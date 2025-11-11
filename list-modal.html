@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>ReVisit - Manage Bookmarks</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Modal Layout */
+    .rv-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 9999;
+      overflow: hidden;
+    }
+    
+    .rv-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: white;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .rv-top-bar {
+      display: flex;
+      align-items: center;
+      padding: 12px 20px;
+      border-bottom: 1px solid #e0e0e0;
+      gap: 10px;
+      background: #f9f9f9;
+    }
+    
+    .rv-search {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    
+    .rv-export-btn, .rv-priority-btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    
+    .rv-export-btn {
+      background: #6c757d;
+      color: white;
+    }
+    
+    .rv-priority-btn {
+      background: #ffc107;
+      color: #000;
+    }
+    
+    .rv-priority-btn.active {
+      background: #ff9800;
+      color: white;
+    }
+    
+    .rv-close-btn {
+      background: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 8px 16px;
+      cursor: pointer;
+    }
+    
+    .rv-main-content {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+    
+    .rv-column {
+      overflow-y: auto;
+      border-right: 1px solid #e0e0e0;
+      padding: 15px;
+    }
+    
+    .rv-categories-col {
+      width: 20%;
+      min-width: 200px;
+    }
+    
+    .rv-links-col {
+      width: 30%;
+      min-width: 300px;
+    }
+    
+    .rv-details-col {
+      width: 50%;
+      min-width: 400px;
+      border-right: none;
+    }
+    
+    .category-item, .link-item {
+      padding: 10px;
+      margin-bottom: 5px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background 0.2s;
+    }
+    
+    .category-item:hover, .link-item:hover {
+      background: #f0f7ff;
+    }
+    
+    .category-item.active {
+      background: #4a90e2;
+      color: white;
+    }
+    
+    .link-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .link-item.overdue {
+      border-left: 4px solid #dc3545;
+    }
+    
+    .link-item.nearing {
+      border-left: 4px solid #ffc107;
+    }
+    
+    .link-title {
+      flex: 1;
+      font-weight: 500;
+    }
+    
+    .link-date {
+      font-size: 12px;
+      color: #666;
+      margin-right: 10px;
+    }
+    
+    .revisit-btn {
+      padding: 4px 8px;
+      background: #4a90e2;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    
+    .details-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    
+    .details-content {
+      line-height: 1.6;
+    }
+    
+    .details-content h1, .details-content h2, .details-content h3 {
+      margin-top: 0;
+    }
+    
+    .tags {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin: 10px 0;
+    }
+    
+    .tag {
+      background: #e3f2fd;
+      color: #1976d2;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+    }
+    
+    .edit-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    
+    .status-filter {
+      margin-bottom: 15px;
+    }
+    
+    .status-filter select {
+      width: 100%;
+      padding: 6px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+    }
+    
+    .empty-state {
+      text-align: center;
+      color: #999;
+      padding: 40px;
+    }
+    
+    .history-list {
+      margin-top: 20px;
+      padding-top: 15px;
+      border-top: 1px solid #e0e0e0;
+    }
+    
+    .history-item {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 5px;
+    }
+    
+    /* Edit Form Styles */
+    .edit-form {
+      display: none;
+    }
+    
+    .edit-form.active {
+      display: block;
+    }
+    
+    .edit-form textarea, .edit-form input {
+      width: 100%;
+      margin: 8px 0;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    
+    .edit-form textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+  </style>
+</head>
+<body>
+  <div class="rv-overlay" id="overlay">
+    <div class="rv-modal">
+      <div class="rv-top-bar">
+        <button class="rv-export-btn" id="export-btn">Export</button>
+        <input type="text" class="rv-search" id="search-input" placeholder="Search all bookmarks...">
+        <button class="rv-priority-btn" id="priority-btn">Priority View</button>
+        <button class="rv-close-btn" id="close-btn">Close</button>
+      </div>
+      
+      <div class="rv-main-content">
+        <div class="rv-column rv-categories-col" id="categories-col">
+          <h3>Categories</h3>
+          <div id="categories-list"></div>
+        </div>
+        
+        <div class="rv-column rv-links-col" id="links-col">
+          <div class="status-filter">
+            <select id="status-filter">
+              <option value="Active">Active</option>
+              <option value="ReVisited">ReVisited</option>
+              <option value="Complete">Complete</option>
+            </select>
+          </div>
+          <div id="links-list"></div>
+        </div>
+        
+        <div class="rv-column rv-details-col" id="details-col">
+          <div id="details-content" class="empty-state">Select a bookmark to view details</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script src="list-modal.js"></script>
+</body>
+</html>
