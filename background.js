@@ -34,6 +34,43 @@ async function saveStorageData(data) {
   await chrome.storage.local.set({ rvData: data });
 }
 
+// Helper function to verify content script is ready
+async function verifyContentScript(tabId) {
+  try {
+    console.log('DEBUG: Sending ping to content script for verification');
+    const response = await chrome.tabs.sendMessage(tabId, { action: 'ping' });
+    console.log('DEBUG: Ping response received:', response);
+    return true;
+  } catch (error) {
+    console.warn('WARN: Ping failed - content script not ready:', error.message);
+    return false;
+  }
+}
+
+// Helper function to send message with retry (exponential backoff)
+async function sendMessageWithRetry(tabId, message, maxRetries = 5) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      // Wait before first attempt (and longer for subsequent attempts)
+      const delay = i === 0 ? 100 : Math.min(100 * Math.pow(2, i), 1000);
+      console.log(`DEBUG: Waiting ${delay}ms before attempt ${i + 1}`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      
+      console.log(`DEBUG: Sending message (attempt ${i + 1}/${maxRetries})`);
+      const response = await chrome.tabs.sendMessage(tabId, message);
+      console.log('DEBUG: Message sent successfully, response:', response);
+      return response;
+    } catch (error) {
+      console.warn(`WARN: Attempt ${i + 1} failed:`, error.message);
+      if (i === maxRetries - 1) {
+        // Last attempt, throw the error
+        throw error;
+      }
+      // Continue to next retry
+    }
+  }
+}
+
 // Handle messages from content scripts and popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   (async () => {
@@ -63,13 +100,189 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           args: [request.bookmarkId, request.revisitBy]
         });
         sendResponse({ success: true });
+      } else if (request.action === 'addBookmark') {
+        console.log('DEBUG: Background received addBookmark request');
+        
+        // Get current tab
+        const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        console.log('DEBUG: Current tab:', currentTab);
+        
+        if (!currentTab) {
+          throw new Error('No active tab found');
+        }
+        
+        // Get storage data
+        const data = await getStorageData();
+        const settings = data.settings || {};
+        const categories = data.categories || [];
+        
+        console.log('DEBUG: Settings loaded in addBookmark:', settings);
+        console.log('DEBUG: API Key present in addBookmark:', !!settings.apiKey);
+        console.log('DEBUG: Categories in addBookmark:', categories);
+        
+        // Create preliminary bookmark
+        const preliminaryBookmark = {
+          id: 'rv-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+          url: currentTab.url,
+          title: currentTab.title || 'Untitled',
+          category: 'Uncategorized',
+          summary: '',
+          tags: [],
+          userNotes: '',
+          addedTimestamp: Date.now(),
+          revisitBy: new Date(Date.now() + (settings.defaultIntervalDays || 7) * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'Active',
+          history: [],
+          isPreliminary: true // Mark as preliminary
+        };
+        
+        console.log('DEBUG: Preliminary bookmark created:', preliminaryBookmark);
+        
+        // Save preliminary bookmark
+        data.bookmarks = data.bookmarks || [];
+        data.bookmarks.push(preliminaryBookmark);
+        await saveStorageData(data);
+        
+        // Ensure content script is injected before sending message
+        console.log('DEBUG: Starting content script injection for tab:', currentTab.id);
+        try {
+          const injectionResult = await chrome.scripting.executeScript({
+            target: { tabId: currentTab.id },
+            files: ['content.js']
+          });
+          console.log('DEBUG: Injection result:', injectionResult);
+          
+          // Wait a bit more after injection for script to initialize
+          console.log('DEBUG: Waiting 500ms after injection for script to initialize');
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+        } catch (injectionError) {
+          console.error('ERROR: Content script injection failed:', injectionError);
+          throw new Error(`Content script injection failed: ${injectionError.message}`);
+        }
+        
+        // Verify content script is ready before sending the real message
+        console.log('DEBUG: Verifying content script is ready...');
+        const isReady = await verifyContentScript(currentTab.id);
+        if (!isReady) {
+          console.error('ERROR: Content script verification failed');
+          throw new Error('Content script is not responding to ping');
+        }
+        console.log('DEBUG: Content script verification successful');
+        
+        // Send message to content script to scrape and show overlay
+        console.log('DEBUG: Sending scrapeAndShowOverlay to tab:', currentTab.id);
+        const response = await sendMessageWithRetry(currentTab.id, {
+          action: 'scrapeAndShowOverlay',
+          bookmarkId: preliminaryBookmark.id,
+          bookmarkData: preliminaryBookmark
+        });
+        
+        sendResponse({ success: true, bookmarkId: preliminaryBookmark.id });
+      } else if (request.action === 'processWithAI') {
+        // Process scraped content with AI
+        console.log('DEBUG: Background processing AI request');
+        
+        // Load settings and categories from storage
+        const data = await getStorageData();
+        const settings = data.settings || {};
+        const categories = data.categories || [];
+        
+        console.log('DEBUG: Settings loaded:', settings);
+        console.log('DEBUG: API Key present:', !!settings.apiKey);
+        console.log('DEBUG: Categories:', categories);
+        
+        // Pass settings to processWithAI
+        const result = await processWithAI(request.scrapedData, settings, categories);
+        sendResponse({ success: true, result });
+      } else if (request.action === 'updateBookmark') {
+        // Update bookmark with final data
+        console.log('DEBUG: Background updating bookmark:', request.bookmarkId);
+        const data = await getStorageData();
+        const bookmarkIndex = data.bookmarks.findIndex(b => b.id === request.bookmarkId);
+        
+        if (bookmarkIndex !== -1) {
+          // Update the bookmark, removing preliminary flag
+          data.bookmarks[bookmarkIndex] = {
+            ...data.bookmarks[bookmarkIndex],
+            ...request.updatedData,
+            isPreliminary: false
+          };
+          await saveStorageData(data);
+          sendResponse({ success: true });
+        } else {
+          throw new Error('Bookmark not found');
+        }
+      } else if (request.action === 'cancelBookmark') {
+        // Remove preliminary bookmark
+        console.log('DEBUG: Background canceling bookmark:', request.bookmarkId);
+        const data = await getStorageData();
+        data.bookmarks = data.bookmarks.filter(b => b.id !== request.bookmarkId);
+        await saveStorageData(data);
+        sendResponse({ success: true });
       }
+      
     } catch (error) {
+      console.error('ERROR: Background processing failed:', error);
       sendResponse({ success: false, error: error.message });
     }
   })();
   return true; // Keep message channel open for async response
 });
+
+// AI processing function
+async function processWithAI(scrapedData, settings, categories) {
+  console.log('DEBUG: processWithAI called with settings:', settings);
+  console.log('DEBUG: API Key in processWithAI:', settings.apiKey ? 'PRESENT' : 'MISSING');
+  
+  // Validate API key
+  if (!settings.apiKey) {
+    throw new Error('API key not found in settings. Please configure your API key in the extension settings.');
+  }
+  
+  const prompt = `Summarize the following webpage content in under 200 words using markdown. Categorize it: Use an existing category if fitting (existing: ${categories.join(', ')}), else suggest a new one. Generate up to 10 relevant tags.
+  
+Content: ${scrapedData.content}
+
+Return ONLY a JSON object with this exact structure:
+{
+  "summary": "markdown summary",
+  "category": "single category name",
+  "tags": ["tag1", "tag2", "tag3"]
+}`;
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': settings.apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 2500,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    console.error('ERROR: API request failed:', response.status, errorData);
+    throw new Error(`API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+  }
+  
+  const data = await response.json();
+  const content = data.content[0].text;
+  
+  // Parse JSON from response
+  const match = content.match(/\{[\s\S]*\}/);
+  if (!match) {
+    throw new Error('Invalid API response format');
+  }
+  
+  return JSON.parse(match[0]);
+}
 
 // Scrape function to be injected
 function scrapePageContent() {

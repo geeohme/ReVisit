@@ -8,6 +8,30 @@ let searchQuery = '';
 let statusFilter = 'Active';
 let priorityView = false;
 
+// Helper function to send message with retry (exponential backoff)
+async function sendMessageWithRetry(tabId, message, maxRetries = 5) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      // Wait before first attempt (and longer for subsequent attempts)
+      const delay = i === 0 ? 100 : Math.min(100 * Math.pow(2, i), 1000);
+      console.log(`DEBUG: Waiting ${delay}ms before attempt ${i + 1}`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      
+      console.log(`DEBUG: Sending message (attempt ${i + 1}/${maxRetries})`);
+      const response = await chrome.tabs.sendMessage(tabId, message);
+      console.log('DEBUG: Message sent successfully');
+      return response;
+    } catch (error) {
+      console.warn(`WARN: Attempt ${i + 1} failed:`, error.message);
+      if (i === maxRetries - 1) {
+        // Last attempt, throw the error
+        throw error;
+      }
+      // Continue to next retry
+    }
+  }
+}
+
 async function init() {
   const urlParams = new URLSearchParams(window.location.search);
   const action = urlParams.get('action');
@@ -329,16 +353,64 @@ async function handleReVisitAction(bookmark) {
 async function openAddBookmarkModal() {
   try {
     // Scrape current page
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const scraped = await chrome.tabs.sendMessage(tab.id, { action: 'scrapePage' });
+    console.log('DEBUG: Starting openAddBookmarkModal()');
+    
+    // Read tabId from URL parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabIdParam = urlParams.get('tabId');
+    console.log('DEBUG: tabId from URL parameter:', tabIdParam);
+    
+    let targetTab;
+    if (tabIdParam) {
+      // Use the specific tab that was passed from popup
+      targetTab = await chrome.tabs.get(parseInt(tabIdParam));
+      console.log('DEBUG: Using target tab from parameter:', targetTab);
+    } else {
+      // Fallback to current behavior for backward compatibility
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      targetTab = activeTab;
+      console.log('DEBUG: Using active tab (fallback):', targetTab);
+    }
+    
+    console.log('DEBUG: Target tab ID:', targetTab.id);
+    console.log('DEBUG: Target tab URL:', targetTab.url);
+    
+    // Ensure content script is injected before sending message
+    console.log('DEBUG: Injecting content script into tab:', targetTab.id);
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: targetTab.id },
+        files: ['content.js']
+      });
+      console.log('DEBUG: Content script injected successfully');
+    } catch (injectionError) {
+      console.warn('WARN: Content script injection failed, may already be injected:', injectionError.message);
+      // Continue anyway as the script might already be present
+    }
+    
+    // TEST: Try to send message to content script with retry
+    console.log('DEBUG: About to call sendMessageWithRetry()');
+    let scraped;
+    try {
+      scraped = await sendMessageWithRetry(targetTab.id, { action: 'scrapePage' });
+      console.log('DEBUG: Scraped data received:', scraped);
+    } catch (messageError) {
+      console.error('ERROR: sendMessageWithRetry() failed:', messageError);
+      console.error('ERROR: Tab ID:', targetTab.id);
+      console.error('ERROR: Tab URL:', targetTab.url);
+      throw messageError; // Re-throw to be caught by outer catch
+    }
     
     // Process with AI
+    console.log('DEBUG: About to call processWithAI()');
     const result = await processWithAI(scraped);
+    console.log('DEBUG: AI processing complete:', result);
     
     // Create bookmark object
+    console.log('DEBUG: Creating bookmark object');
     const bookmark = {
       id: 'rv-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
-      url: scraped.url,
+      url: targetTab.url, // Use the target tab's URL instead of scraped URL
       title: scraped.title,
       category: result.category,
       summary: result.summary,
@@ -349,17 +421,32 @@ async function openAddBookmarkModal() {
       status: 'Active',
       history: []
     };
+    console.log('DEBUG: Bookmark object created:', bookmark);
     
     // Save and open for editing
+    console.log('DEBUG: About to push bookmark to array');
     bookmarks.push(bookmark);
+    console.log('DEBUG: About to call saveData()');
     await saveData();
+    console.log('DEBUG: saveData() completed successfully');
+    
     selectedBookmarkId = bookmark.id;
     renderCategories();
     renderLinks();
     renderDetails(bookmark);
+    console.log('DEBUG: openAddBookmarkModal() completed successfully');
   } catch (error) {
-    console.error('Error adding bookmark:', error);
-    alert('Failed to add bookmark. Check API key and try again.');
+    console.error('ERROR: Caught in openAddBookmarkModal() catch block');
+    console.error('ERROR: Message:', error.message);
+    console.error('ERROR: Stack:', error.stack);
+    
+    // Check if it's the specific connection error
+    if (error.message.includes('Could not establish connection')) {
+      console.error('DEBUG: Connection error detected - content script not available');
+      alert('Failed to add bookmark: Content script not loaded. Please refresh the page and try again.');
+    } else {
+      alert('Failed to add bookmark. Check API key and try again.');
+    }
   }
 }
 
@@ -380,7 +467,8 @@ Return ONLY a JSON object with this exact structure:
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': settings.apiKey,
-      'anthropic-version': '2023-06-01'
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
