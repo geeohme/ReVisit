@@ -202,6 +202,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const bookmarkIndex = data.bookmarks.findIndex(b => b.id === request.bookmarkId);
         
         if (bookmarkIndex !== -1) {
+          // Check if category has been updated by user and is new
+          const updatedCategory = request.updatedData.category;
+          const existingCategories = data.categories || [];
+          
+          if (updatedCategory && !existingCategories.includes(updatedCategory)) {
+            console.log('DEBUG: New category detected, adding to categories list:', updatedCategory);
+            // Add new category to the categories array
+            existingCategories.push(updatedCategory);
+            existingCategories.sort(); // Keep categories sorted
+            data.categories = existingCategories;
+          }
+          
           // Update the bookmark, removing preliminary flag
           data.bookmarks[bookmarkIndex] = {
             ...data.bookmarks[bookmarkIndex],
