@@ -244,8 +244,8 @@ function renderDetails(bookmark) {
       <label>Notes:</label>
       <textarea id="edit-notes">${bookmark.userNotes}</textarea>
       <div class="edit-actions">
-        <button class="btn-primary" onclick="saveEdit('${bookmark.id}')">Save</button>
-        <button class="btn-secondary" onclick="cancelEdit()">Cancel</button>
+        <button class="btn-primary" id="save-edit-btn">Save</button>
+        <button class="btn-secondary" id="cancel-edit-btn">Cancel</button>
       </div>
     </div>
   `;
@@ -265,6 +265,9 @@ function renderDetails(bookmark) {
       container.innerHTML = '<div class="empty-state">Select a bookmark to view details</div>';
     }
   });
+  
+  document.getElementById('save-edit-btn').addEventListener('click', () => saveEdit(bookmark.id));
+  document.getElementById('cancel-edit-btn').addEventListener('click', cancelEdit);
 }
 
 function renderMarkdown(text) {

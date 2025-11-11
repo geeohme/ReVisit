@@ -85,7 +85,7 @@
       <p>Let's personalize your experience.</p>
       <input type="text" id="user-name" placeholder="Enter your name">
       <div class="button-group">
-        <button class="btn-primary" onclick="nextStep()">Next</button>
+        <button class="btn-primary" id="next-btn-1">Next</button>
       </div>
     </div>
     
@@ -94,8 +94,8 @@
       <p>Choose some starting categories (comma-separated):</p>
       <input type="text" id="initial-categories" value="Articles, Research, Work, Personal" placeholder="e.g., Tech, Books, Research">
       <div class="button-group">
-        <button class="btn-secondary" onclick="prevStep()">Back</button>
-        <button class="btn-primary" onclick="nextStep()">Next</button>
+        <button class="btn-secondary" id="prev-btn-2">Back</button>
+        <button class="btn-primary" id="next-btn-2">Next</button>
       </div>
     </div>
     
@@ -112,8 +112,8 @@
       <label>Priority threshold (days before due):</label>
       <input type="number" id="priority-threshold" value="3" min="1" max="30">
       <div class="button-group">
-        <button class="btn-secondary" onclick="prevStep()">Back</button>
-        <button class="btn-primary" onclick="nextStep()">Next</button>
+        <button class="btn-secondary" id="prev-btn-3">Back</button>
+        <button class="btn-primary" id="next-btn-3">Next</button>
       </div>
     </div>
     
@@ -128,69 +128,12 @@
         <a href="https://console.anthropic.com/" target="_blank">Get your API key here</a>
       </p>
       <div class="button-group">
-        <button class="btn-secondary" onclick="prevStep()">Back</button>
-        <button class="btn-primary" onclick="completeOnboarding()">Complete Setup</button>
+        <button class="btn-secondary" id="prev-btn-4">Back</button>
+        <button class="btn-primary" id="complete-btn">Complete Setup</button>
       </div>
     </div>
   </div>
   
-  <script>
-    let currentStep = 1;
-    
-    function nextStep() {
-      if (currentStep < 4) {
-        document.getElementById(`step-${currentStep}`).classList.remove('active');
-        currentStep++;
-        document.getElementById(`step-${currentStep}`).classList.add('active');
-        updateStepIndicator();
-      }
-    }
-    
-    function prevStep() {
-      if (currentStep > 1) {
-        document.getElementById(`step-${currentStep}`).classList.remove('active');
-        currentStep--;
-        document.getElementById(`step-${currentStep}`).classList.add('active');
-        updateStepIndicator();
-      }
-    }
-    
-    function updateStepIndicator() {
-      document.querySelectorAll('.step-dot').forEach((dot, idx) => {
-        dot.classList.toggle('active', idx + 1 <= currentStep);
-      });
-    }
-    
-    async function completeOnboarding() {
-      const userName = document.getElementById('user-name').value.trim();
-      const categories = document.getElementById('initial-categories').value
-        .split(',')
-        .map(c => c.trim())
-        .filter(c => c.length > 0);
-      const interval = parseInt(document.getElementById('default-interval').value);
-      const threshold = parseInt(document.getElementById('priority-threshold').value);
-      const apiKey = document.getElementById('api-key').value.trim();
-      
-      if (!userName || !apiKey) {
-        alert('Please fill in your name and API key.');
-        return;
-      }
-      
-      const data = {
-        bookmarks: [],
-        categories: categories,
-        settings: {
-          userName,
-          defaultIntervalDays: interval,
-          apiKey,
-          onboardingComplete: true,
-          priorityThresholdDays: threshold
-        }
-      };
-      
-      await chrome.storage.local.set({ rvData: data });
-      window.location.href = 'list-modal.html';
-    }
-  </script>
+  <script src="onboarding.js"></script>
 </body>
 </html>
