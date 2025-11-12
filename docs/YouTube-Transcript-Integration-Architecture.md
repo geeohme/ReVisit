@@ -151,22 +151,63 @@ async function processYouTubeVideo(scrapedData, settings, categories) {
   return aiResult;
 }
 
-async function getYouTubeTranscript(videoId) {
-  // Use YouTube Transcript API (client-side JavaScript version)
-  // This would be adapted from the provided Python script
+async function getYouTubeTranscript(videoId, lang = 'en') {
   try {
-    const response = await fetch(`https://www.youtube.com/api/timedtext?v=${videoId}`);
-    // Parse and format the transcript
-    // Implementation details would go here
-    return {
-      raw: "Raw transcript text for AI processing",
-      segments: [] // Optional: timed segments for advanced formatting
-    };
+    // Step 1: Get video page to find caption tracks
+    const videoPage = await fetch(`https://www.youtube.com/watch?v=${videoId}`);
+    const html = await videoPage.text();
+    
+    // Step 2: Extract caption track URL from page
+    const captionRegex = /"captionTracks":(\[.*?\])/;
+    const match = html.match(captionRegex);
+    
+    if (!match) {
+      throw new Error('No captions found');
+    }
+    
+    const captionTracks = JSON.parse(match[1]);
+    const track = captionTracks.find(t => t.languageCode === lang);
+    
+    if (!track) {
+      throw new Error(`No ${lang} captions found`);
+    }
+    
+    // Step 3: Fetch the actual transcript
+    const transcriptResponse = await fetch(track.baseUrl);
+    const transcriptXML = await transcriptResponse.text();
+    
+    // Step 4: Parse XML
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(transcriptXML, 'text/xml');
+    const textNodes = xmlDoc.getElementsByTagName('text');
+    
+    const transcript = Array.from(textNodes).map(node => ({
+      text: node.textContent,
+      start: parseFloat(node.getAttribute('start')),
+      duration: parseFloat(node.getAttribute('dur'))
+    }));
+    
+    return transcript;
+    
   } catch (error) {
-    console.error('Failed to get transcript:', error);
-    return { raw: '', segments: [] };
+    console.error('Error:', error);
+    return null;
   }
 }
+
+// Usage example:
+// getYouTubeTranscript('dQw4w9WgXcQ').then(transcript => {
+//   console.log(transcript);
+// });
+
+// Extract video ID from current page
+// const videoId = new URLSearchParams(window.location.search).get('v');
+// if (videoId) {
+//   getYouTubeTranscript(videoId).then(transcript => {
+//     console.log('Transcript:', transcript);
+//     // Do something with the transcript
+//   });
+// }
 
 async function formatTranscriptForDisplay(rawTranscript, apiKey) {
   const prompt = `Reformat this YouTube transcript to make it "pretty" and readable for humans in markdown format. 
@@ -461,10 +502,12 @@ sequenceDiagram
 ## Technical Considerations
 
 ### YouTube Transcript API
-- The provided Python script uses `youtube_transcript_api`
-- For browser extension, we'll need a JavaScript equivalent
-- Consider using: `https://www.youtube.com/api/timedtext` endpoint
-- Handle rate limiting and errors gracefully
+- Uses native JavaScript implementation that extracts captions directly from YouTube's page data
+- No external dependencies required - pure browser JavaScript
+- Works by parsing the video page HTML to find caption track URLs
+- Fetches and parses XML transcript data from YouTube's servers
+- Handles multiple languages and gracefully falls back when captions aren't available
+- Error handling for private videos, deleted content, and videos without captions
 
 ### AI Processing
 - Raw transcript goes to AI for summarization (better context)

@@ -5,37 +5,40 @@ console.log('DEBUG: Content script starting execution on:', window.location.href
 try {
   console.log('DEBUG: Content script loaded successfully, registering message listener');
   
+  // Synchronous message handler - no async/await anywhere
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('DEBUG: Content script received message:', request);
     
-    try {
-      if (request.action === 'ping') {
-        console.log('DEBUG: Responding to ping request');
-        sendResponse({ success: true, message: 'Content script is ready' });
-      } else if (request.action === 'scrapePage') {
-        console.log('DEBUG: Processing scrapePage request');
-        const bodyText = document.body.innerText || '';
-        const truncated = bodyText.substring(0, 2000);
-        const response = {
-          url: window.location.href,
-          title: document.title || 'Untitled',
-          content: truncated
-        };
-        console.log('DEBUG: Sending response:', response);
-        sendResponse(response);
-      } else if (request.action === 'scrapeAndShowOverlay') {
-        console.log('DEBUG: Processing scrapeAndShowOverlay request');
-        handleScrapeAndShowOverlay(request.bookmarkId, request.bookmarkData);
-        sendResponse({ success: true });
-      } else {
-        console.warn('WARN: Unknown action received:', request.action);
-        sendResponse({ success: false, error: 'Unknown action' });
-      }
-    } catch (error) {
-      console.error('ERROR: Message handler failed:', error);
-      sendResponse({ success: false, error: error.message });
+    if (request.action === 'ping') {
+      console.log('DEBUG: Responding to ping request');
+      sendResponse({ success: true, message: 'Content script is ready' });
+      return;
     }
-    return true; // Keep message channel open for async response
+    
+    if (request.action === 'scrapePage') {
+      console.log('DEBUG: Processing scrapePage request');
+      const bodyText = document.body.innerText || '';
+      const truncated = bodyText.substring(0, 2000);
+      const response = {
+        url: window.location.href,
+        title: document.title || 'Untitled',
+        content: truncated
+      };
+      console.log('DEBUG: Sending response:', response);
+      sendResponse(response);
+      return;
+    }
+    
+    if (request.action === 'scrapeAndShowOverlay') {
+      console.log('DEBUG: Processing scrapeAndShowOverlay request');
+      handleScrapeAndShowOverlay(request.bookmarkId, request.bookmarkData);
+      sendResponse({ success: true });
+      return;
+    }
+    
+    // REMOVED: fetchTranscript handler - no longer needed
+    console.warn('WARN: Unknown action received:', request.action);
+    sendResponse({ success: false, error: 'Unknown action' });
   });
   
   console.log('DEBUG: Message listener registered successfully');
@@ -59,28 +62,178 @@ window.addEventListener('message', (event) => {
   }
 });
 
+// YouTube URL detection and video ID extraction
+function isYouTubeUrl(url) {
+  return url.includes('youtube.com/watch') || url.includes('youtu.be/');
+}
+
+function extractVideoId(url) {
+  const urlObj = new URL(url);
+  return urlObj.searchParams.get('v') || urlObj.pathname.split('/').pop();
+}
+
+// YouTube content scraping
+function scrapeYouTubeContent() {
+  const videoId = extractVideoId(window.location.href);
+  const title = document.title.replace(' - YouTube', '');
+  
+  // Get description from meta tag or page
+  const descriptionMeta = document.querySelector('meta[name="description"]');
+  const description = descriptionMeta ? descriptionMeta.content : '';
+  
+  return {
+    url: window.location.href,
+    title: title,
+    content: description.substring(0, 2000), // Description only, no comments
+    isYouTube: true,
+    videoId: videoId
+  };
+}
+
+// Helper function to wait for an element to appear in the DOM
+function waitForElement(selector, timeout = 5000) {
+  return new Promise((resolve, reject) => {
+    const existingElement = document.querySelector(selector);
+    if (existingElement) {
+      return resolve(existingElement);
+    }
+
+    const intervalTime = 100;
+    let elapsedTime = 0;
+
+    const interval = setInterval(() => {
+      const element = document.querySelector(selector);
+      if (element) {
+        clearInterval(interval);
+        resolve(element);
+      }
+
+      elapsedTime += intervalTime;
+      if (elapsedTime >= timeout) {
+        clearInterval(interval);
+        reject(new Error(`Element with selector "${selector}" not found within ${timeout}ms.`));
+      }
+    }, intervalTime);
+  });
+}
+
+// Function to scrape transcript from YouTube DOM
+async function getTranscriptFromDOM() {
+  try {
+    console.log("Scraper: Starting transcript search...");
+    let segmentsContainer = document.querySelector('ytd-transcript-segment-list-renderer');
+
+    if (!segmentsContainer) {
+      console.log("Scraper: Transcript panel not found. Attempting to open it.");
+      
+      // Step 1: Click "...more" to expand the description area
+      const descriptionExpander = document.querySelector('#expand.ytd-text-inline-expander');
+      if (descriptionExpander) {
+        console.log("Scraper: Found '...more' button. Clicking to expand description.");
+        descriptionExpander.click();
+      } else {
+        console.log("Scraper: '...more' button not found, assuming description is already expanded.");
+      }
+
+      // Step 2: Wait for the specific transcript section container to appear
+      console.log("Scraper: Waiting for the transcript section container to appear...");
+      const transcriptSectionContainer = await waitForElement('ytd-video-description-transcript-section-renderer');
+      console.log("Scraper: Found transcript section container.");
+
+      // Step 3: Find the button within that container using its unique aria-label
+      const showTranscriptButton = transcriptSectionContainer.querySelector('button[aria-label="Show transcript"]');
+
+      if (!showTranscriptButton) {
+        console.error("Scraper: Could not find the 'Show transcript' button inside its container.");
+        return { error: "Could not find the 'Show transcript' button. The video may not have a transcript or the UI has changed." };
+      }
+      
+      console.log("Scraper: Found 'Show transcript' button. Clicking it.");
+      showTranscriptButton.click();
+
+      // Step 4: Wait for the actual transcript content panel to render
+      segmentsContainer = await waitForElement('ytd-transcript-segment-list-renderer');
+      console.log("Scraper: Transcript panel is now visible.");
+    } else {
+      console.log("Scraper: Transcript panel was already open.");
+    }
+
+    // Step 5: Scrape the content
+    await new Promise(resolve => setTimeout(resolve, 500)); // Small delay for content to load
+    
+    const segmentElements = segmentsContainer.querySelectorAll('ytd-transcript-segment-renderer');
+    if (segmentElements.length === 0) {
+      return { error: "Transcript panel is open, but no text segments were found." };
+    }
+
+    console.log(`Scraper: Found ${segmentElements.length} transcript segments. Scraping text.`);
+    let fullTranscript = "";
+    segmentElements.forEach(segment => {
+      const textElement = segment.querySelector('.segment-text');
+      if (textElement) {
+        fullTranscript += textElement.textContent.trim() + " ";
+      }
+    });
+
+    return { transcript: fullTranscript.trim() };
+
+  } catch (error) {
+    console.error("Transcript scraper error:", error);
+    return { error: error.message };
+  }
+}
+
 // Handle the scrape and overlay workflow
 async function handleScrapeAndShowOverlay(bookmarkId, preliminaryBookmark) {
   console.log('DEBUG: Starting scrape and overlay workflow');
   
-  try {
-    // Scrape page content
+  // Scrape page content
+  let scrapedData;
+  let transcript = null;
+  const url = window.location.href;
+  
+  if (isYouTubeUrl(url)) {
+    console.log('DEBUG: Detected YouTube URL, using YouTube scraping');
+    scrapedData = scrapeYouTubeContent();
+    
+    // Also try to get transcript for YouTube videos
+    console.log('DEBUG: Attempting to scrape transcript from DOM');
+    const transcriptResult = await getTranscriptFromDOM();
+    console.log('DEBUG: Transcript result:', transcriptResult);
+    
+    if (transcriptResult && transcriptResult.transcript) {
+      transcript = transcriptResult.transcript;
+      console.log('DEBUG: Transcript successfully scraped, length:', transcript.length);
+    } else {
+      console.warn('WARN: No transcript available from DOM scraping');
+    }
+  } else {
+    console.log('DEBUG: Standard URL, using standard scraping');
     const bodyText = document.body.innerText || '';
-    const scrapedData = {
+    scrapedData = {
       url: window.location.href,
       title: document.title || 'Untitled',
-      content: bodyText.substring(0, 2000)
+      content: bodyText.substring(0, 2000),
+      isYouTube: false,
+      videoId: null
     };
-    console.log('DEBUG: Scraped data:', scrapedData);
-    
-    // Send to background for AI processing
-    console.log('DEBUG: Sending to background for AI processing');
-    const response = await chrome.runtime.sendMessage({
-      action: 'processWithAI',
-      scrapedData: scrapedData
-      // Settings and categories will be loaded by background script
-    });
-    
+  }
+  console.log('DEBUG: Scraped data:', scrapedData);
+  
+  // Send to background for AI processing
+  console.log('DEBUG: Sending to background for AI processing');
+  const message = {
+    action: 'processWithAI',
+    scrapedData: scrapedData
+  };
+  
+  // Add transcript to message if available
+  if (transcript) {
+    message.transcript = transcript;
+    console.log('DEBUG: Including transcript in AI processing request');
+  }
+  
+  chrome.runtime.sendMessage(message).then(response => {
     if (!response.success) {
       throw new Error(response.error || 'AI processing failed');
     }
@@ -94,12 +247,11 @@ async function handleScrapeAndShowOverlay(bookmarkId, preliminaryBookmark) {
       summary: response.result.summary,
       tags: response.result.tags
     });
-    
-  } catch (error) {
+  }).catch(error => {
     console.error('ERROR: Scrape and overlay workflow failed:', error);
     // Show error overlay
     injectErrorOverlay(bookmarkId, error.message);
-  }
+  });
 }
 
 // Listen for floating modal actions (from injected script)

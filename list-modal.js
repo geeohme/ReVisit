@@ -212,14 +212,27 @@ function createLinkItem(bookmark) {
   return div;
 }
 
+// YouTube URL detection and video ID extraction
+function isYouTubeUrl(url) {
+  return url.includes('youtube.com/watch') || url.includes('youtu.be/');
+}
+
+function extractVideoId(url) {
+  const urlObj = new URL(url);
+  return urlObj.searchParams.get('v') || urlObj.pathname.split('/').pop();
+}
+
 function renderDetails(bookmark) {
   const container = document.getElementById('details-content');
+  const isYouTube = isYouTubeUrl(bookmark.url);
+  const videoId = isYouTube ? extractVideoId(bookmark.url) : null;
   
   const html = `
     <div>
       <div class="details-header">
         <h2>${bookmark.title}</h2>
         <div>
+          ${isYouTube ? `<button id="transcript-btn" class="transcript-btn">Video Transcript</button>` : ''}
           <button id="edit-btn">Edit</button>
           <button id="delete-btn" style="background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">Delete</button>
         </div>
@@ -272,9 +285,33 @@ function renderDetails(bookmark) {
         <button class="btn-secondary" id="cancel-edit-btn">Cancel</button>
       </div>
     </div>
+    
+    <!-- Transcript Overlay -->
+    <div id="transcript-overlay" class="transcript-overlay" style="display: none;">
+      <div class="transcript-modal">
+        <div class="transcript-header">
+          <h3>Video Transcript</h3>
+          <button id="close-transcript" class="close-btn">&times;</button>
+        </div>
+        <div class="transcript-content" id="transcript-content">
+          <div class="loading">Loading transcript...</div>
+        </div>
+      </div>
+    </div>
   `;
   
   container.innerHTML = html;
+  
+  // Add transcript button handler
+  if (isYouTube) {
+    document.getElementById('transcript-btn').addEventListener('click', () => {
+      showTranscriptOverlay(videoId);
+    });
+    
+    document.getElementById('close-transcript').addEventListener('click', () => {
+      document.getElementById('transcript-overlay').style.display = 'none';
+    });
+  }
   
   document.getElementById('edit-btn').addEventListener('click', () => {
     document.getElementById('edit-form').classList.add('active');
@@ -293,6 +330,35 @@ function renderDetails(bookmark) {
   document.getElementById('save-edit-btn').addEventListener('click', () => saveEdit(bookmark.id));
   document.getElementById('cancel-edit-btn').addEventListener('click', cancelEdit);
 }
+
+async function showTranscriptOverlay(videoId) {
+  const overlay = document.getElementById('transcript-overlay');
+  const content = document.getElementById('transcript-content');
+  
+  overlay.style.display = 'flex';
+  
+  // Check if transcript exists in storage
+  const response = await chrome.runtime.sendMessage({
+    action: 'getTranscript',
+    videoId: videoId
+  });
+  
+  if (response.success && response.transcript) {
+    const transcriptData = response.transcript;
+    
+    if (transcriptData.formatted) {
+      content.innerHTML = renderMarkdown(transcriptData.formatted);
+    } else if (transcriptData.raw) {
+      // DOM-scraped transcript is a string - display directly
+      content.innerHTML = `<pre>${transcriptData.raw}</pre>`;
+    } else {
+      content.innerHTML = '<div class="error">Transcript not available. Try refreshing the bookmark.</div>';
+    }
+  } else {
+    content.innerHTML = '<div class="error">Transcript not available. Try refreshing the bookmark.</div>';
+  }
+}
+
 
 function renderMarkdown(text) {
   if (!text) return '';
