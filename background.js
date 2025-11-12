@@ -37,12 +37,12 @@ async function saveStorageData(data) {
 // Helper function to verify content script is ready
 async function verifyContentScript(tabId) {
   try {
-    console.log('DEBUG: Sending ping to content script for verification');
+    console.log('DEBUG: 201 Sending ping to content script for verification');
     const response = await chrome.tabs.sendMessage(tabId, { action: 'ping' });
-    console.log('DEBUG: Ping response received:', response);
+    console.log('DEBUG: 202 Ping response received:', response);
     return true;
   } catch (error) {
-    console.warn('WARN: Ping failed - content script not ready:', error.message);
+    console.warn('WARN: 203 Ping failed - content script not ready:', error.message);
     return false;
   }
 }
@@ -53,15 +53,15 @@ async function sendMessageWithRetry(tabId, message, maxRetries = 5) {
     try {
       // Wait before first attempt (and longer for subsequent attempts)
       const delay = i === 0 ? 100 : Math.min(100 * Math.pow(2, i), 1000);
-      console.log(`DEBUG: Waiting ${delay}ms before attempt ${i + 1}`);
+      console.log(`DEBUG: 204 Waiting ${delay}ms before attempt ${i + 1}`);
       await new Promise(resolve => setTimeout(resolve, delay));
       
-      console.log(`DEBUG: Sending message (attempt ${i + 1}/${maxRetries})`);
+      console.log(`DEBUG: 205 Sending message (attempt ${i + 1}/${maxRetries})`);
       const response = await chrome.tabs.sendMessage(tabId, message);
-      console.log('DEBUG: Message sent successfully, response:', response);
+      console.log('DEBUG: 206 Message sent successfully, response:', response);
       return response;
     } catch (error) {
-      console.warn(`WARN: Attempt ${i + 1} failed:`, error.message);
+      console.warn(`WARN: 207 Attempt ${i + 1} failed:`, error.message);
       if (i === maxRetries - 1) {
         // Last attempt, throw the error
         throw error;
@@ -101,11 +101,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
         sendResponse({ success: true });
       } else if (request.action === 'addBookmark') {
-        console.log('DEBUG: Background received addBookmark request');
+        console.log('DEBUG: 208 Background received addBookmark request');
         
         // Get current tab
         const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        console.log('DEBUG: Current tab:', currentTab);
+        console.log('DEBUG: 209 Current tab:', currentTab);
         
         if (!currentTab) {
           throw new Error('No active tab found');
@@ -113,16 +113,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         
         // Check if this is a YouTube URL
         const isYouTube = currentTab.url && (currentTab.url.includes('youtube.com/watch') || currentTab.url.includes('youtu.be/'));
-        console.log('DEBUG: Is YouTube URL:', isYouTube);
+        console.log('DEBUG: 210 Is YouTube URL:', isYouTube);
         
         // Get storage data
         const data = await getStorageData();
         const settings = data.settings || {};
         const categories = data.categories || [];
         
-        console.log('DEBUG: Settings loaded in addBookmark:', settings);
-        console.log('DEBUG: API Key present in addBookmark:', !!settings.apiKey);
-        console.log('DEBUG: Categories in addBookmark:', categories);
+        console.log('DEBUG: 211 Settings loaded in addBookmark:', settings);
+        console.log('DEBUG: 212 API Key present in addBookmark:', !!settings.apiKey);
+        console.log('DEBUG: 213 Categories in addBookmark:', categories);
         
         // Create preliminary bookmark
         const preliminaryBookmark = {
@@ -141,7 +141,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           isYouTube: isYouTube // Mark if YouTube video
         };
         
-        console.log('DEBUG: Preliminary bookmark created:', preliminaryBookmark);
+        console.log('DEBUG: 214 Preliminary bookmark created:', preliminaryBookmark);
         
         // Save preliminary bookmark
         data.bookmarks = data.bookmarks || [];
@@ -150,56 +150,56 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         
         // For YouTube videos, inject content script for DOM scraping
         if (isYouTube) {
-          console.log('DEBUG: YouTube video detected, injecting content script for transcript scraping');
+          console.log('DEBUG: 215 YouTube video detected, injecting content script for transcript scraping');
           
           // Ensure content script is injected before sending message
-          console.log('DEBUG: Starting content script injection for tab:', currentTab.id);
+          console.log('DEBUG: 216 Starting content script injection for tab:', currentTab.id);
           try {
             const injectionResult = await chrome.scripting.executeScript({
               target: { tabId: currentTab.id },
               files: ['content.js']
             });
-            console.log('DEBUG: Injection result:', injectionResult);
+            console.log('DEBUG: 217 Injection result:', injectionResult);
             
             // Wait a bit more after injection for script to initialize
-            console.log('DEBUG: Waiting 500ms after injection for script to initialize');
+            console.log('DEBUG: 218 Waiting 500ms after injection for script to initialize');
             await new Promise(resolve => setTimeout(resolve, 500));
             
           } catch (injectionError) {
-            console.error('ERROR: Content script injection failed:', injectionError);
+            console.error('ERROR: 219 Content script injection failed:', injectionError);
             throw new Error(`Content script injection failed: ${injectionError.message}`);
           }
           
           // Verify content script is ready before sending the real message
-          console.log('DEBUG: Verifying content script is ready...');
+          console.log('DEBUG: 220 Verifying content script is ready...');
           const isReady = await verifyContentScript(currentTab.id);
           if (!isReady) {
-            console.error('ERROR: Content script verification failed');
+            console.error('ERROR: 221 Content script verification failed');
             throw new Error('Content script is not responding to ping');
           }
-          console.log('DEBUG: Content script verification successful');
+          console.log('DEBUG: 222 Content script verification successful');
           
           // Send message to content script to scrape and show overlay
-          console.log('DEBUG: Sending scrapeAndShowOverlay to tab:', currentTab.id);
+          console.log('DEBUG: 223 Sending scrapeAndShowOverlay to tab:', currentTab.id);
           const response = await sendMessageWithRetry(currentTab.id, {
             action: 'scrapeAndShowOverlay',
             bookmarkId: preliminaryBookmark.id,
             bookmarkData: preliminaryBookmark
           });
         } else {
-          console.log('DEBUG: Non-YouTube page, scraping directly in background');
-          // For non-YouTube pages, scrape directly without content script
-          const scrapedData = {
-            url: currentTab.url,
-            title: currentTab.title || 'Untitled',
-            content: '', // Will be filled by processWithAI
-            isYouTube: false,
-            videoId: null
-          };
+          console.log('DEBUG: 224 Non-YouTube page, scraping directly in background');
+          // For non-YouTube pages, scrape page content using executeScript
+          const scrapeResult = await chrome.scripting.executeScript({
+            target: { tabId: currentTab.id },
+            func: scrapePageContent
+          });
           
-          // Process with AI directly
+          const scrapedData = scrapeResult[0].result;
+          console.log('DEBUG: 225 Page scraped successfully, content length:', scrapedData.content.length);
+          
+          // Process with AI
           const result = await processWithAI(scrapedData, settings, categories, null);
-          console.log('DEBUG: AI processing completed for non-YouTube page');
+          console.log('DEBUG: 226 AI processing completed for non-YouTube page');
           
           // Update the preliminary bookmark with AI results
           const bookmarkIndex = data.bookmarks.findIndex(b => b.id === preliminaryBookmark.id);
@@ -212,41 +212,52 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             await saveStorageData(data);
           }
           
-          // Inject the overlay directly
+          // Inject content script and then overlay
+          console.log('DEBUG: 227 Injecting content script for overlay');
           await chrome.scripting.executeScript({
             target: { tabId: currentTab.id },
-            func: injectBookmarkOverlay,
-            args: [preliminaryBookmark.id, {
+            files: ['content.js']
+          });
+          
+          // Wait for content script to initialize
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          // Send message to content script to inject overlay with AI results
+          console.log('DEBUG: 228 Sending injectOverlayWithAIResults message');
+          await chrome.tabs.sendMessage(currentTab.id, {
+            action: 'injectOverlayWithAIResults',
+            bookmarkId: preliminaryBookmark.id,
+            bookmarkData: {
               ...preliminaryBookmark,
               category: result.category,
               summary: result.summary,
               tags: result.tags
-            }]
+            }
           });
         }
         
         sendResponse({ success: true, bookmarkId: preliminaryBookmark.id });
       } else if (request.action === 'processWithAI') {
         // Process scraped content with AI
-        console.log('DEBUG: Background processing AI request');
+        console.log('DEBUG: 229 Background processing AI request');
         
         // Load settings and categories from storage
         const data = await getStorageData();
         const settings = data.settings || {};
         const categories = data.categories || [];
         
-        console.log('DEBUG: Settings loaded:', settings);
-        console.log('DEBUG: API Key present:', !!settings.apiKey);
-        console.log('DEBUG: Categories:', categories);
-        console.log('DEBUG: Transcript provided:', !!request.transcript);
-        console.log('DEBUG: Is YouTube:', request.scrapedData.isYouTube);
+        console.log('DEBUG: 230 Settings loaded:', settings);
+        console.log('DEBUG: 231 API Key present:', !!settings.apiKey);
+        console.log('DEBUG: 232 Categories:', categories);
+        console.log('DEBUG: 233 Transcript provided:', !!request.transcript);
+        console.log('DEBUG: 234 Is YouTube:', request.scrapedData.isYouTube);
         
         // Pass settings to processWithAI
         const result = await processWithAI(request.scrapedData, settings, categories, request.transcript);
         sendResponse({ success: true, result });
       } else if (request.action === 'updateBookmark') {
         // Update bookmark with final data
-        console.log('DEBUG: Background updating bookmark:', request.bookmarkId);
+        console.log('DEBUG: 235 Background updating bookmark:', request.bookmarkId);
         const data = await getStorageData();
         const bookmarkIndex = data.bookmarks.findIndex(b => b.id === request.bookmarkId);
         
@@ -256,7 +267,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           const existingCategories = data.categories || [];
           
           if (updatedCategory && !existingCategories.includes(updatedCategory)) {
-            console.log('DEBUG: New category detected, adding to categories list:', updatedCategory);
+            console.log('DEBUG: 236 New category detected, adding to categories list:', updatedCategory);
             // Add new category to the categories array
             existingCategories.push(updatedCategory);
             existingCategories.sort(); // Keep categories sorted
@@ -276,20 +287,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
       } else if (request.action === 'cancelBookmark') {
         // Remove preliminary bookmark
-        console.log('DEBUG: Background canceling bookmark:', request.bookmarkId);
+        console.log('DEBUG: 237 Background canceling bookmark:', request.bookmarkId);
         const data = await getStorageData();
         data.bookmarks = data.bookmarks.filter(b => b.id !== request.bookmarkId);
         await saveStorageData(data);
         sendResponse({ success: true });
       } else if (request.action === 'getTranscript') {
         // Get transcript for a video
-        console.log('DEBUG: Background getting transcript for video:', request.videoId);
+        console.log('DEBUG: 238 Background getting transcript for video:', request.videoId);
         const transcriptData = await getTranscript(request.videoId);
         sendResponse({ success: true, transcript: transcriptData });
       }
       
     } catch (error) {
-      console.error('ERROR: Background processing failed:', error);
+      console.error('ERROR: 239 Background processing failed:', error);
       sendResponse({ success: false, error: error.message });
     }
   })();
@@ -305,6 +316,7 @@ async function saveTranscript(videoId, transcriptData) {
     ...transcripts[videoId],
     ...transcriptData
   };
+  console.log('DEBUG: 240 Saving transcript for video:', videoId);
   
   await chrome.storage.local.set({ rvTranscripts: transcripts });
 }
@@ -312,11 +324,13 @@ async function saveTranscript(videoId, transcriptData) {
 async function getTranscript(videoId) {
   const result = await chrome.storage.local.get('rvTranscripts');
   return result.rvTranscripts ? result.rvTranscripts[videoId] : null;
+  console.log('DEBUG: 241 Retrieved transcript for video:', videoId);
 }
 
 async function updateTranscript(videoId, updates) {
   const result = await chrome.storage.local.get('rvTranscripts');
   const transcripts = result.rvTranscripts || {};
+  console.log('DEBUG: 242 Updating transcript for video:', videoId);
   
   if (transcripts[videoId]) {
     transcripts[videoId] = {
@@ -333,7 +347,7 @@ async function updateTranscript(videoId, updates) {
 // Format transcript for display using AI (handles DOM-scraped string)
 async function formatTranscriptForDisplay(rawTranscript, apiKey) {
   try {
-    console.log('DEBUG: Formatting transcript with AI, length:', rawTranscript.length);
+    console.log('DEBUG: 243 Formatting transcript with AI, length:', rawTranscript.length);
     
     // DOM-scraped transcript is already a string - no conversion needed
     const prompt = `Reformat this YouTube transcript to make it "pretty" and readable for humans in markdown format.
@@ -357,17 +371,18 @@ Return ONLY the formatted markdown transcript.`;
         messages: [{ role: 'user', content: prompt }]
       })
     });
+    console.log('DEBUG: 244 Transcript formatting API response received');
     
     if (!response.ok) {
       throw new Error(`API error: ${response.status}`);
     }
     
     const data = await response.json();
-    console.log('DEBUG: Transcript formatting completed successfully');
+    console.log('DEBUG: 245 Transcript formatting completed successfully');
     return data.content[0].text;
     
   } catch (error) {
-    console.error('ERROR: Failed to format transcript:', error);
+    console.error('ERROR: 246 Failed to format transcript:', error);
     return null;
   }
 }
@@ -376,10 +391,10 @@ Return ONLY the formatted markdown transcript.`;
 
 // Enhanced AI processing function
 async function processWithAI(scrapedData, settings, categories, transcript = null) {
-  console.log('DEBUG: processWithAI called with settings:', settings);
-  console.log('DEBUG: API Key in processWithAI:', settings.apiKey ? 'PRESENT' : 'MISSING');
-  console.log('DEBUG: Is YouTube video:', scrapedData.isYouTube);
-  console.log('DEBUG: Transcript provided:', !!transcript);
+  console.log('DEBUG: 247 processWithAI called with settings:', settings);
+  console.log('DEBUG: 248 API Key in processWithAI:', settings.apiKey ? 'PRESENT' : 'MISSING');
+  console.log('DEBUG: 249 Is YouTube video:', scrapedData.isYouTube);
+  console.log('DEBUG: 250 Transcript provided:', !!transcript);
   
   // Validate API key
   if (!settings.apiKey) {
@@ -388,20 +403,21 @@ async function processWithAI(scrapedData, settings, categories, transcript = nul
   
   // Handle YouTube videos with transcript
   if (scrapedData.isYouTube && scrapedData.videoId && transcript) {
-    console.log('DEBUG: Processing YouTube video with DOM-scraped transcript');
+    console.log('DEBUG: 251 Processing YouTube video with DOM-scraped transcript');
     return await processYouTubeVideoWithTranscript(scrapedData, settings, categories, transcript);
   } else if (scrapedData.isYouTube && scrapedData.videoId) {
-    console.log('DEBUG: Processing YouTube video without transcript');
+    console.log('DEBUG: 252 Processing YouTube video without transcript');
     return await processStandardPage(scrapedData, settings, categories);
   } else {
+    console.log('DEBUG: 253 Processing non-YouTube page');
     return await processStandardPage(scrapedData, settings, categories);
   }
 }
 
 // Process YouTube video with transcript (DOM-scraped only)
 async function processYouTubeVideoWithTranscript(scrapedData, settings, categories, transcript) {
-  console.log('DEBUG: Processing YouTube video with DOM transcript:', scrapedData.videoId);
-  console.log('DEBUG: Transcript length:', transcript.length);
+  console.log('DEBUG: 254 Processing YouTube video with DOM transcript:', scrapedData.videoId);
+  console.log('DEBUG: 255 Transcript length:', transcript.length);
   
   try {
     // Save the raw transcript
@@ -414,7 +430,7 @@ async function processYouTubeVideoWithTranscript(scrapedData, settings, categori
         source: 'dom-scraping'
       }
     });
-    console.log('DEBUG: Raw transcript saved to storage');
+    console.log('DEBUG: 256 Raw transcript saved to storage');
     
     // Process with AI using the transcript for enhanced analysis
     const aiResult = await processWithAIAndTranscript(
@@ -424,28 +440,29 @@ async function processYouTubeVideoWithTranscript(scrapedData, settings, categori
       settings,
       categories
     );
-    console.log('DEBUG: AI processing with transcript completed');
+    console.log('DEBUG: 257 AI processing with transcript completed');
     
     // Format transcript for display using AI
     const formattedTranscript = await formatTranscriptForDisplay(
       transcript,
       settings.apiKey
     );
+    console.log('DEBUG: 258 Transcript formatting completed function: formatTranscriptForDisplay');
     
     // Update transcript with formatted version
     if (formattedTranscript) {
       await updateTranscript(scrapedData.videoId, {
         formatted: formattedTranscript
       });
-      console.log('DEBUG: Formatted transcript saved to storage');
+      console.log('DEBUG: 259 Formatted transcript saved to storage');
     } else {
-      console.warn('WARN: No formatted transcript returned from AI');
+      console.warn('WARN: 260 No formatted transcript returned from AI');
     }
     
     return aiResult;
     
   } catch (error) {
-    console.error('ERROR: YouTube video processing failed:', error);
+    console.error('ERROR: 261 YouTube video processing failed:', error);
     // Fall back to standard processing without transcript
     return await processStandardPage(scrapedData, settings, categories);
   }
@@ -454,10 +471,46 @@ async function processYouTubeVideoWithTranscript(scrapedData, settings, categori
 // Process with AI and transcript (DOM-scraped only) - NO TRUNCATION
 async function processWithAIAndTranscript(title, description, transcript, settings, categories) {
   // DOM-scraped transcript is a string - do NOT truncate
-  console.log('DEBUG: Using full DOM-scraped transcript, length:', transcript.length);
+  console.log('DEBUG: 262 Using full DOM-scraped transcript, length:', transcript.length);
   
   const prompt = `Analyze this YouTube video and provide:
-1. A summary under 200 words using markdown
+1. Analyze the transcript and create a structured summary following this format below.  If the transcript is not in english, create a summary in the native language, then translate it to english using natural language to communicate the meaning over literal translation.  Only return the English version:
+
+# {{Title}}
+
+## Right Up Front
+#### [Relevant Emoji] * Very Short and Concise Summary Line 1 [what am I going to read]
+#### [Relevant Emoji] * Very Short and Concise Summary Line 2 [what am I going to read]
+#### [Relevant Emoji] * Very Short and Concise Summary Line 3 [what am I going to read]
+
+Brief overview (2-3 sentences)
+
+# The Real Real [include this section only if applicable.  If not applicable, skip it]
+## Say What??
+### - [Relevant emoji] [Identify Sensationalistic, Exaggerated, or Conspiratorial keywords, statements and claims.  For each include:]
+* Explain what is implied
+* Provide a brief realistic statement on the known or likely facts about this point.  
+* If applicable, provide a consensus view of scientists, experts, doctors or other professionals in the field.
+
+## 📌 Key Categories
+[For each major theme, include:]
+### - [Relevant emoji] Category Name
+* Important points, critical data, arguments, conclusions, or novel insights as bullets
+* Supporting details/examples
+
+#### 🔗 Referenced URLs/Websites
+[List all mentioned, as hyperlinks if possible]
+
+#️⃣ Tags: [Up to 8 relevant topic tags]
+
+Guidelines:
+- Prioritize AI business cases when present
+- Use clear, descriptive headings
+- Group related points together
+- Include all significant data/insights
+- Maintain logical flow
+- Be concise, but thorough and comprehensive
+- Use markdown formatting
 2. A category (use existing if fitting: ${categories.join(', ')}, else suggest new)
 3. Up to 10 relevant tags
 
@@ -484,14 +537,14 @@ Return ONLY a JSON object with this exact structure:
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 8000, // Increased for longer transcripts
+      max_tokens: 10000, // Increased for longer transcripts
       messages: [{ role: 'user', content: prompt }]
     })
   });
   
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    console.error('ERROR: API request failed:', response.status, errorData);
+    console.error('ERROR: 263 API request failed:', response.status, errorData);
     throw new Error(`API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
   }
   
@@ -534,10 +587,11 @@ Return ONLY a JSON object with this exact structure:
       messages: [{ role: 'user', content: prompt }]
     })
   });
+  console.log('DEBUG: 264 Standard page AI API response received');
   
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    console.error('ERROR: API request failed:', response.status, errorData);
+    console.error('ERROR: 265 API request failed:', response.status, errorData);
     throw new Error(`API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
   }
   

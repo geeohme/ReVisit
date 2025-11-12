@@ -14,15 +14,15 @@ async function sendMessageWithRetry(tabId, message, maxRetries = 5) {
     try {
       // Wait before first attempt (and longer for subsequent attempts)
       const delay = i === 0 ? 100 : Math.min(100 * Math.pow(2, i), 1000);
-      console.log(`DEBUG: Waiting ${delay}ms before attempt ${i + 1}`);
+      console.log(`DEBUG: 301 Waiting ${delay}ms before attempt ${i + 1}`);
       await new Promise(resolve => setTimeout(resolve, delay));
       
-      console.log(`DEBUG: Sending message (attempt ${i + 1}/${maxRetries})`);
+      console.log(`DEBUG: 302 Sending message (attempt ${i + 1}/${maxRetries})`);
       const response = await chrome.tabs.sendMessage(tabId, message);
-      console.log('DEBUG: Message sent successfully');
+      console.log('DEBUG: 303 Message sent successfully');
       return response;
     } catch (error) {
-      console.warn(`WARN: Attempt ${i + 1} failed:`, error.message);
+      console.warn(`WARN: 304 Attempt ${i + 1} failed:`, error.message);
       if (i === maxRetries - 1) {
         // Last attempt, throw the error
         throw error;
@@ -419,61 +419,61 @@ async function handleReVisitAction(bookmark) {
 async function openAddBookmarkModal() {
   try {
     // Scrape current page
-    console.log('DEBUG: Starting openAddBookmarkModal()');
+    console.log('DEBUG: 305 Starting openAddBookmarkModal()');
     
     // Read tabId from URL parameter
     const urlParams = new URLSearchParams(window.location.search);
     const tabIdParam = urlParams.get('tabId');
-    console.log('DEBUG: tabId from URL parameter:', tabIdParam);
+    console.log('DEBUG: 306 tabId from URL parameter:', tabIdParam);
     
     let targetTab;
     if (tabIdParam) {
       // Use the specific tab that was passed from popup
       targetTab = await chrome.tabs.get(parseInt(tabIdParam));
-      console.log('DEBUG: Using target tab from parameter:', targetTab);
+      console.log('DEBUG: 307 Using target tab from parameter:', targetTab);
     } else {
       // Fallback to current behavior for backward compatibility
       const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
       targetTab = activeTab;
-      console.log('DEBUG: Using active tab (fallback):', targetTab);
+      console.log('DEBUG: 308 Using active tab (fallback):', targetTab);
     }
     
-    console.log('DEBUG: Target tab ID:', targetTab.id);
-    console.log('DEBUG: Target tab URL:', targetTab.url);
+    console.log('DEBUG: 309 Target tab ID:', targetTab.id);
+    console.log('DEBUG: 310 Target tab URL:', targetTab.url);
     
     // Ensure content script is injected before sending message
-    console.log('DEBUG: Injecting content script into tab:', targetTab.id);
+    console.log('DEBUG: 311 Injecting content script into tab:', targetTab.id);
     try {
       await chrome.scripting.executeScript({
         target: { tabId: targetTab.id },
         files: ['content.js']
       });
-      console.log('DEBUG: Content script injected successfully');
+      console.log('DEBUG: 312 Content script injected successfully');
     } catch (injectionError) {
-      console.warn('WARN: Content script injection failed, may already be injected:', injectionError.message);
+      console.warn('WARN: 313 Content script injection failed, may already be injected:', injectionError.message);
       // Continue anyway as the script might already be present
     }
     
     // TEST: Try to send message to content script with retry
-    console.log('DEBUG: About to call sendMessageWithRetry()');
+    console.log('DEBUG: 314 About to call sendMessageWithRetry()');
     let scraped;
     try {
       scraped = await sendMessageWithRetry(targetTab.id, { action: 'scrapePage' });
-      console.log('DEBUG: Scraped data received:', scraped);
+      console.log('DEBUG: 315 Scraped data received:', scraped);
     } catch (messageError) {
-      console.error('ERROR: sendMessageWithRetry() failed:', messageError);
-      console.error('ERROR: Tab ID:', targetTab.id);
-      console.error('ERROR: Tab URL:', targetTab.url);
+      console.error('ERROR: 316 sendMessageWithRetry() failed:', messageError);
+      console.error('ERROR: 317 Tab ID:', targetTab.id);
+      console.error('ERROR: 318 Tab URL:', targetTab.url);
       throw messageError; // Re-throw to be caught by outer catch
     }
     
     // Process with AI
-    console.log('DEBUG: About to call processWithAI()');
+    console.log('DEBUG: 319 About to call processWithAI()');
     const result = await processWithAI(scraped);
-    console.log('DEBUG: AI processing complete:', result);
+    console.log('DEBUG: 320 AI processing complete:', result);
     
     // Create bookmark object
-    console.log('DEBUG: Creating bookmark object');
+    console.log('DEBUG: 321 Creating bookmark object');
     const bookmark = {
       id: 'rv-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
       url: targetTab.url, // Use the target tab's URL instead of scraped URL
@@ -487,28 +487,28 @@ async function openAddBookmarkModal() {
       status: 'Active',
       history: []
     };
-    console.log('DEBUG: Bookmark object created:', bookmark);
+    console.log('DEBUG: 322 Bookmark object created:', bookmark);
     
     // Save and open for editing
-    console.log('DEBUG: About to push bookmark to array');
+    console.log('DEBUG: 323 About to push bookmark to array');
     bookmarks.push(bookmark);
-    console.log('DEBUG: About to call saveData()');
+    console.log('DEBUG: 324 About to call saveData()');
     await saveData();
-    console.log('DEBUG: saveData() completed successfully');
+    console.log('DEBUG: 325 saveData() completed successfully');
     
     selectedBookmarkId = bookmark.id;
     renderCategories();
     renderLinks();
     renderDetails(bookmark);
-    console.log('DEBUG: openAddBookmarkModal() completed successfully');
+    console.log('DEBUG: 326 openAddBookmarkModal() completed successfully');
   } catch (error) {
-    console.error('ERROR: Caught in openAddBookmarkModal() catch block');
-    console.error('ERROR: Message:', error.message);
-    console.error('ERROR: Stack:', error.stack);
+    console.error('ERROR: 327 Caught in openAddBookmarkModal() catch block');
+    console.error('ERROR: 328 Message:', error.message);
+    console.error('ERROR: 329 Stack:', error.stack);
     
     // Check if it's the specific connection error
     if (error.message.includes('Could not establish connection')) {
-      console.error('DEBUG: Connection error detected - content script not available');
+      console.error('DEBUG: 330 Connection error detected - content script not available');
       alert('Failed to add bookmark: Content script not loaded. Please refresh the page and try again.');
     } else {
       alert('Failed to add bookmark. Check API key and try again.');

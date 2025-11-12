@@ -3,20 +3,20 @@ console.log('DEBUG: Content script starting execution on:', window.location.href
 
 // Wrap entire script in try-catch to catch any initialization errors
 try {
-  console.log('DEBUG: Content script loaded successfully, registering message listener');
+  console.log('DEBUG: 101 Content script loaded successfully, registering message listener');
   
   // Synchronous message handler - no async/await anywhere
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    console.log('DEBUG: Content script received message:', request);
+    console.log('DEBUG: 102 Content script received message:', request);
     
     if (request.action === 'ping') {
-      console.log('DEBUG: Responding to ping request');
+      console.log('DEBUG: 103 Responding to ping request');
       sendResponse({ success: true, message: 'Content script is ready' });
       return;
     }
     
     if (request.action === 'scrapePage') {
-      console.log('DEBUG: Processing scrapePage request');
+      console.log('DEBUG: 104 Processing scrapePage request');
       const bodyText = document.body.innerText || '';
       const truncated = bodyText.substring(0, 2000);
       const response = {
@@ -24,27 +24,34 @@ try {
         title: document.title || 'Untitled',
         content: truncated
       };
-      console.log('DEBUG: Sending response:', response);
+      console.log('DEBUG: 105 Sending response:', response);
       sendResponse(response);
       return;
     }
     
     if (request.action === 'scrapeAndShowOverlay') {
-      console.log('DEBUG: Processing scrapeAndShowOverlay request');
+      console.log('DEBUG: 106 Processing scrapeAndShowOverlay request');
       handleScrapeAndShowOverlay(request.bookmarkId, request.bookmarkData);
       sendResponse({ success: true });
       return;
     }
     
+    if (request.action === 'injectOverlayWithAIResults') {
+      console.log('DEBUG: 107 Processing injectOverlayWithAIResults request');
+      injectBookmarkOverlay(request.bookmarkId, request.bookmarkData);
+      sendResponse({ success: true });
+      return;
+    }
+    
     // REMOVED: fetchTranscript handler - no longer needed
-    console.warn('WARN: Unknown action received:', request.action);
+    console.warn('WARN: 108 Unknown action received:', request.action);
     sendResponse({ success: false, error: 'Unknown action' });
   });
   
-  console.log('DEBUG: Message listener registered successfully');
+  console.log('DEBUG: 109 Message listener registered successfully');
   
 } catch (error) {
-  console.error('ERROR: Content script initialization failed:', error);
+  console.error('ERROR: 110 Content script initialization failed:', error);
 }
 
 // Listen for floating modal actions (from injected script)
@@ -64,16 +71,19 @@ window.addEventListener('message', (event) => {
 
 // YouTube URL detection and video ID extraction
 function isYouTubeUrl(url) {
+  console.log('DEBUG: 111 Checking if URL is YouTube:', url);
   return url.includes('youtube.com/watch') || url.includes('youtu.be/');
 }
 
 function extractVideoId(url) {
+  console.log('DEBUG: 112 Extracting video ID from URL:', url);
   const urlObj = new URL(url);
   return urlObj.searchParams.get('v') || urlObj.pathname.split('/').pop();
 }
 
 // YouTube content scraping
 function scrapeYouTubeContent() {
+  console.log('DEBUG: 113 Scraping YouTube content');
   const videoId = extractVideoId(window.location.href);
   const title = document.title.replace(' - YouTube', '');
   
@@ -94,6 +104,7 @@ function scrapeYouTubeContent() {
 function waitForElement(selector, timeout = 5000) {
   return new Promise((resolve, reject) => {
     const existingElement = document.querySelector(selector);
+    console.log('DEBUG: 114 Waiting for element:', selector);
     if (existingElement) {
       return resolve(existingElement);
     }
@@ -120,42 +131,42 @@ function waitForElement(selector, timeout = 5000) {
 // Function to scrape transcript from YouTube DOM
 async function getTranscriptFromDOM() {
   try {
-    console.log("Scraper: Starting transcript search...");
+    console.log("DEBUG: 115 Scraper: Starting transcript search...");
     let segmentsContainer = document.querySelector('ytd-transcript-segment-list-renderer');
 
     if (!segmentsContainer) {
-      console.log("Scraper: Transcript panel not found. Attempting to open it.");
+      console.log("DEBUG: 116 Scraper: Transcript panel not found. Attempting to open it.");
       
       // Step 1: Click "...more" to expand the description area
       const descriptionExpander = document.querySelector('#expand.ytd-text-inline-expander');
       if (descriptionExpander) {
-        console.log("Scraper: Found '...more' button. Clicking to expand description.");
+        console.log("DEBUG: 117 Scraper: Found '...more' button. Clicking to expand description.");
         descriptionExpander.click();
       } else {
-        console.log("Scraper: '...more' button not found, assuming description is already expanded.");
+        console.log("DEBUG: 118 Scraper: '...more' button not found, assuming description is already expanded.");
       }
 
       // Step 2: Wait for the specific transcript section container to appear
-      console.log("Scraper: Waiting for the transcript section container to appear...");
+      console.log("DEBUG: 119 Scraper: Waiting for the transcript section container to appear...");
       const transcriptSectionContainer = await waitForElement('ytd-video-description-transcript-section-renderer');
-      console.log("Scraper: Found transcript section container.");
+      console.log("DEBUG: 120 Scraper: Found transcript section container.");
 
       // Step 3: Find the button within that container using its unique aria-label
       const showTranscriptButton = transcriptSectionContainer.querySelector('button[aria-label="Show transcript"]');
 
       if (!showTranscriptButton) {
-        console.error("Scraper: Could not find the 'Show transcript' button inside its container.");
+        console.error("DEBUG: 121 Scraper: Could not find the 'Show transcript' button inside its container.");
         return { error: "Could not find the 'Show transcript' button. The video may not have a transcript or the UI has changed." };
       }
       
-      console.log("Scraper: Found 'Show transcript' button. Clicking it.");
+      console.log("DEBUG: 122 Scraper: Found 'Show transcript' button. Clicking it.");
       showTranscriptButton.click();
 
       // Step 4: Wait for the actual transcript content panel to render
       segmentsContainer = await waitForElement('ytd-transcript-segment-list-renderer');
-      console.log("Scraper: Transcript panel is now visible.");
+      console.log("DEBUG: 123 Scraper: Transcript panel is now visible.");
     } else {
-      console.log("Scraper: Transcript panel was already open.");
+      console.log("DEBUG: 124 Scraper: Transcript panel was already open.");
     }
 
     // Step 5: Scrape the content
@@ -166,7 +177,7 @@ async function getTranscriptFromDOM() {
       return { error: "Transcript panel is open, but no text segments were found." };
     }
 
-    console.log(`Scraper: Found ${segmentElements.length} transcript segments. Scraping text.`);
+    console.log(`DEBUG: 125 Scraper: Found ${segmentElements.length} transcript segments. Scraping text.`);
     let fullTranscript = "";
     segmentElements.forEach(segment => {
       const textElement = segment.querySelector('.segment-text');
@@ -178,14 +189,14 @@ async function getTranscriptFromDOM() {
     return { transcript: fullTranscript.trim() };
 
   } catch (error) {
-    console.error("Transcript scraper error:", error);
+    console.error("DEBUG: 126 Transcript scraper error:", error);
     return { error: error.message };
   }
 }
 
 // Handle the scrape and overlay workflow
 async function handleScrapeAndShowOverlay(bookmarkId, preliminaryBookmark) {
-  console.log('DEBUG: Starting scrape and overlay workflow');
+  console.log('DEBUG: 127 Starting scrape and overlay workflow');
   
   // Scrape page content
   let scrapedData;
@@ -193,22 +204,22 @@ async function handleScrapeAndShowOverlay(bookmarkId, preliminaryBookmark) {
   const url = window.location.href;
   
   if (isYouTubeUrl(url)) {
-    console.log('DEBUG: Detected YouTube URL, using YouTube scraping');
+    console.log('DEBUG: 128 Detected YouTube URL, using YouTube scraping');
     scrapedData = scrapeYouTubeContent();
     
     // Also try to get transcript for YouTube videos
-    console.log('DEBUG: Attempting to scrape transcript from DOM');
+    console.log('DEBUG: 129 Attempting to scrape transcript from DOM');
     const transcriptResult = await getTranscriptFromDOM();
-    console.log('DEBUG: Transcript result:', transcriptResult);
+    console.log('DEBUG: 130 Transcript result:', transcriptResult);
     
     if (transcriptResult && transcriptResult.transcript) {
       transcript = transcriptResult.transcript;
-      console.log('DEBUG: Transcript successfully scraped, length:', transcript.length);
+      console.log('DEBUG: 131 Transcript successfully scraped, length:', transcript.length);
     } else {
-      console.warn('WARN: No transcript available from DOM scraping');
+      console.warn('WARN: 132 No transcript available from DOM scraping');
     }
   } else {
-    console.log('DEBUG: Standard URL, using standard scraping');
+    console.log('DEBUG: 134 Standard URL, using standard scraping');
     const bodyText = document.body.innerText || '';
     scrapedData = {
       url: window.location.href,
@@ -218,10 +229,10 @@ async function handleScrapeAndShowOverlay(bookmarkId, preliminaryBookmark) {
       videoId: null
     };
   }
-  console.log('DEBUG: Scraped data:', scrapedData);
+  console.log('DEBUG: 135 Scraped data:', scrapedData);
   
   // Send to background for AI processing
-  console.log('DEBUG: Sending to background for AI processing');
+  console.log('DEBUG: 136 Sending to background for AI processing: processWithAI');
   const message = {
     action: 'processWithAI',
     scrapedData: scrapedData
@@ -230,7 +241,7 @@ async function handleScrapeAndShowOverlay(bookmarkId, preliminaryBookmark) {
   // Add transcript to message if available
   if (transcript) {
     message.transcript = transcript;
-    console.log('DEBUG: Including transcript in AI processing request');
+    console.log('DEBUG: 137 Including transcript in AI processing request');
   }
   
   chrome.runtime.sendMessage(message).then(response => {
@@ -238,7 +249,7 @@ async function handleScrapeAndShowOverlay(bookmarkId, preliminaryBookmark) {
       throw new Error(response.error || 'AI processing failed');
     }
     
-    console.log('DEBUG: AI processing result:', response.result);
+    console.log('DEBUG: 138 AI processing result:', response.result);
     
     // Inject overlay with AI results
     injectBookmarkOverlay(bookmarkId, {
@@ -248,7 +259,7 @@ async function handleScrapeAndShowOverlay(bookmarkId, preliminaryBookmark) {
       tags: response.result.tags
     });
   }).catch(error => {
-    console.error('ERROR: Scrape and overlay workflow failed:', error);
+    console.error('ERROR: 139 Scrape and overlay workflow failed:', error);
     // Show error overlay
     injectErrorOverlay(bookmarkId, error.message);
   });
@@ -256,11 +267,11 @@ async function handleScrapeAndShowOverlay(bookmarkId, preliminaryBookmark) {
 
 // Listen for floating modal actions (from injected script)
 window.addEventListener('message', (event) => {
-  console.log('DEBUG: Window message received:', event.data);
+  console.log('DEBUG: 140 Window message received:', event.data);
   
   try {
     if (event.data.type === 'REVISIT_ACTION') {
-      console.log('DEBUG: Forwarding REVISIT_ACTION to background');
+      console.log('DEBUG: 141 Forwarding REVISIT_ACTION to background');
       // Forward to background script
       chrome.runtime.sendMessage({
         action: 'updateBookmarkStatus',
@@ -268,20 +279,20 @@ window.addEventListener('message', (event) => {
         actionType: event.data.action
       });
     } else if (event.data.type === 'OVERLAY_ACTION') {
-      console.log('DEBUG: Handling OVERLAY_ACTION');
+      console.log('DEBUG: 142 Handling OVERLAY_ACTION');
       // Handle overlay actions
       handleOverlayAction(event.data);
     } else {
-      console.log('DEBUG: Ignoring unknown message type:', event.data.type);
+      console.log('DEBUG: 143 Ignoring unknown message type:', event.data.type);
     }
   } catch (error) {
-    console.error('ERROR: Window message handler failed:', error);
+    console.error('ERROR: 144 Window message handler failed:', error);
   }
 });
 
 // Inject the bookmark overlay into the current page
 function injectBookmarkOverlay(bookmarkId, bookmarkData) {
-  console.log('DEBUG: Injecting bookmark overlay');
+  console.log('DEBUG: 145 Injecting bookmark overlay');
   
   // Remove existing overlay if any
   const existingOverlay = document.getElementById('rv-bookmark-overlay');
@@ -358,7 +369,7 @@ function injectBookmarkOverlay(bookmarkId, bookmarkData) {
     handleOverlayAction({ action: 'save', bookmarkId, updatedData });
   });
   
-  console.log('DEBUG: Overlay injected successfully');
+  console.log('DEBUG: 146 Overlay injected successfully');
 }
 
 // Inject error overlay
@@ -395,7 +406,7 @@ function injectErrorOverlay(bookmarkId, errorMessage) {
 
 // Handle overlay actions
 async function handleOverlayAction(actionData) {
-  console.log('DEBUG: Handling overlay action:', actionData);
+  console.log('DEBUG: 147 Handling overlay action:', actionData);
   
   const overlay = document.getElementById('rv-bookmark-overlay');
   if (overlay) {
@@ -404,7 +415,7 @@ async function handleOverlayAction(actionData) {
   
   if (actionData.action === 'save') {
     // Update bookmark with final data
-    console.log('DEBUG: Saving bookmark with final data');
+    console.log('DEBUG: 148 Saving bookmark with final data');
     const response = await chrome.runtime.sendMessage({
       action: 'updateBookmark',
       bookmarkId: actionData.bookmarkId,
@@ -412,16 +423,16 @@ async function handleOverlayAction(actionData) {
     });
     
     if (response.success) {
-      console.log('DEBUG: Bookmark saved successfully');
+      console.log('DEBUG: 149 Bookmark saved successfully');
       // Show success notification
       showNotification('Bookmark saved successfully!', 'success');
     } else {
-      console.error('ERROR: Failed to save bookmark:', response.error);
+      console.error('ERROR: 150 Failed to save bookmark:', response.error);
       showNotification('Failed to save bookmark', 'error');
     }
   } else if (actionData.action === 'cancel') {
     // Cancel and remove preliminary bookmark
-    console.log('DEBUG: Canceling bookmark');
+    console.log('DEBUG: 151 Canceling bookmark');
     await chrome.runtime.sendMessage({
       action: 'cancelBookmark',
       bookmarkId: actionData.bookmarkId
@@ -446,6 +457,7 @@ function showNotification(message, type = 'info') {
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   `;
   notification.textContent = message;
+  console.log('DEBUG: 152 Showing notification:', message);
   
   document.body.appendChild(notification);
   
