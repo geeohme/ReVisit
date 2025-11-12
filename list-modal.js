@@ -230,12 +230,12 @@ function renderDetails(bookmark) {
       <p><strong>Category:</strong> ${bookmark.category}</p>
       <p><strong>Revisit By:</strong> ${new Date(bookmark.revisitBy).toLocaleDateString()}</p>
       <p><strong>Status:</strong> ${bookmark.status}</p>
-      <div class="details-content">
+      <div class="details-content left-justify">
         <h3>Summary</h3>
         ${renderMarkdown(bookmark.summary)}
       </div>
       ${bookmark.userNotes ? `
-        <div class="details-content" style="margin-top: 15px;">
+        <div class="details-content left-justify" style="margin-top: 15px;">
           <h3>Your Notes</h3>
           ${renderMarkdown(bookmark.userNotes)}
         </div>
