@@ -7,9 +7,15 @@ const DEFAULT_DATA = {
   settings: {
     userName: "",
     defaultIntervalDays: 7,
-    apiKey: "",
+    apiKey: "",           // Anthropic API key
+    groqApiKey: "",       // Groq API key (optional, for faster/cheaper formatting)
     onboardingComplete: false,
-    priorityThresholdDays: 3
+    priorityThresholdDays: 3,
+    // Future: Allow user to choose providers
+    providers: {
+      summary: 'anthropic',    // 'anthropic', 'openai', 'groq'
+      formatting: 'groq'       // 'groq', 'sambanova', 'anthropic'
+    }
   }
 };
 
