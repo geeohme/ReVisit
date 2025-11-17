@@ -19,6 +19,190 @@ const DEFAULT_DATA = {
   }
 };
 
+// ============================================================================
+// LLM Provider Functions (from api-providers.js)
+// Note: Included inline due to service worker module limitations
+// ============================================================================
+
+async function callAnthropic(prompt, apiKey, maxTokens = 10000) {
+  console.log(`DEBUG: Calling Anthropic Haiku, max_tokens: ${maxTokens}`);
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: maxTokens,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    console.error('ERROR: Anthropic API request failed:', response.status, errorData);
+    throw new Error(`Anthropic API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+  }
+
+  const data = await response.json();
+  return data.content[0].text;
+}
+
+async function callGroq(prompt, apiKey, maxTokens = 8000) {
+  console.log(`DEBUG: Calling Groq Llama 4, max_tokens: ${maxTokens}`);
+
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: 'llama-3.1-70b-versatile',
+      max_tokens: maxTokens,
+      temperature: 0.3,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a helpful assistant that formats transcripts into clean, readable markdown.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ]
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    console.error('ERROR: Groq API request failed:', response.status, errorData);
+    throw new Error(`Groq API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content;
+}
+
+async function formatTranscriptFast(transcript, settings) {
+  // Use Groq by default, fallback to Anthropic if Groq key missing
+  const useGroq = settings.groqApiKey && settings.groqApiKey.trim().length > 0;
+  const provider = useGroq ? 'groq' : 'anthropic';
+
+  console.log(`DEBUG: Formatting transcript with ${provider}`);
+
+  const prompt = `Reformat this YouTube transcript to make it "pretty" and readable for humans in markdown format.
+Add timestamps in a clean format and improve readability:
+
+${transcript}
+
+Return ONLY the formatted markdown transcript.`;
+
+  try {
+    if (useGroq) {
+      const formatted = await callGroq(prompt, settings.groqApiKey, 8000);
+      console.log('DEBUG: Transcript formatted successfully with Groq');
+      return formatted;
+    } else {
+      const formatted = await callAnthropic(prompt, settings.apiKey, 8000);
+      console.log('DEBUG: Transcript formatted successfully with Anthropic (fallback)');
+      return formatted;
+    }
+  } catch (error) {
+    console.error(`ERROR: ${provider} formatting failed:`, error);
+
+    // Fallback to Anthropic if Groq fails
+    if (provider === 'groq' && settings.apiKey) {
+      console.log('DEBUG: Falling back to Anthropic for formatting');
+      const formatted = await callAnthropic(prompt, settings.apiKey, 8000);
+      return formatted;
+    }
+
+    throw error;
+  }
+}
+
+async function summarizeYouTubeVideo(title, description, transcript, settings, categories) {
+  if (!settings.apiKey) {
+    throw new Error('Anthropic API key required for video summarization');
+  }
+
+  console.log('DEBUG: Summarizing YouTube video with Anthropic Haiku');
+
+  const prompt = `Analyze this YouTube video and provide:
+1. Analyze the transcript and create a structured summary following this format below. If the transcript is not in english, create a summary in the native language, then translate it to english using natural language to communicate the meaning over literal translation. Only return the English version:
+
+# {{Title}}
+
+## Right Up Front
+#### [Relevant Emoji] * Very Short and Concise Summary Line 1 [what am I going to read]
+#### [Relevant Emoji] * Very Short and Concise Summary Line 2 [what am I going to read]
+#### [Relevant Emoji] * Very Short and Concise Summary Line 3 [what am I going to read]
+
+Brief overview (2-3 sentences)
+
+# The Real Real [include this section only if applicable. If not applicable, skip it]
+## Say What??
+### - [Relevant emoji] [Identify Sensationalistic, Exaggerated, or Conspiratorial keywords, statements and claims. For each include:]
+* Explain what is implied
+* Provide a brief realistic statement on the known or likely facts about this point.
+* If applicable, provide a consensus view of scientists, experts, doctors or other professionals in the field.
+
+## 📌 Key Categories
+[For each major theme, include:]
+### - [Relevant emoji] Category Name
+* Important points, critical data, arguments, conclusions, or novel insights as bullets
+* Supporting details/examples
+
+#### 🔗 Referenced URLs/Websites
+[List all mentioned, as hyperlinks if possible]
+
+#️⃣ Tags: [Up to 8 relevant topic tags]
+
+Guidelines:
+- Prioritize AI business cases when present
+- Use clear, descriptive headings
+- Group related points together
+- Include all significant data/insights
+- Maintain logical flow
+- Be concise, but thorough and comprehensive
+- Use markdown formatting
+
+2. A category (use existing if fitting: ${categories.join(', ')}, else suggest new)
+3. Up to 10 relevant tags
+
+Video Title: ${title}
+Description: ${description}
+
+Transcript:
+${transcript}
+
+Return ONLY a JSON object with this exact structure:
+{
+  "summary": "markdown summary",
+  "category": "single category name",
+  "tags": ["tag1", "tag2", "tag3"]
+}`;
+
+  const response = await callAnthropic(prompt, settings.apiKey, 10000);
+
+  // Parse JSON from response
+  const match = response.match(/\{[\s\S]*\}/);
+  if (!match) {
+    throw new Error('Invalid API response format');
+  }
+
+  return JSON.parse(match[0]);
+}
+
+// ============================================================================
+// End of LLM Provider Functions
+// ============================================================================
+
 // Initialize storage on install
 chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install') {
@@ -246,20 +430,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       } else if (request.action === 'processWithAI') {
         // Process scraped content with AI
         console.log('DEBUG: 229 Background processing AI request');
-        
+
         // Load settings and categories from storage
         const data = await getStorageData();
         const settings = data.settings || {};
         const categories = data.categories || [];
-        
+
         console.log('DEBUG: 230 Settings loaded:', settings);
         console.log('DEBUG: 231 API Key present:', !!settings.apiKey);
         console.log('DEBUG: 232 Categories:', categories);
         console.log('DEBUG: 233 Transcript provided:', !!request.transcript);
         console.log('DEBUG: 234 Is YouTube:', request.scrapedData.isYouTube);
-        
-        // Pass settings to processWithAI
-        const result = await processWithAI(request.scrapedData, settings, categories, request.transcript);
+
+        // Pass settings and sender.tab.id to processWithAI
+        const result = await processWithAI(request.scrapedData, settings, categories, request.transcript, sender?.tab?.id);
         sendResponse({ success: true, result });
       } else if (request.action === 'updateBookmark') {
         // Update bookmark with final data
@@ -347,70 +531,22 @@ async function updateTranscript(videoId, updates) {
   }
 }
 
-// REMOVED: All API-based YouTube transcript functions
-// DOM scraping in content.js is now the only method for transcript retrieval
-
-// Format transcript for display using AI (handles DOM-scraped string)
-async function formatTranscriptForDisplay(rawTranscript, apiKey) {
-  try {
-    console.log('DEBUG: 243 Formatting transcript with AI, length:', rawTranscript.length);
-    
-    // DOM-scraped transcript is already a string - no conversion needed
-    const prompt = `Reformat this YouTube transcript to make it "pretty" and readable for humans in markdown format.
-Add timestamps in a clean format and improve readability:
-
-${rawTranscript}
-
-Return ONLY the formatted markdown transcript.`;
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 8000, // Increased for longer transcripts
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-    console.log('DEBUG: 244 Transcript formatting API response received');
-    
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    console.log('DEBUG: 245 Transcript formatting completed successfully');
-    return data.content[0].text;
-    
-  } catch (error) {
-    console.error('ERROR: 246 Failed to format transcript:', error);
-    return null;
-  }
-}
-
-// REMOVED: formatTime function - no longer needed for DOM-scraped transcripts
-
 // Enhanced AI processing function
-async function processWithAI(scrapedData, settings, categories, transcript = null) {
+async function processWithAI(scrapedData, settings, categories, transcript = null, tabId = null) {
   console.log('DEBUG: 247 processWithAI called with settings:', settings);
   console.log('DEBUG: 248 API Key in processWithAI:', settings.apiKey ? 'PRESENT' : 'MISSING');
   console.log('DEBUG: 249 Is YouTube video:', scrapedData.isYouTube);
   console.log('DEBUG: 250 Transcript provided:', !!transcript);
-  
+
   // Validate API key
   if (!settings.apiKey) {
     throw new Error('API key not found in settings. Please configure your API key in the extension settings.');
   }
-  
+
   // Handle YouTube videos with transcript
   if (scrapedData.isYouTube && scrapedData.videoId && transcript) {
     console.log('DEBUG: 251 Processing YouTube video with DOM-scraped transcript');
-    return await processYouTubeVideoWithTranscript(scrapedData, settings, categories, transcript);
+    return await processYouTubeVideoWithTranscript(scrapedData, settings, categories, transcript, tabId);
   } else if (scrapedData.isYouTube && scrapedData.videoId) {
     console.log('DEBUG: 252 Processing YouTube video without transcript');
     return await processStandardPage(scrapedData, settings, categories);
@@ -420,11 +556,12 @@ async function processWithAI(scrapedData, settings, categories, transcript = nul
   }
 }
 
-// Process YouTube video with transcript (DOM-scraped only)
-async function processYouTubeVideoWithTranscript(scrapedData, settings, categories, transcript) {
-  console.log('DEBUG: 254 Processing YouTube video with DOM transcript:', scrapedData.videoId);
+// Process YouTube video with transcript using parallel API calls
+async function processYouTubeVideoWithTranscript(scrapedData, settings, categories, transcript, tabId) {
+  console.log('DEBUG: 254 Processing YouTube video with parallel API calls');
   console.log('DEBUG: 255 Transcript length:', transcript.length);
-  
+  console.log('DEBUG: 256 Using Groq for formatting:', !!settings.groqApiKey);
+
   try {
     // Save the raw transcript
     await saveTranscript(scrapedData.videoId, {
@@ -436,134 +573,57 @@ async function processYouTubeVideoWithTranscript(scrapedData, settings, categori
         source: 'dom-scraping'
       }
     });
-    console.log('DEBUG: 256 Raw transcript saved to storage');
-    
-    // Process with AI using the transcript for enhanced analysis
-    const aiResult = await processWithAIAndTranscript(
-      scrapedData.title,
-      scrapedData.content, // description
-      transcript,
-      settings,
-      categories
-    );
-    console.log('DEBUG: 257 AI processing with transcript completed');
-    
-    // Format transcript for display using AI
-    const formattedTranscript = await formatTranscriptForDisplay(
-      transcript,
-      settings.apiKey
-    );
-    console.log('DEBUG: 258 Transcript formatting completed function: formatTranscriptForDisplay');
-    
-    // Update transcript with formatted version
+    console.log('DEBUG: 257 Raw transcript saved to storage');
+
+    // PARALLEL API CALLS: Summary (Haiku) + Formatting (Groq)
+    console.log('DEBUG: 258 Launching parallel API calls (Haiku + Groq)');
+    const startTime = Date.now();
+
+    const [aiResult, formattedTranscript] = await Promise.all([
+      // Call 1: Anthropic Haiku for smart summarization
+      summarizeYouTubeVideo(
+        scrapedData.title,
+        scrapedData.content,
+        transcript,
+        settings,
+        categories
+      ),
+
+      // Call 2: Groq for fast transcript formatting
+      formatTranscriptFast(transcript, settings)
+    ]);
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`DEBUG: 259 Both API calls completed in ${elapsed}s`);
+    console.log('DEBUG: 260 AI summarization result:', aiResult);
+    console.log('DEBUG: 261 Formatted transcript length:', formattedTranscript.length);
+
+    // Save formatted transcript (non-blocking - happens in background)
     if (formattedTranscript) {
-      await updateTranscript(scrapedData.videoId, {
-        formatted: formattedTranscript
-      });
-      console.log('DEBUG: 259 Formatted transcript saved to storage');
-    } else {
-      console.warn('WARN: 260 No formatted transcript returned from AI');
+      console.log('DEBUG: 262 Saving formatted transcript in background');
+      updateTranscript(scrapedData.videoId, { formatted: formattedTranscript })
+        .then(() => {
+          console.log('DEBUG: 263 Formatted transcript saved successfully');
+          // Show success notification to user
+          if (tabId) {
+            chrome.tabs.sendMessage(tabId, {
+              action: 'showNotification',
+              message: 'Transcript Saved',
+              type: 'success'
+            }).catch(err => console.warn('WARN: Could not show transcript saved notification:', err));
+          }
+        })
+        .catch(err => console.error('ERROR: 264 Failed to save formatted transcript:', err));
     }
-    
+
+    // Return summary immediately (formatted transcript save is non-blocking)
     return aiResult;
-    
+
   } catch (error) {
-    console.error('ERROR: 261 YouTube video processing failed:', error);
+    console.error('ERROR: 265 YouTube video processing failed:', error);
     // Fall back to standard processing without transcript
     return await processStandardPage(scrapedData, settings, categories);
   }
-}
-
-// Process with AI and transcript (DOM-scraped only) - NO TRUNCATION
-async function processWithAIAndTranscript(title, description, transcript, settings, categories) {
-  // DOM-scraped transcript is a string - do NOT truncate
-  console.log('DEBUG: 262 Using full DOM-scraped transcript, length:', transcript.length);
-  
-  const prompt = `Analyze this YouTube video and provide:
-1. Analyze the transcript and create a structured summary following this format below.  If the transcript is not in english, create a summary in the native language, then translate it to english using natural language to communicate the meaning over literal translation.  Only return the English version:
-
-# {{Title}}
-
-## Right Up Front
-#### [Relevant Emoji] * Very Short and Concise Summary Line 1 [what am I going to read]
-#### [Relevant Emoji] * Very Short and Concise Summary Line 2 [what am I going to read]
-#### [Relevant Emoji] * Very Short and Concise Summary Line 3 [what am I going to read]
-
-Brief overview (2-3 sentences)
-
-# The Real Real [include this section only if applicable.  If not applicable, skip it]
-## Say What??
-### - [Relevant emoji] [Identify Sensationalistic, Exaggerated, or Conspiratorial keywords, statements and claims.  For each include:]
-* Explain what is implied
-* Provide a brief realistic statement on the known or likely facts about this point.  
-* If applicable, provide a consensus view of scientists, experts, doctors or other professionals in the field.
-
-## 📌 Key Categories
-[For each major theme, include:]
-### - [Relevant emoji] Category Name
-* Important points, critical data, arguments, conclusions, or novel insights as bullets
-* Supporting details/examples
-
-#### 🔗 Referenced URLs/Websites
-[List all mentioned, as hyperlinks if possible]
-
-#️⃣ Tags: [Up to 8 relevant topic tags]
-
-Guidelines:
-- Prioritize AI business cases when present
-- Use clear, descriptive headings
-- Group related points together
-- Include all significant data/insights
-- Maintain logical flow
-- Be concise, but thorough and comprehensive
-- Use markdown formatting
-2. A category (use existing if fitting: ${categories.join(', ')}, else suggest new)
-3. Up to 10 relevant tags
-
-Video Title: ${title}
-Description: ${description}
-
-Transcript:
-${transcript}
-
-Return ONLY a JSON object with this exact structure:
-{
-  "summary": "markdown summary",
-  "category": "single category name",
-  "tags": ["tag1", "tag2", "tag3"]
-}`;
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': settings.apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 10000, // Increased for longer transcripts
-      messages: [{ role: 'user', content: prompt }]
-    })
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    console.error('ERROR: 263 API request failed:', response.status, errorData);
-    throw new Error(`API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
-  }
-  
-  const data = await response.json();
-  const content = data.content[0].text;
-  
-  // Parse JSON from response
-  const match = content.match(/\{[\s\S]*\}/);
-  if (!match) {
-    throw new Error('Invalid API response format');
-  }
-  
-  return JSON.parse(match[0]);
 }
 
 // Process standard page (original function)

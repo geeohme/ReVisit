@@ -1488,20 +1488,20 @@ async function streamingSummarize(prompt, apiKey) {
   - [x] Add Groq API key to DEFAULT_DATA
   - [x] Test: Verify no errors on extension reload
 
-- [ ] **Phase 2:** Implement parallel split (70 min)
-  - [ ] Add LLM provider functions to background.js
-  - [ ] Replace processYouTubeVideoWithTranscript (with tabId parameter)
-  - [ ] Update processWithAI to pass sender.tab.id
-  - [ ] Add notification handler to content.js
-  - [ ] Add "ReVisit Processing" notification in content.js
-  - [ ] Add "Transcript Saved" notification in background.js
-  - [ ] Delete old formatting functions
+- [x] **Phase 2:** Implement parallel split (70 min) ✅ COMPLETED
+  - [x] Add LLM provider functions to background.js
+  - [x] Replace processYouTubeVideoWithTranscript (with tabId parameter)
+  - [x] Update processWithAI to pass sender.tab.id
+  - [x] Add notification handler to content.js
+  - [x] Add "ReVisit Processing" notification in content.js
+  - [x] Add "Transcript Saved" notification in background.js
+  - [x] Delete old formatting functions
   - [ ] Test: YouTube bookmark with Groq key
   - [ ] Test: Verify both notifications appear correctly
 
-- [ ] **Phase 3:** Update onboarding (30 min)
-  - [ ] Add Groq API key input to onboarding.html
-  - [ ] Update completeOnboarding() function
+- [x] **Phase 3:** Update onboarding (30 min) ✅ COMPLETED
+  - [x] Add Groq API key input to onboarding.html
+  - [x] Update completeOnboarding() function
   - [ ] Test: Run onboarding, verify Groq key saved
 
 - [ ] **Phase 4:** Eliminate code duplication (45 min)
