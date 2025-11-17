@@ -11,6 +11,7 @@ This document provides exact fixes for all duplication and performance issues id
 - ✅ Remove zombie code and bugs
 - ✅ Reduce storage operations from 3 to 2 per bookmark
 - ✅ Future-proof architecture with LLM provider abstraction layer
+- ✅ Enhanced user feedback with toast notifications ("ReVisit Processing", "Transcript Saved")
 
 ---
 
@@ -74,6 +75,8 @@ background.js: Create preliminary bookmark (IN MEMORY, no save yet)
   ↓
 content.js: Scrape page + transcript
   ↓
+content.js: 🔔 TOAST: "ReVisit Processing" (info notification)
+  ↓
 background.js: processWithAI() called
   ├→ saveTranscript() → SAVE #1 (raw transcript only)
   └→ processYouTubeVideoWithTranscript()
@@ -84,7 +87,7 @@ background.js: processWithAI() called
       │
       Wait for BOTH to complete (MAX of the two = ~2-4s)
       │
-      ├─→ Formatted transcript ready immediately (no background save needed!)
+      ├─→ Formatted transcript ready immediately!
       └─→ Return summary/category/tags
   ↓
 ⏱️ TOTAL WAIT: ~2-4 seconds (50% improvement)
@@ -93,6 +96,8 @@ background.js: processWithAI() called
 content.js: injectBookmarkOverlay() ← USER SEES OVERLAY
   ↓
 [Background] Save formatted transcript to storage
+  ├─→ On success: 🔔 TOAST: "Transcript Saved" (success notification)
+  └─→ On error: Log error
   ↓
 User edits bookmark and clicks "Save"
   ↓
@@ -754,7 +759,7 @@ Return ONLY a JSON object with this exact structure:
 **Replace with:**
 ```javascript
 // Process YouTube video with transcript using parallel API calls
-async function processYouTubeVideoWithTranscript(scrapedData, settings, categories, transcript) {
+async function processYouTubeVideoWithTranscript(scrapedData, settings, categories, transcript, tabId) {
   console.log('DEBUG: 254 Processing YouTube video with parallel API calls');
   console.log('DEBUG: 255 Transcript length:', transcript.length);
   console.log('DEBUG: 256 Using Groq for formatting:', !!settings.groqApiKey);
@@ -799,7 +804,17 @@ async function processYouTubeVideoWithTranscript(scrapedData, settings, categori
     if (formattedTranscript) {
       console.log('DEBUG: 262 Saving formatted transcript in background');
       updateTranscript(scrapedData.videoId, { formatted: formattedTranscript })
-        .then(() => console.log('DEBUG: 263 Formatted transcript saved successfully'))
+        .then(() => {
+          console.log('DEBUG: 263 Formatted transcript saved successfully');
+          // Show success notification to user
+          if (tabId) {
+            chrome.tabs.sendMessage(tabId, {
+              action: 'showNotification',
+              message: 'Transcript Saved',
+              type: 'success'
+            }).catch(err => console.warn('WARN: Could not show transcript saved notification:', err));
+          }
+        })
         .catch(err => console.error('ERROR: 264 Failed to save formatted transcript:', err));
     }
 
@@ -814,7 +829,98 @@ async function processYouTubeVideoWithTranscript(scrapedData, settings, categori
 }
 ```
 
-#### Step 2.3: Delete Old Functions
+#### Step 2.3: Update processWithAI to Pass tabId
+
+**File:** `background.js`
+**Location:** Lines 393-415 (`processWithAI` function)
+
+**Update:** Pass `tabId` parameter through to YouTube processing function
+
+**Find the call to processYouTubeVideoWithTranscript:**
+```javascript
+// Old
+return await processYouTubeVideoWithTranscript(scrapedData, settings, categories, transcript);
+```
+
+**Replace with:**
+```javascript
+// New - pass sender.tab.id for notifications
+return await processYouTubeVideoWithTranscript(scrapedData, settings, categories, transcript, sender?.tab?.id);
+```
+
+**Note:** You'll also need to update the function signature of `processWithAI` to accept `sender` parameter, and update the message handler to pass `sender` when calling `processWithAI`.
+
+#### Step 2.4: Add Notification Handler to content.js
+
+**File:** `content.js`
+**Location:** In the `chrome.runtime.onMessage` listener (around line 9)
+
+**Add new message handler case:**
+```javascript
+// Existing message handler structure
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  console.log('DEBUG: 106 Content script received message:', request.action);
+
+  // ... existing cases ...
+
+  // NEW: Add this case for showing notifications
+  else if (request.action === 'showNotification') {
+    console.log('DEBUG: Showing notification from background:', request.message);
+    showNotification(request.message, request.type);
+    sendResponse({ success: true });
+  }
+
+  // ... rest of existing code ...
+});
+```
+
+#### Step 2.5: Add "ReVisit Processing" Notification in content.js
+
+**File:** `content.js`
+**Location:** In `handleScrapeAndShowOverlay` function (around line 247)
+
+**Current code (lines 247-260):**
+```javascript
+chrome.runtime.sendMessage(message).then(response => {
+  if (!response.success) {
+    throw new Error(response.error || 'AI processing failed');
+  }
+
+  console.log('DEBUG: 138 AI processing result:', response.result);
+
+  // Inject overlay with AI results
+  injectBookmarkOverlay(bookmarkId, {
+    ...preliminaryBookmark,
+    category: response.result.category,
+    summary: response.result.summary,
+    tags: response.result.tags
+  });
+})
+```
+
+**Replace with:**
+```javascript
+// Show processing notification to user
+showNotification('ReVisit Processing', 'info');
+
+chrome.runtime.sendMessage(message).then(response => {
+  if (!response.success) {
+    throw new Error(response.error || 'AI processing failed');
+  }
+
+  console.log('DEBUG: 138 AI processing result:', response.result);
+
+  // Inject overlay with AI results
+  injectBookmarkOverlay(bookmarkId, {
+    ...preliminaryBookmark,
+    category: response.result.category,
+    summary: response.result.summary,
+    tags: response.result.tags
+  });
+})
+```
+
+#### Step 2.6: Delete Old Functions
 
 **File:** `background.js`
 
@@ -1154,21 +1260,24 @@ document.getElementById('search-input').addEventListener('input', (e) => {
 
 ### Test Case 1: YouTube Video Bookmark with Groq (PRIMARY)
 
-**Objective:** Verify parallel API calls work and overlay displays quickly
+**Objective:** Verify parallel API calls work, overlay displays quickly, and notifications appear
 
 **Steps:**
 1. Add Groq API key in settings (optional, for testing)
 2. Navigate to YouTube video with transcript
 3. Open browser console to see logs
 4. Click "ReVisit this Page"
-5. **VERIFY:** Console shows "Launching parallel API calls (Haiku + Groq)"
-6. **VERIFY:** Overlay displays within 2-4 seconds
-7. **VERIFY:** Summary, category, tags are populated
-8. Edit fields and click "Save"
-9. Open bookmark list → Click bookmark → Click "Video Transcript"
-10. **VERIFY:** Formatted transcript appears
+5. **VERIFY:** 🔔 Toast notification "ReVisit Processing" appears (blue, info style)
+6. **VERIFY:** Console shows "Launching parallel API calls (Haiku + Groq)"
+7. **VERIFY:** Overlay displays within 2-4 seconds
+8. **VERIFY:** Summary, category, tags are populated
+9. **VERIFY:** 🔔 Toast notification "Transcript Saved" appears (green, success style) ~1-2s after overlay
+10. Edit fields and click "Save"
+11. Open bookmark list → Click bookmark → Click "Video Transcript"
+12. **VERIFY:** Formatted transcript appears
 
 **Expected Results:**
+- 🔔 Two toast notifications appear at correct times
 - ⏱️ Overlay displays in ~2-4 seconds
 - 💰 Console shows both Groq and Anthropic calls
 - ✅ Formatted transcript available
@@ -1379,11 +1488,16 @@ async function streamingSummarize(prompt, apiKey) {
   - [ ] Add Groq API key to DEFAULT_DATA
   - [ ] Test: Verify no errors on extension reload
 
-- [ ] **Phase 2:** Implement parallel split (60 min)
+- [ ] **Phase 2:** Implement parallel split (70 min)
   - [ ] Add LLM provider functions to background.js
-  - [ ] Replace processYouTubeVideoWithTranscript
+  - [ ] Replace processYouTubeVideoWithTranscript (with tabId parameter)
+  - [ ] Update processWithAI to pass sender.tab.id
+  - [ ] Add notification handler to content.js
+  - [ ] Add "ReVisit Processing" notification in content.js
+  - [ ] Add "Transcript Saved" notification in background.js
   - [ ] Delete old formatting functions
   - [ ] Test: YouTube bookmark with Groq key
+  - [ ] Test: Verify both notifications appear correctly
 
 - [ ] **Phase 3:** Update onboarding (30 min)
   - [ ] Add Groq API key input to onboarding.html
@@ -1416,7 +1530,7 @@ async function streamingSummarize(prompt, apiKey) {
   - [ ] Check console for errors
   - [ ] Commit and push changes
 
-**Total Estimated Time: ~3.5 hours**
+**Total Estimated Time: ~3.7 hours**
 
 ---
 
