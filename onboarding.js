@@ -33,12 +33,18 @@ async function completeOnboarding() {
   const interval = parseInt(document.getElementById('default-interval').value);
   const threshold = parseInt(document.getElementById('priority-threshold').value);
   const apiKey = document.getElementById('api-key').value.trim();
-  
+  const groqApiKey = document.getElementById('groq-api-key').value.trim();
+
   if (!userName || !apiKey) {
-    alert('Please fill in your name and API key.');
+    alert('Please fill in your name and Anthropic API key.');
     return;
   }
-  
+
+  // Groq key is optional but recommended
+  if (!groqApiKey) {
+    console.log('INFO: No Groq API key provided, will use Anthropic for all tasks');
+  }
+
   const data = {
     bookmarks: [],
     categories: categories,
@@ -46,11 +52,16 @@ async function completeOnboarding() {
       userName,
       defaultIntervalDays: interval,
       apiKey,
+      groqApiKey: groqApiKey,  // Add Groq key
       onboardingComplete: true,
-      priorityThresholdDays: threshold
+      priorityThresholdDays: threshold,
+      providers: {
+        summary: 'anthropic',
+        formatting: groqApiKey ? 'groq' : 'anthropic'
+      }
     }
   };
-  
+
   await chrome.storage.local.set({ rvData: data });
   window.location.href = 'list-modal.html';
 }

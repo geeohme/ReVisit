@@ -42,8 +42,14 @@ try {
       sendResponse({ success: true });
       return;
     }
-    
-    // REMOVED: fetchTranscript handler - no longer needed
+
+    if (request.action === 'showNotification') {
+      console.log('DEBUG: Showing notification from background:', request.message);
+      showNotification(request.message, request.type);
+      sendResponse({ success: true });
+      return;
+    }
+
     console.warn('WARN: 108 Unknown action received:', request.action);
     sendResponse({ success: false, error: 'Unknown action' });
   });
@@ -233,17 +239,21 @@ async function handleScrapeAndShowOverlay(bookmarkId, preliminaryBookmark) {
   
   // Send to background for AI processing
   console.log('DEBUG: 136 Sending to background for AI processing: processWithAI');
+
+  // Show processing notification to user
+  showNotification('ReVisit Processing', 'info');
+
   const message = {
     action: 'processWithAI',
     scrapedData: scrapedData
   };
-  
+
   // Add transcript to message if available
   if (transcript) {
     message.transcript = transcript;
     console.log('DEBUG: 137 Including transcript in AI processing request');
   }
-  
+
   chrome.runtime.sendMessage(message).then(response => {
     if (!response.success) {
       throw new Error(response.error || 'AI processing failed');
