@@ -342,56 +342,64 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // For YouTube videos, inject content script for DOM scraping
         if (isYouTube) {
           console.log('DEBUG: 215 YouTube video detected, injecting content script for transcript scraping');
-          
-          // Ensure content script is injected before sending message
-          console.log('DEBUG: 216 Starting content script injection for tab:', currentTab.id);
-          try {
-            const injectionResult = await chrome.scripting.executeScript({
-              target: { tabId: currentTab.id },
-              files: ['content.js']
-            });
-            console.log('DEBUG: 217 Injection result:', injectionResult);
-            
-            // Wait a bit more after injection for script to initialize
-            console.log('DEBUG: 218 Waiting 500ms after injection for script to initialize');
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-          } catch (injectionError) {
-            console.error('ERROR: 219 Content script injection failed:', injectionError);
-            throw new Error(`Content script injection failed: ${injectionError.message}`);
+
+          // First, check if content script is already loaded
+          console.log('DEBUG: 216 Checking if content script is already loaded...');
+          const isAlreadyLoaded = await verifyContentScript(currentTab.id);
+
+          if (!isAlreadyLoaded) {
+            // Only inject if not already loaded
+            console.log('DEBUG: 217 Content script not loaded, injecting now for tab:', currentTab.id);
+            try {
+              const injectionResult = await chrome.scripting.executeScript({
+                target: { tabId: currentTab.id },
+                files: ['content.js']
+              });
+              console.log('DEBUG: 218 Injection result:', injectionResult);
+
+              // Wait after injection for script to initialize
+              console.log('DEBUG: 219 Waiting 500ms after injection for script to initialize');
+              await new Promise(resolve => setTimeout(resolve, 500));
+
+            } catch (injectionError) {
+              console.error('ERROR: 220 Content script injection failed:', injectionError);
+              throw new Error(`Content script injection failed: ${injectionError.message}`);
+            }
+
+            // Verify content script is ready after injection
+            console.log('DEBUG: 221 Verifying content script is ready...');
+            const isReady = await verifyContentScript(currentTab.id);
+            if (!isReady) {
+              console.error('ERROR: 222 Content script verification failed after injection');
+              throw new Error('Content script is not responding to ping');
+            }
+            console.log('DEBUG: 223 Content script verification successful');
+          } else {
+            console.log('DEBUG: 224 Content script already loaded and ready, skipping injection');
           }
-          
-          // Verify content script is ready before sending the real message
-          console.log('DEBUG: 220 Verifying content script is ready...');
-          const isReady = await verifyContentScript(currentTab.id);
-          if (!isReady) {
-            console.error('ERROR: 221 Content script verification failed');
-            throw new Error('Content script is not responding to ping');
-          }
-          console.log('DEBUG: 222 Content script verification successful');
-          
+
           // Send message to content script to scrape and show overlay
-          console.log('DEBUG: 223 Sending scrapeAndShowOverlay to tab:', currentTab.id);
+          console.log('DEBUG: 225 Sending scrapeAndShowOverlay to tab:', currentTab.id);
           const response = await sendMessageWithRetry(currentTab.id, {
             action: 'scrapeAndShowOverlay',
             bookmarkId: preliminaryBookmark.id,
             bookmarkData: preliminaryBookmark
           });
         } else {
-          console.log('DEBUG: 224 Non-YouTube page, scraping directly in background');
+          console.log('DEBUG: 226 Non-YouTube page, scraping directly in background');
           // For non-YouTube pages, scrape page content using executeScript
           const scrapeResult = await chrome.scripting.executeScript({
             target: { tabId: currentTab.id },
             func: scrapePageContent
           });
-          
+
           const scrapedData = scrapeResult[0].result;
-          console.log('DEBUG: 225 Page scraped successfully, content length:', scrapedData.content.length);
-          
+          console.log('DEBUG: 227 Page scraped successfully, content length:', scrapedData.content.length);
+
           // Process with AI
           const result = await processWithAI(scrapedData, settings, categories, null);
-          console.log('DEBUG: 226 AI processing completed for non-YouTube page');
-          
+          console.log('DEBUG: 228 AI processing completed for non-YouTube page');
+
           // Update the preliminary bookmark with AI results
           const bookmarkIndex = data.bookmarks.findIndex(b => b.id === preliminaryBookmark.id);
           if (bookmarkIndex !== -1) {
@@ -402,19 +410,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             };
             await saveStorageData(data);
           }
-          
+
           // Inject content script and then overlay
-          console.log('DEBUG: 227 Injecting content script for overlay');
+          console.log('DEBUG: 229 Injecting content script for overlay');
           await chrome.scripting.executeScript({
             target: { tabId: currentTab.id },
             files: ['content.js']
           });
-          
+
           // Wait for content script to initialize
           await new Promise(resolve => setTimeout(resolve, 300));
-          
+
           // Send message to content script to inject overlay with AI results
-          console.log('DEBUG: 228 Sending injectOverlayWithAIResults message');
+          console.log('DEBUG: 230 Sending injectOverlayWithAIResults message');
           await chrome.tabs.sendMessage(currentTab.id, {
             action: 'injectOverlayWithAIResults',
             bookmarkId: preliminaryBookmark.id,
