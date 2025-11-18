@@ -24,7 +24,7 @@ const DEFAULT_DATA = {
 // Note: Included inline due to service worker module limitations
 // ============================================================================
 
-async function callAnthropic(prompt, apiKey, maxTokens = 10000) {
+async function callAnthropic(prompt, apiKey, maxTokens = 64000) {
   console.log(`DEBUG: Calling Anthropic Haiku, max_tokens: ${maxTokens}`);
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -52,8 +52,8 @@ async function callAnthropic(prompt, apiKey, maxTokens = 10000) {
   return data.content[0].text;
 }
 
-async function callGroq(prompt, apiKey, maxTokens = 8000) {
-  console.log(`DEBUG: Calling Groq Llama 4, max_tokens: ${maxTokens}`);
+async function callGroq(prompt, apiKey, maxTokens = 64000) {
+  console.log(`DEBUG: Calling Groq GPT-OSS-20b, max_tokens: ${maxTokens}`);
 
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
@@ -62,7 +62,7 @@ async function callGroq(prompt, apiKey, maxTokens = 8000) {
       'Authorization': `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      model: 'llama-3.1-70b-versatile',
+      model: 'openai/gpt-oss-20b',
       max_tokens: maxTokens,
       temperature: 0.3,
       messages: [
@@ -104,11 +104,11 @@ Return ONLY the formatted markdown transcript.`;
 
   try {
     if (useGroq) {
-      const formatted = await callGroq(prompt, settings.groqApiKey, 8000);
+      const formatted = await callGroq(prompt, settings.groqApiKey, 64000);
       console.log('DEBUG: Transcript formatted successfully with Groq');
       return formatted;
     } else {
-      const formatted = await callAnthropic(prompt, settings.apiKey, 8000);
+      const formatted = await callAnthropic(prompt, settings.apiKey, 64000);
       console.log('DEBUG: Transcript formatted successfully with Anthropic (fallback)');
       return formatted;
     }
