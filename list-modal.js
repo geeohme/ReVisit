@@ -8,29 +8,8 @@ let searchQuery = '';
 let statusFilter = 'Active';
 let priorityView = false;
 
-// Helper function to send message with retry (exponential backoff)
-async function sendMessageWithRetry(tabId, message, maxRetries = 5) {
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      // Wait before first attempt (and longer for subsequent attempts)
-      const delay = i === 0 ? 100 : Math.min(100 * Math.pow(2, i), 1000);
-      console.log(`DEBUG: 301 Waiting ${delay}ms before attempt ${i + 1}`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-      
-      console.log(`DEBUG: 302 Sending message (attempt ${i + 1}/${maxRetries})`);
-      const response = await chrome.tabs.sendMessage(tabId, message);
-      console.log('DEBUG: 303 Message sent successfully');
-      return response;
-    } catch (error) {
-      console.warn(`WARN: 304 Attempt ${i + 1} failed:`, error.message);
-      if (i === maxRetries - 1) {
-        // Last attempt, throw the error
-        throw error;
-      }
-      // Continue to next retry
-    }
-  }
-}
+// Load shared utilities from utils.js
+// Note: sendMessageWithRetry, isYouTubeUrl, extractVideoId are available from utils.js
 
 async function init() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -210,16 +189,6 @@ function createLinkItem(bookmark) {
   });
   
   return div;
-}
-
-// YouTube URL detection and video ID extraction
-function isYouTubeUrl(url) {
-  return url.includes('youtube.com/watch') || url.includes('youtu.be/');
-}
-
-function extractVideoId(url) {
-  const urlObj = new URL(url);
-  return urlObj.searchParams.get('v') || urlObj.pathname.split('/').pop();
 }
 
 function renderDetails(bookmark) {
@@ -467,9 +436,18 @@ async function openAddBookmarkModal() {
       throw messageError; // Re-throw to be caught by outer catch
     }
     
-    // Process with AI
-    console.log('DEBUG: 319 About to call processWithAI()');
-    const result = await processWithAI(scraped);
+    // Process with AI via background script
+    console.log('DEBUG: 319 About to call background.js processWithAI');
+    const aiResponse = await chrome.runtime.sendMessage({
+      action: 'processWithAI',
+      scrapedData: scraped
+    });
+
+    if (!aiResponse.success) {
+      throw new Error(aiResponse.error || 'AI processing failed');
+    }
+
+    const result = aiResponse.result;
     console.log('DEBUG: 320 AI processing complete:', result);
     
     // Create bookmark object
@@ -516,56 +494,8 @@ async function openAddBookmarkModal() {
   }
 }
 
-async function processWithAI(scraped) {
-  const prompt = `Summarize the following webpage content in under 200 words using markdown. Categorize it: Use an existing category if fitting (existing: ${categories.join(', ')}), else suggest a new one. Generate up to 10 relevant tags.
-  
-Content: ${scraped.content}
-
-Return ONLY a JSON object with this exact structure:
-{
-  "summary": "markdown summary",
-  "category": "single category name",
-  "tags": ["tag1", "tag2", "tag3"]
-}`;
-  
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': settings.apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2500,
-      messages: [{ role: 'user', content: prompt }]
-    })
-  });
-  
-  if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
-  }
-  
-  const data = await response.json();
-  const content = data.content[0].text;
-  
-  // Parse JSON from response
-  const match = content.match(/\{[\s\S]*\}/);
-  if (!match) {
-    throw new Error('Invalid API response format');
-  }
-  
-  const result = JSON.parse(match[0]);
-  
-  // Add new category if needed
-  if (!categories.includes(result.category)) {
-    categories.push(result.category);
-    categories.sort();
-  }
-  
-  return result;
-}
+// Note: processWithAI functionality is now handled by background.js
+// The background script processes AI requests and returns results
 
 async function saveData() {
   await chrome.storage.local.set({

@@ -1504,11 +1504,14 @@ async function streamingSummarize(prompt, apiKey) {
   - [x] Update completeOnboarding() function
   - [ ] Test: Run onboarding, verify Groq key saved
 
-- [ ] **Phase 4:** Eliminate code duplication (45 min)
-  - [ ] Create utils.js
-  - [ ] Remove duplicates from list-modal.js
-  - [ ] Add comments to remaining duplicates
-  - [ ] Test: Verify all functions still work
+- [x] **Phase 4:** Eliminate code duplication (45 min) ✅ COMPLETED
+  - [x] Create utils.js
+  - [x] Remove duplicates from list-modal.js
+  - [x] Add comments to remaining duplicates
+  - [x] Update manifest.json to include utils.js as web_accessible_resource
+  - [x] Add utils.js script loader to list-modal.html
+  - [x] Update list-modal.js to use background.js for AI processing
+  - [x] Test: Verify all functions still work
 
 - [ ] **Phase 5:** Remove zombie code (15 min)
   - [ ] Delete duplicate event listener

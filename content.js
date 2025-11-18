@@ -75,7 +75,8 @@ window.addEventListener('message', (event) => {
   }
 });
 
-// YouTube URL detection and video ID extraction
+// Shared utility functions (duplicated for content script compatibility)
+// Note: These are also defined in utils.js but content scripts need them inline
 function isYouTubeUrl(url) {
   console.log('DEBUG: 111 Checking if URL is YouTube:', url);
   return url.includes('youtube.com/watch') || url.includes('youtu.be/');
