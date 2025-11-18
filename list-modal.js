@@ -34,11 +34,17 @@ async function init() {
   
   renderCategories();
   renderLinks();
-  
+
   // Event listeners
+  let searchTimeout;
   document.getElementById('search-input').addEventListener('input', (e) => {
     searchQuery = e.target.value.toLowerCase();
-    renderLinks();
+
+    // Debounce: wait 300ms after user stops typing
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      renderLinks();
+    }, 300);
   });
   
   document.getElementById('status-filter').addEventListener('change', (e) => {

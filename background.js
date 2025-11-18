@@ -238,7 +238,8 @@ async function verifyContentScript(tabId) {
 }
 
 // Helper function to send message with retry (exponential backoff)
-async function sendMessageWithRetry(tabId, message, maxRetries = 5) {
+// 3 retries = ~700ms worst case (vs 5 retries = ~2.5s)
+async function sendMessageWithRetry(tabId, message, maxRetries = 3) {
   for (let i = 0; i < maxRetries; i++) {
     try {
       // Wait before first attempt (and longer for subsequent attempts)
