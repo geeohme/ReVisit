@@ -276,31 +276,6 @@ async function handleScrapeAndShowOverlay(bookmarkId, preliminaryBookmark) {
   });
 }
 
-// Listen for floating modal actions (from injected script)
-window.addEventListener('message', (event) => {
-  console.log('DEBUG: 140 Window message received:', event.data);
-  
-  try {
-    if (event.data.type === 'REVISIT_ACTION') {
-      console.log('DEBUG: 141 Forwarding REVISIT_ACTION to background');
-      // Forward to background script
-      chrome.runtime.sendMessage({
-        action: 'updateBookmarkStatus',
-        bookmarkId: event.data.bookmarkId,
-        actionType: event.data.action
-      });
-    } else if (event.data.type === 'OVERLAY_ACTION') {
-      console.log('DEBUG: 142 Handling OVERLAY_ACTION');
-      // Handle overlay actions
-      handleOverlayAction(event.data);
-    } else {
-      console.log('DEBUG: 143 Ignoring unknown message type:', event.data.type);
-    }
-  } catch (error) {
-    console.error('ERROR: 144 Window message handler failed:', error);
-  }
-});
-
 // Inject the bookmark overlay into the current page
 function injectBookmarkOverlay(bookmarkId, bookmarkData) {
   console.log('DEBUG: 145 Injecting bookmark overlay');

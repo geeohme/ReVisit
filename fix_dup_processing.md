@@ -1513,11 +1513,11 @@ async function streamingSummarize(prompt, apiKey) {
   - [x] Update list-modal.js to use background.js for AI processing
   - [x] Test: Verify all functions still work
 
-- [ ] **Phase 5:** Remove zombie code (15 min)
-  - [ ] Delete duplicate event listener
-  - [ ] Fix unreachable code
-  - [ ] Delete zombie comments
-  - [ ] Test: Verify no errors in console
+- [x] **Phase 5:** Remove zombie code (15 min) ✅ COMPLETED
+  - [x] Delete duplicate event listener
+  - [x] Fix unreachable code
+  - [x] Delete zombie comments (already removed in previous phases)
+  - [x] Test: Verify no errors in console
 
 - [ ] **Phase 6:** Performance optimizations (20 min)
   - [ ] Reduce retry attempts to 3

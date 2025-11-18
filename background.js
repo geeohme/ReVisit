@@ -512,9 +512,11 @@ async function saveTranscript(videoId, transcriptData) {
 }
 
 async function getTranscript(videoId) {
+  console.log('DEBUG: 241 Retrieving transcript for video:', videoId);
   const result = await chrome.storage.local.get('rvTranscripts');
-  return result.rvTranscripts ? result.rvTranscripts[videoId] : null;
-  console.log('DEBUG: 241 Retrieved transcript for video:', videoId);
+  const transcript = result.rvTranscripts ? result.rvTranscripts[videoId] : null;
+  console.log('DEBUG: 242 Transcript found:', !!transcript);
+  return transcript;
 }
 
 async function updateTranscript(videoId, updates) {
