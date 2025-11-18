@@ -2,6 +2,136 @@
 
 This document tracks planned features, enhancements, and fixes for the ReVisit project.
 
+## 🔴 Priority 0: Critical Bugs (Must Fix Immediately)
+
+### Bug #1: Missing updateBookmarkStatus Handler
+**Status**: Not Fixed
+**Priority**: CRITICAL
+**Location**: `content.js` sends the message, but `background.js` has no handler
+**Estimated Fix Time**: 1 hour
+
+**Impact**:
+- The floating modal's "Complete" and "Keep" buttons fail silently
+- Users cannot mark bookmarks as complete from the floating modal
+- Core feature is broken
+
+**Fix Required**:
+- Add message handler in `background.js` for `updateBookmarkStatus` messages
+- Implement status update logic
+- Test Complete and Keep button functionality
+
+---
+
+### Bug #5: Category Deduplication Missing
+**Status**: Not Fixed
+**Priority**: CRITICAL (Quick Win)
+**Location**: `onboarding.js:43-53`
+**Estimated Fix Time**: 5 minutes
+
+**Impact**:
+- Users can enter "Tech, Tech, Tech" and create duplicate categories
+- Results in cluttered category list
+- Poor user experience during onboarding
+
+**Fix Required**:
+- Add `Array.from(new Set(categories))` to deduplicate categories
+- Validate before saving to storage
+
+---
+
+## 🟡 Priority 0.5: Medium Priority Bugs & Issues
+
+### Bug #6: XSS Vulnerability (Likely Fixed, Needs Audit)
+**Status**: Partially Mitigated
+**Priority**: High (Security)
+**Estimated Time**: 2-3 hours
+
+**Current State**:
+- Some mitigations in place
+- Needs comprehensive security audit
+
+**Action Required**:
+- Full security review of all user input rendering
+- Test with malicious inputs (script tags, event handlers, etc.)
+- Ensure all dynamic HTML uses proper sanitization
+- Document security measures in code
+
+---
+
+### Bug #4: Race Condition in Content Script Injection
+**Status**: Partially Fixed
+**Priority**: Medium
+**Estimated Time**: 2-3 hours for optimization
+
+**Current State**:
+- Retry logic implemented
+- Script initialization may run twice in some edge cases
+
+**Optimization Needed**:
+- Review and optimize content script injection timing
+- Prevent duplicate initialization more reliably
+- Add better state management for script lifecycle
+
+---
+
+### Bug #8: Inconsistent Storage Access
+**Status**: Improved, Not Optimized
+**Priority**: Medium (Performance)
+**Estimated Time**: 3-4 hours
+
+**Issue**:
+- Multiple storage reads in single operation
+- Inefficient data passing between components
+
+**Recommendation**:
+- Pass data as parameters instead of re-loading from storage
+- Batch storage operations where possible
+- Reduce storage API calls by caching in memory when appropriate
+
+---
+
+### Missing API Error Handling
+**Status**: Has Fallback Mechanisms
+**Priority**: Medium (UX)
+**Estimated Time**: 2-3 hours
+
+**Issue**:
+- No user-facing error messages for API failures
+- Users don't know when/why LLM operations fail
+
+**Required Improvements**:
+- Add toast/notification system for errors
+- Display meaningful error messages to users
+- Provide retry options for failed operations
+- Log errors for debugging while showing user-friendly messages
+
+---
+
+## 🧪 Testing Gaps
+
+### Critical Tests Needed:
+1. **Floating Modal ReVisit Actions**
+   - Test Complete/Keep buttons (currently broken - Bug #1)
+   - Verify bookmark status updates in storage
+   - Test across different video platforms
+
+2. **Security Testing**
+   - XSS vulnerability testing with malicious inputs
+   - Test all user input fields for injection attacks
+   - Verify sanitization in transcript/summary display
+
+3. **Load Testing**
+   - Test with 500+ bookmarks to verify performance
+   - Measure UI responsiveness with large datasets
+   - Identify performance bottlenecks
+
+4. **Cross-Browser Testing**
+   - Test on Chrome, Firefox, Edge
+   - Verify extension APIs work consistently
+   - Test video platform compatibility
+
+---
+
 ## Priority 1: Settings Panel & LLM Configuration
 
 ### Settings Panel Implementation
@@ -123,14 +253,92 @@ This document tracks planned features, enhancements, and fixes for the ReVisit p
 
 ---
 
+## 📋 Recommended Future Improvements
+
+### High Priority Enhancements
+
+**Virtual Scrolling for Bookmark Lists**
+- **Status**: Planned
+- **Priority**: High (Performance)
+- **Estimated Time**: 4-6 hours
+- **Benefit**: Improve performance with large bookmark collections
+- **Description**: Implement virtual scrolling to render only visible bookmarks, reducing DOM nodes and improving rendering performance
+
+**Streaming API for LLM Responses**
+- **Status**: Planned
+- **Priority**: High (UX)
+- **Estimated Time**: 8-10 hours
+- **Benefit**: Better user experience with real-time feedback during summary/transcript generation
+- **Description**:
+  - Implement streaming responses from LLM APIs
+  - Show progressive results as they arrive
+  - Add loading indicators and partial content display
+
+---
+
+### Medium Priority Enhancements
+
+**Local LLM Support**
+- **Status**: Research Phase
+- **Priority**: Medium
+- **Estimated Time**: 10-15 hours
+- **Benefit**: Privacy, cost reduction, offline capability
+- **Description**:
+  - Support for local LLM models (Ollama, LM Studio, etc.)
+  - Local inference for summaries and transcripts
+  - Fallback to cloud APIs when needed
+
+**Pagination for Large Lists**
+- **Status**: Planned
+- **Priority**: Medium
+- **Estimated Time**: 3-4 hours
+- **Benefit**: Better organization and navigation of bookmarks
+- **Description**:
+  - Implement pagination or infinite scroll
+  - Add page size controls
+  - Maintain scroll position across navigation
+
+---
+
+### Low Priority Enhancements
+
+**IndexedDB Migration**
+- **Status**: Research Phase
+- **Priority**: Low (Future Scalability)
+- **Estimated Time**: 15-20 hours
+- **Benefit**: Better performance and larger storage capacity
+- **Description**:
+  - Migrate from localStorage to IndexedDB
+  - Support larger datasets (transcripts, summaries)
+  - Implement data migration strategy from existing localStorage data
+  - Consider progressive enhancement approach
+
+---
+
 ## Implementation Notes
 
 ### Development Order Suggestion:
-1. **Settings Panel & LLM Configuration** - Foundation for other features
-2. **Transcript Display Alignment** - Quick fix, immediate UX improvement
-3. **General UI Overhaul** - Do in parallel with other work
-4. **Chat with Transcript** - Depends on settings panel being complete
-5. **Storage Options** - Research while implementing other features, implement last
+
+#### Immediate (Sprint 1 - Critical Bugs)
+1. **Bug #5: Category Deduplication** - 5 minutes, quick win
+2. **Bug #1: Missing updateBookmarkStatus Handler** - 1 hour, critical functionality
+3. **Transcript Display Alignment** - Quick fix, immediate UX improvement
+
+#### Short Term (Sprint 2 - Foundation)
+4. **Settings Panel & LLM Configuration** - Foundation for other features
+5. **Bug #6: Security Audit** - Important for production readiness
+6. **Missing API Error Handling** - Improve user experience
+
+#### Medium Term (Sprint 3 - Optimization)
+7. **Bug #8: Storage Access Optimization** - Performance improvements
+8. **Bug #4: Content Script Race Condition** - Stability improvements
+9. **Testing Suite** - Ensure reliability
+
+#### Long Term (Sprint 4+ - Features)
+10. **General UI Overhaul** - Do in parallel with other work
+11. **Chat with Transcript** - Depends on settings panel being complete
+12. **Virtual Scrolling** - Performance for large datasets
+13. **Storage Options** - Research while implementing other features, implement last
 
 ### Technical Debt to Address:
 - Ensure all LLM API calls use configured providers from settings
@@ -146,5 +354,5 @@ _(Move items here as they are completed)_
 
 ---
 
-**Last Updated**: 2025-11-18
+**Last Updated**: 2025-11-18 (Added critical bugs and open issues from ARCHITECTURE.md analysis)
 **Document Owner**: Development Team
