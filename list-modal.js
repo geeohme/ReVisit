@@ -57,8 +57,8 @@ async function init() {
     document.getElementById('priority-btn').classList.toggle('active');
     renderLinks();
   });
-  
-  document.getElementById('export-btn').addEventListener('click', exportData);
+
+  document.getElementById('settings-btn').addEventListener('click', openSettings);
   document.getElementById('close-btn').addEventListener('click', () => window.close());
   
   // ESC to close
@@ -548,5 +548,265 @@ window.addEventListener('message', async (event) => {
     // Already handled in the function
   }
 });
+
+/* ============================================
+   SETTINGS PANEL FUNCTIONALITY
+   ============================================ */
+
+/**
+ * Provider model configurations
+ */
+const PROVIDER_MODELS = {
+  groq: [
+    { id: 'openai/gpt-oss-120b', name: 'GPT-OSS 120B (Recommended)' },
+    { id: 'llama-3.1-70b-versatile', name: 'Llama 3.1 70B (Versatile)' },
+    { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B (Ultra Fast)' },
+    { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B (Long Context)' }
+  ],
+  anthropic: [
+    { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet (Latest)' },
+    { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus (Flagship)' },
+    { id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku (Fast)' }
+  ],
+  openai: [
+    { id: 'gpt-4', name: 'GPT-4 (Most Capable)' },
+    { id: 'gpt-4-turbo', name: 'GPT-4 Turbo (Faster, Cheaper)' },
+    { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo (Fast, Cost-Effective)' }
+  ],
+  google: [
+    { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash (Experimental)' },
+    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Most Capable)' },
+    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Fast, Efficient)' }
+  ],
+  deepseek: [
+    { id: 'deepseek-chat', name: 'Deepseek Chat' },
+    { id: 'deepseek-coder', name: 'Deepseek Coder (Specialized)' }
+  ],
+  perplexity: [
+    { id: 'llama-3.1-sonar-large-128k-online', name: 'Sonar Large (Online Search)' },
+    { id: 'llama-3.1-sonar-small-128k-online', name: 'Sonar Small (Online)' },
+    { id: 'llama-3.1-sonar-large-128k-chat', name: 'Sonar Large (Chat)' }
+  ],
+  xai: [
+    { id: 'grok-beta', name: 'Grok Beta' }
+  ]
+};
+
+/**
+ * Open settings modal and populate with current settings
+ */
+function openSettings() {
+  const overlay = document.getElementById('settings-overlay');
+  overlay.classList.add('active');
+
+  // Initialize llmGateway settings if not present
+  if (!settings.llmGateway) {
+    settings.llmGateway = getDefaultSettings();
+  }
+
+  // Populate fields
+  document.getElementById('gateway-api-key').value = settings.llmGateway.apiKey || '';
+
+  // YouTube settings
+  const youtubeConfig = settings.llmGateway.transactions?.youtubeSummary || { provider: 'groq', model: 'openai/gpt-oss-120b' };
+  document.getElementById('youtube-provider').value = youtubeConfig.provider;
+  updateModelDropdown('youtube-model', youtubeConfig.provider, youtubeConfig.model);
+
+  // Transcript settings
+  const transcriptConfig = settings.llmGateway.transactions?.transcriptFormatting || { provider: 'groq', model: 'openai/gpt-oss-120b' };
+  document.getElementById('transcript-provider').value = transcriptConfig.provider;
+  updateModelDropdown('transcript-model', transcriptConfig.provider, transcriptConfig.model);
+
+  // Page settings
+  const pageConfig = settings.llmGateway.transactions?.pageSummary || { provider: 'groq', model: 'openai/gpt-oss-120b' };
+  document.getElementById('page-provider').value = pageConfig.provider;
+  updateModelDropdown('page-model', pageConfig.provider, pageConfig.model);
+
+  // Setup event listeners
+  setupSettingsEventListeners();
+}
+
+/**
+ * Update model dropdown based on selected provider
+ */
+function updateModelDropdown(dropdownId, provider, selectedModel = null) {
+  const dropdown = document.getElementById(dropdownId);
+  dropdown.innerHTML = '';
+
+  const models = PROVIDER_MODELS[provider] || [];
+  models.forEach(model => {
+    const option = document.createElement('option');
+    option.value = model.id;
+    option.textContent = model.name;
+    if (model.id === selectedModel) {
+      option.selected = true;
+    }
+    dropdown.appendChild(option);
+  });
+
+  // If no model selected, select first
+  if (!selectedModel && models.length > 0) {
+    dropdown.value = models[0].id;
+  }
+}
+
+/**
+ * Setup event listeners for settings panel
+ */
+function setupSettingsEventListeners() {
+  // Close settings
+  document.getElementById('settings-close-btn').onclick = closeSettings;
+
+  // Toggle instructions
+  document.getElementById('toggle-instructions-btn').onclick = () => {
+    const instructions = document.getElementById('api-key-instructions');
+    instructions.style.display = instructions.style.display === 'none' ? 'block' : 'none';
+  };
+
+  // Test connection
+  document.getElementById('test-connection-btn').onclick = testGatewayConnection;
+
+  // Provider change listeners - update model dropdowns
+  document.getElementById('youtube-provider').onchange = (e) => {
+    updateModelDropdown('youtube-model', e.target.value);
+  };
+
+  document.getElementById('transcript-provider').onchange = (e) => {
+    updateModelDropdown('transcript-model', e.target.value);
+  };
+
+  document.getElementById('page-provider').onchange = (e) => {
+    updateModelDropdown('page-model', e.target.value);
+  };
+
+  // Export data
+  document.getElementById('export-data-btn').onclick = exportData;
+
+  // Save settings
+  document.getElementById('save-settings-btn').onclick = saveSettings;
+
+  // Critical error close
+  document.getElementById('critical-error-close-btn').onclick = closeCriticalError;
+}
+
+/**
+ * Close settings modal
+ */
+function closeSettings() {
+  document.getElementById('settings-overlay').classList.remove('active');
+}
+
+/**
+ * Test LLM Gateway connection
+ */
+async function testGatewayConnection() {
+  const apiKey = document.getElementById('gateway-api-key').value.trim();
+
+  if (!apiKey) {
+    showToast('Please enter an API key first', 'error');
+    return;
+  }
+
+  const provider = document.getElementById('youtube-provider').value;
+  const model = document.getElementById('youtube-model').value;
+
+  showToast('Testing connection...', 'info');
+
+  try {
+    const result = await testConnection(apiKey, provider, model);
+
+    if (result.success) {
+      showToast(`✅ Connection successful! Provider: ${result.provider}, Model: ${result.model}`, 'success');
+    } else {
+      showToast(`❌ Connection failed: ${result.message}`, 'error');
+    }
+  } catch (error) {
+    showToast(`❌ Test failed: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Save settings to storage
+ */
+async function saveSettings() {
+  const apiKey = document.getElementById('gateway-api-key').value.trim();
+
+  if (!apiKey) {
+    showToast('Please enter an API key', 'error');
+    return;
+  }
+
+  // Build settings object
+  settings.llmGateway = {
+    enabled: true,
+    apiKey: apiKey,
+    transactions: {
+      youtubeSummary: {
+        provider: document.getElementById('youtube-provider').value,
+        model: document.getElementById('youtube-model').value,
+        options: {
+          temperature: 0.7,
+          maxTokens: 10000
+        }
+      },
+      transcriptFormatting: {
+        provider: document.getElementById('transcript-provider').value,
+        model: document.getElementById('transcript-model').value,
+        options: {
+          temperature: 0.3,
+          maxTokens: 64000
+        }
+      },
+      pageSummary: {
+        provider: document.getElementById('page-provider').value,
+        model: document.getElementById('page-model').value,
+        options: {
+          temperature: 0.7,
+          maxTokens: 2500
+        }
+      }
+    }
+  };
+
+  await saveData();
+  showToast('✅ Settings saved successfully!', 'success');
+  closeSettings();
+}
+
+/**
+ * Show toast message
+ */
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('toast-message');
+  toast.textContent = message;
+  toast.className = 'toast-message active';
+
+  if (type === 'error') {
+    toast.classList.add('error');
+  }
+
+  setTimeout(() => {
+    toast.classList.remove('active');
+    toast.classList.remove('error');
+  }, 3000);
+}
+
+/**
+ * Show critical error modal
+ */
+function showCriticalError(errorMessage) {
+  const overlay = document.getElementById('critical-error-overlay');
+  const messageEl = document.getElementById('critical-error-message');
+
+  messageEl.textContent = errorMessage;
+  overlay.classList.add('active');
+}
+
+/**
+ * Close critical error modal
+ */
+function closeCriticalError() {
+  document.getElementById('critical-error-overlay').classList.remove('active');
+}
 
 init();

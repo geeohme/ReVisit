@@ -32,17 +32,11 @@ async function completeOnboarding() {
     .filter(c => c.length > 0);
   const interval = parseInt(document.getElementById('default-interval').value);
   const threshold = parseInt(document.getElementById('priority-threshold').value);
-  const apiKey = document.getElementById('api-key').value.trim();
-  const groqApiKey = document.getElementById('groq-api-key').value.trim();
+  const gatewayApiKey = document.getElementById('gateway-api-key').value.trim();
 
-  if (!userName || !apiKey) {
-    alert('Please fill in your name and Anthropic API key.');
+  if (!userName || !gatewayApiKey) {
+    alert('Please fill in your name and LLM Gateway API key.');
     return;
-  }
-
-  // Groq key is optional but recommended
-  if (!groqApiKey) {
-    console.log('INFO: No Groq API key provided, will use Anthropic for all tasks');
   }
 
   const data = {
@@ -51,13 +45,36 @@ async function completeOnboarding() {
     settings: {
       userName,
       defaultIntervalDays: interval,
-      apiKey,
-      groqApiKey: groqApiKey,  // Add Groq key
+      apiKey: '',           // DEPRECATED: Keep for backward compatibility
+      groqApiKey: '',       // DEPRECATED: Keep for backward compatibility
       onboardingComplete: true,
       priorityThresholdDays: threshold,
+      // DEPRECATED: Old providers config
       providers: {
         summary: 'anthropic',
-        formatting: groqApiKey ? 'groq' : 'anthropic'
+        formatting: 'groq'
+      },
+      // NEW: LLM Gateway configuration
+      llmGateway: {
+        enabled: true,
+        apiKey: gatewayApiKey,
+        transactions: {
+          youtubeSummary: {
+            provider: 'groq',
+            model: 'openai/gpt-oss-120b',
+            options: { temperature: 0.7, maxTokens: 10000 }
+          },
+          transcriptFormatting: {
+            provider: 'groq',
+            model: 'openai/gpt-oss-120b',
+            options: { temperature: 0.3, maxTokens: 64000 }
+          },
+          pageSummary: {
+            provider: 'groq',
+            model: 'openai/gpt-oss-120b',
+            options: { temperature: 0.7, maxTokens: 2500 }
+          }
+        }
       }
     }
   };
