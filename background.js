@@ -7,23 +7,248 @@ const DEFAULT_DATA = {
   settings: {
     userName: "",
     defaultIntervalDays: 7,
-    apiKey: "",           // Anthropic API key
-    groqApiKey: "",       // Groq API key (optional, for faster/cheaper formatting)
     onboardingComplete: false,
     priorityThresholdDays: 3,
-    // Future: Allow user to choose providers
-    providers: {
-      summary: 'anthropic',    // 'anthropic', 'openai', 'groq'
-      formatting: 'groq'       // 'groq', 'sambanova', 'anthropic'
+    llmGateway: {
+      enabled: true,
+      apiKey: '',
+      transactions: {
+        youtubeSummary: {
+          provider: 'groq',
+          model: 'openai/gpt-oss-120b',  // GROQ requires provider-prefixed model names
+          options: { temperature: 0.7, maxTokens: 10000 }  // maxTokens removed by formatProviderRequest
+        },
+        transcriptFormatting: {
+          provider: 'groq',
+          model: 'openai/gpt-oss-120b',  // GROQ requires provider-prefixed model names
+          options: { temperature: 0.3, maxTokens: 64000 }  // maxTokens removed by formatProviderRequest
+        },
+        pageSummary: {
+          provider: 'groq',
+          model: 'openai/gpt-oss-120b',  // GROQ requires provider-prefixed model names
+          options: { temperature: 0.7, maxTokens: 2500 }  // maxTokens removed by formatProviderRequest
+        }
+      }
     }
   }
 };
 
 // ============================================================================
-// LLM Provider Functions (from api-providers.js)
-// Note: Included inline due to service worker module limitations
+// LLM GATEWAY INTEGRATION
+// Note: Inline code from llm-gateway.js for service worker compatibility
 // ============================================================================
 
+const LLM_GATEWAY_URL = 'https://llmproxy.api.sparkbright.me';
+
+/**
+ * Format request body for provider-specific requirements
+ *
+ * Different providers have different requirements for token limits and request structure.
+ * This function transforms the generic options into provider-specific format.
+ *
+ * PROVIDER-SPECIFIC REQUIREMENTS:
+ *
+ * GROQ:
+ *   - Does NOT support maxTokens parameter (will error if included)
+ *   - Model names MUST include provider prefix
+ *   - Examples: "openai/gpt-oss-120b", "moonshotai/kimi-k2-instruct-0905", "meta-llama/llama-guard-4-12b", "qwen/qwen3-32b"
+ *   - Only temperature is supported in options
+ *
+ * OPENAI:
+ *   - Does NOT support maxTokens parameter (error: "Unrecognized request argument supplied: maxTokens")
+ *   - Model names are simple: "gpt-4-0613", "gpt-5.1", "gpt-3.5-turbo"
+ *   - Only temperature is supported in options
+ *
+ * ANTHROPIC:
+ *   - Does NOT support maxTokens in options
+ *   - REQUIRES max_tokens as TOP-LEVEL field (not in options)
+ *   - Model names: "claude-haiku-4-5-20251001", "claude-opus-4-5-20251101", "claude-sonnet-4-5-20250929"
+ *   - Temperature goes in options
+ *
+ * MISTRAL:
+ *   - Does NOT support maxTokens (camelCase)
+ *   - Uses max_tokens (snake_case) in options
+ *   - Model names: "mistral-large-latest", "mistral-medium-2505"
+ *   - Temperature goes in options
+ *
+ * @param {string} provider - Provider name (groq, openai, anthropic, mistral, etc.)
+ * @param {string} model - Model identifier (format varies by provider)
+ * @param {Array} messages - Array of message objects
+ * @param {Object} options - Options object (maxTokens, temperature, etc.)
+ * @returns {Object} Formatted request body for the specific provider
+ */
+function formatProviderRequest(provider, model, messages, options = {}) {
+  const normalizedProvider = provider.toLowerCase();
+  const requestBody = {
+    provider: normalizedProvider,
+    model,
+    messages,
+    standardFormat: true,
+  };
+
+  // Extract maxTokens from options
+  const maxTokens = options.maxTokens || options.max_tokens;
+  const temperature = options.temperature;
+
+  // GROQ: No token limits supported, model names must include provider prefix
+  // Examples: "openai/gpt-oss-120b", "moonshotai/kimi-k2-instruct-0905", "qwen/qwen3-32b"
+  if (normalizedProvider === 'groq') {
+    // Remove all token-related options
+    const cleanOptions = { ...options };
+    delete cleanOptions.maxTokens;
+    delete cleanOptions.max_tokens;
+
+    if (temperature !== undefined) {
+      requestBody.options = { temperature };
+    }
+  }
+
+  // OPENAI: No maxTokens parameter supported
+  else if (normalizedProvider === 'openai') {
+    // Remove all token-related options
+    const cleanOptions = { ...options };
+    delete cleanOptions.maxTokens;
+    delete cleanOptions.max_tokens;
+
+    if (temperature !== undefined) {
+      requestBody.options = { temperature };
+    }
+  }
+
+  // ANTHROPIC: max_tokens as TOP-LEVEL field (not in options)
+  else if (normalizedProvider === 'anthropic') {
+    if (maxTokens) {
+      requestBody.max_tokens = maxTokens;
+    }
+
+    // Add temperature to options if provided
+    if (temperature !== undefined) {
+      requestBody.options = { temperature };
+    }
+  }
+
+  // MISTRAL: max_tokens in options (not maxTokens)
+  else if (normalizedProvider === 'mistral') {
+    const providerOptions = {};
+
+    if (maxTokens) {
+      providerOptions.max_tokens = maxTokens;
+    }
+    if (temperature !== undefined) {
+      providerOptions.temperature = temperature;
+    }
+
+    if (Object.keys(providerOptions).length > 0) {
+      requestBody.options = providerOptions;
+    }
+  }
+
+  // Other providers: use standard options format
+  else {
+    if (Object.keys(options).length > 0) {
+      requestBody.options = options;
+    }
+  }
+
+  return requestBody;
+}
+
+async function callLLMGateway(provider, model, messages, options = {}, apiKey, conversationId = null) {
+  if (!apiKey) {
+    throw new Error('LLM Gateway API key is required. Please configure it in Settings.');
+  }
+
+  const requestBody = formatProviderRequest(provider, model, messages, options);
+
+  if (conversationId) {
+    requestBody.conversationId = conversationId;
+  }
+
+  // Debug logging - show formatted request body
+  console.log('DEBUG: LLM Gateway Request:', {
+    url: `${LLM_GATEWAY_URL}/v1/chat/completions`,
+    provider,
+    model,
+    messageCount: messages.length,
+    formattedRequestBody: JSON.stringify(requestBody, null, 2)
+  });
+
+  try {
+    const response = await fetch(`${LLM_GATEWAY_URL}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+
+      // Log full error details
+      console.error('DEBUG: LLM Gateway Error Response:', {
+        status: response.status,
+        errorData,
+        provider,
+        model
+      });
+
+      switch (response.status) {
+        case 401:
+          throw new Error(`Authentication failed: ${errorData.error || 'Invalid API key'}. Please check your LLM Gateway API key in Settings.`);
+        case 429:
+          throw new Error(`Rate limit exceeded: ${errorData.details || 'Too many requests'}. Please wait a moment and try again.`);
+        case 400:
+          throw new Error(`Invalid request: ${errorData.error || 'Bad request'}. Please check your provider/model configuration.`);
+        case 500:
+          const details = errorData.details ? ` Details: ${JSON.stringify(errorData.details)}` : '';
+          throw new Error(`Gateway error: ${errorData.error || 'Internal server error'}.${details} Provider: ${provider}, Model: ${model}`);
+        default:
+          throw new Error(`Unexpected error (${response.status}): ${errorData.error || 'Unknown error'}`);
+      }
+    }
+
+    const data = await response.json();
+    const content = data.response?.choices?.[0]?.message?.content;
+
+    if (!content) {
+      throw new Error('Invalid response format from gateway: Missing message content');
+    }
+
+    return {
+      content,
+      usage: data.usage,
+      metadata: data.metadata,
+      provider: data.provider,
+      model: data.model
+    };
+  } catch (error) {
+    if (error.message.includes('fetch') || error.message.includes('network')) {
+      throw new Error(`Network error: Unable to reach LLM Gateway. Please check your internet connection.`);
+    }
+    throw error;
+  }
+}
+
+function extractJSON(content) {
+  try {
+    return JSON.parse(content);
+  } catch (e) {
+    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const jsonStr = jsonMatch[1] || jsonMatch[0];
+      return JSON.parse(jsonStr);
+    }
+    throw new Error('Failed to extract valid JSON from LLM response');
+  }
+}
+
+// ============================================================================
+// DEPRECATED: Old Direct API Functions (COMMENTED OUT - Use LLM Gateway instead)
+// ============================================================================
+
+/*
 async function callAnthropic(prompt, apiKey, maxTokens = 64000) {
   console.log(`DEBUG: Calling Anthropic Haiku, max_tokens: ${maxTokens}`);
 
@@ -87,13 +312,23 @@ async function callGroq(prompt, apiKey, maxTokens = 64000) {
   const data = await response.json();
   return data.choices[0].message.content;
 }
+*/
+
+// ============================================================================
+// LLM GATEWAY WRAPPER FUNCTIONS
+// ============================================================================
 
 async function formatTranscriptFast(transcript, settings) {
-  // Use Groq by default, fallback to Anthropic if Groq key missing
-  const useGroq = settings.groqApiKey && settings.groqApiKey.trim().length > 0;
-  const provider = useGroq ? 'groq' : 'anthropic';
+  const gatewayConfig = settings.llmGateway?.transactions?.transcriptFormatting;
 
-  console.log(`DEBUG: Formatting transcript with ${provider}`);
+  if (!gatewayConfig) {
+    throw new Error('LLM Gateway configuration not found. Please configure it in Settings.');
+  }
+
+  const { provider, model, options } = gatewayConfig;
+  const apiKey = settings.llmGateway?.apiKey;
+
+  console.log(`DEBUG: Formatting transcript with LLM Gateway - Provider: ${provider}, Model: ${model}`);
 
   const prompt = `Reformat this YouTube transcript to make it "pretty" and readable for humans in markdown format.
 Add timestamps in a clean format and improve readability:
@@ -103,35 +338,33 @@ ${transcript}
 Return ONLY the formatted markdown transcript.`;
 
   try {
-    if (useGroq) {
-      const formatted = await callGroq(prompt, settings.groqApiKey, 64000);
-      console.log('DEBUG: Transcript formatted successfully with Groq');
-      return formatted;
-    } else {
-      const formatted = await callAnthropic(prompt, settings.apiKey, 64000);
-      console.log('DEBUG: Transcript formatted successfully with Anthropic (fallback)');
-      return formatted;
-    }
+    const result = await callLLMGateway(
+      provider,
+      model,
+      [{ role: 'user', content: prompt }],
+      options,
+      apiKey
+    );
+
+    console.log('DEBUG: Transcript formatted successfully with LLM Gateway');
+    return result.content;
   } catch (error) {
-    console.error(`ERROR: ${provider} formatting failed:`, error);
-
-    // Fallback to Anthropic if Groq fails
-    if (provider === 'groq' && settings.apiKey) {
-      console.log('DEBUG: Falling back to Anthropic for formatting');
-      const formatted = await callAnthropic(prompt, settings.apiKey, 8000);
-      return formatted;
-    }
-
+    console.error('ERROR: LLM Gateway transcript formatting failed:', error);
     throw error;
   }
 }
 
 async function summarizeYouTubeVideo(title, description, transcript, settings, categories) {
-  if (!settings.apiKey) {
-    throw new Error('Anthropic API key required for video summarization');
+  const gatewayConfig = settings.llmGateway?.transactions?.youtubeSummary;
+
+  if (!gatewayConfig) {
+    throw new Error('LLM Gateway configuration not found. Please configure it in Settings.');
   }
 
-  console.log('DEBUG: Summarizing YouTube video with Anthropic Haiku');
+  const { provider, model, options } = gatewayConfig;
+  const apiKey = settings.llmGateway?.apiKey;
+
+  console.log(`DEBUG: Summarizing YouTube video with LLM Gateway - Provider: ${provider}, Model: ${model}`);
 
   const prompt = `Analyze this YouTube video and provide:
 1. Analyze the transcript and create a structured summary following this format below. If the transcript is not in english, create a summary in the native language, then translate it to english using natural language to communicate the meaning over literal translation. Only return the English version:
@@ -188,15 +421,21 @@ Return ONLY a JSON object with this exact structure:
   "tags": ["tag1", "tag2", "tag3"]
 }`;
 
-  const response = await callAnthropic(prompt, settings.apiKey, 10000);
+  try {
+    const result = await callLLMGateway(
+      provider,
+      model,
+      [{ role: 'user', content: prompt }],
+      options,
+      apiKey
+    );
 
-  // Parse JSON from response
-  const match = response.match(/\{[\s\S]*\}/);
-  if (!match) {
-    throw new Error('Invalid API response format');
+    console.log('DEBUG: YouTube video summarized successfully with LLM Gateway');
+    return extractJSON(result.content);
+  } catch (error) {
+    console.error('ERROR: LLM Gateway YouTube summarization failed:', error);
+    throw error;
   }
-
-  return JSON.parse(match[0]);
 }
 
 // ============================================================================
@@ -312,7 +551,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const categories = data.categories || [];
         
         console.log('DEBUG: 211 Settings loaded in addBookmark:', settings);
-        console.log('DEBUG: 212 API Key present in addBookmark:', !!settings.apiKey);
+        console.log('DEBUG: 212 LLM Gateway API Key present in addBookmark:', !!settings.llmGateway?.apiKey);
         console.log('DEBUG: 213 Categories in addBookmark:', categories);
         
         // Create preliminary bookmark
@@ -446,7 +685,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const categories = data.categories || [];
 
         console.log('DEBUG: 230 Settings loaded:', settings);
-        console.log('DEBUG: 231 API Key present:', !!settings.apiKey);
+        console.log('DEBUG: 231 LLM Gateway API Key present:', !!settings.llmGateway?.apiKey);
         console.log('DEBUG: 232 Categories:', categories);
         console.log('DEBUG: 233 Transcript provided:', !!request.transcript);
         console.log('DEBUG: 234 Is YouTube:', request.scrapedData.isYouTube);
@@ -535,8 +774,57 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.log('DEBUG: 238 Background getting transcript for video:', request.videoId);
         const transcriptData = await getTranscript(request.videoId);
         sendResponse({ success: true, transcript: transcriptData });
+      } else if (request.action === 'testGatewayConnection') {
+        // Test LLM Gateway connection and fetch models
+        console.log('DEBUG: Testing LLM Gateway connection');
+        try {
+          // Step 1: Check /health endpoint (no auth required)
+          const healthResponse = await fetch(`${LLM_GATEWAY_URL}/health`);
+
+          if (!healthResponse.ok) {
+            throw new Error(`Health check failed: Gateway may be down (status: ${healthResponse.status})`);
+          }
+
+          const healthData = await healthResponse.json();
+          console.log('DEBUG: Gateway health check passed:', healthData);
+
+          // Step 2: Test authentication by fetching models
+          const modelsResponse = await fetch(`${LLM_GATEWAY_URL}/v1/models`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${request.apiKey}`,
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (!modelsResponse.ok) {
+            const errorData = await modelsResponse.json().catch(() => ({}));
+
+            if (modelsResponse.status === 401) {
+              throw new Error('Authentication failed: Invalid API key');
+            }
+
+            throw new Error(`Failed to fetch models: ${errorData.error || 'Unknown error'}`);
+          }
+
+          const modelsData = await modelsResponse.json();
+          console.log('DEBUG: Models fetched successfully');
+
+          sendResponse({
+            success: true,
+            message: 'Connection successful!',
+            healthData,
+            modelsData
+          });
+        } catch (error) {
+          console.error('ERROR: Gateway connection test failed:', error);
+          sendResponse({
+            success: false,
+            message: error.message
+          });
+        }
       }
-      
+
     } catch (error) {
       console.error('ERROR: 239 Background processing failed:', error);
       sendResponse({ success: false, error: error.message });
@@ -584,13 +872,13 @@ async function updateTranscript(videoId, updates) {
 // Enhanced AI processing function
 async function processWithAI(scrapedData, settings, categories, transcript = null, tabId = null) {
   console.log('DEBUG: 247 processWithAI called with settings:', settings);
-  console.log('DEBUG: 248 API Key in processWithAI:', settings.apiKey ? 'PRESENT' : 'MISSING');
+  console.log('DEBUG: 248 LLM Gateway API Key in processWithAI:', settings.llmGateway?.apiKey ? 'PRESENT' : 'MISSING');
   console.log('DEBUG: 249 Is YouTube video:', scrapedData.isYouTube);
   console.log('DEBUG: 250 Transcript provided:', !!transcript);
 
   // Validate API key
-  if (!settings.apiKey) {
-    throw new Error('API key not found in settings. Please configure your API key in the extension settings.');
+  if (!settings.llmGateway?.apiKey) {
+    throw new Error('LLM Gateway API key not found in settings. Please configure your API key in the extension settings.');
   }
 
   // Handle YouTube videos with transcript
@@ -610,7 +898,7 @@ async function processWithAI(scrapedData, settings, categories, transcript = nul
 async function processYouTubeVideoWithTranscript(scrapedData, settings, categories, transcript, tabId) {
   console.log('DEBUG: 254 Processing YouTube video with parallel API calls');
   console.log('DEBUG: 255 Transcript length:', transcript.length);
-  console.log('DEBUG: 256 Using Groq for formatting:', !!settings.groqApiKey);
+  console.log('DEBUG: 256 LLM Gateway configured:', !!settings.llmGateway?.apiKey);
 
   try {
     // Save the raw transcript
@@ -676,10 +964,21 @@ async function processYouTubeVideoWithTranscript(scrapedData, settings, categori
   }
 }
 
-// Process standard page (original function)
+// Process standard page (using LLM Gateway)
 async function processStandardPage(scrapedData, settings, categories) {
+  const gatewayConfig = settings.llmGateway?.transactions?.pageSummary;
+
+  if (!gatewayConfig) {
+    throw new Error('LLM Gateway configuration not found. Please configure it in Settings.');
+  }
+
+  const { provider, model, options } = gatewayConfig;
+  const apiKey = settings.llmGateway?.apiKey;
+
+  console.log(`DEBUG: Processing standard page with LLM Gateway - Provider: ${provider}, Model: ${model}`);
+
   const prompt = `Summarize the following webpage content in under 200 words using markdown. Categorize it: Use an existing category if fitting (existing: ${categories.join(', ')}), else suggest a new one. Generate up to 10 relevant tags.
-  
+
 Content: ${scrapedData.content}
 
 Return ONLY a JSON object with this exact structure:
@@ -689,38 +988,21 @@ Return ONLY a JSON object with this exact structure:
   "tags": ["tag1", "tag2", "tag3"]
 }`;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': settings.apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2500,
-      messages: [{ role: 'user', content: prompt }]
-    })
-  });
-  console.log('DEBUG: 264 Standard page AI API response received');
-  
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    console.error('ERROR: 265 API request failed:', response.status, errorData);
-    throw new Error(`API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+  try {
+    const result = await callLLMGateway(
+      provider,
+      model,
+      [{ role: 'user', content: prompt }],
+      options,
+      apiKey
+    );
+
+    console.log('DEBUG: Standard page processed successfully with LLM Gateway');
+    return extractJSON(result.content);
+  } catch (error) {
+    console.error('ERROR: LLM Gateway page processing failed:', error);
+    throw error;
   }
-  
-  const data = await response.json();
-  const content = data.content[0].text;
-  
-  // Parse JSON from response
-  const match = content.match(/\{[\s\S]*\}/);
-  if (!match) {
-    throw new Error('Invalid API response format');
-  }
-  
-  return JSON.parse(match[0]);
 }
 
 // Scrape function to be injected

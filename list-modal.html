@@ -42,27 +42,36 @@
       font-size: 14px;
     }
     
-    .rv-export-btn, .rv-priority-btn {
+    .rv-export-btn, .rv-priority-btn, .rv-settings-btn {
       padding: 8px 16px;
       border: none;
       border-radius: 4px;
       cursor: pointer;
       font-size: 14px;
     }
-    
+
     .rv-export-btn {
       background: #6c757d;
       color: white;
     }
-    
+
     .rv-priority-btn {
       background: #ffc107;
       color: #000;
     }
-    
+
     .rv-priority-btn.active {
       background: #ff9800;
       color: white;
+    }
+
+    .rv-settings-btn {
+      background: #17a2b8;
+      color: white;
+    }
+
+    .rv-settings-btn:hover {
+      background: #138496;
     }
     
     .rv-close-btn {
@@ -249,15 +258,292 @@
       min-height: 100px;
       resize: vertical;
     }
+
+    /* Settings Modal Styles */
+    .settings-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 10000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .settings-overlay.active {
+      display: flex;
+    }
+
+    .settings-modal {
+      background: white;
+      border-radius: 8px;
+      width: 90%;
+      max-width: 800px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+
+    .settings-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px;
+      border-bottom: 2px solid #e0e0e0;
+      background: #f9f9f9;
+    }
+
+    .settings-header h2 {
+      margin: 0;
+      color: #333;
+    }
+
+    .settings-close-btn {
+      background: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .settings-body {
+      padding: 20px;
+    }
+
+    .settings-section {
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .settings-section:last-child {
+      border-bottom: none;
+    }
+
+    .settings-section h3 {
+      margin-top: 0;
+      color: #4a90e2;
+      font-size: 18px;
+    }
+
+    .settings-field {
+      margin-bottom: 20px;
+    }
+
+    .settings-field label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 5px;
+      color: #333;
+    }
+
+    .settings-field input,
+    .settings-field select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+
+    .settings-field input[type="password"] {
+      font-family: monospace;
+    }
+
+    .settings-help-text {
+      font-size: 12px;
+      color: #666;
+      margin-top: 5px;
+      line-height: 1.4;
+    }
+
+    .settings-button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .settings-btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .settings-btn-primary {
+      background: #28a745;
+      color: white;
+    }
+
+    .settings-btn-primary:hover {
+      background: #218838;
+    }
+
+    .settings-btn-secondary {
+      background: #6c757d;
+      color: white;
+    }
+
+    .settings-btn-secondary:hover {
+      background: #5a6268;
+    }
+
+    .settings-btn-info {
+      background: #17a2b8;
+      color: white;
+    }
+
+    .settings-btn-info:hover {
+      background: #138496;
+    }
+
+    .api-key-instructions {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 4px;
+      margin-top: 10px;
+      font-size: 13px;
+      border-left: 4px solid #17a2b8;
+    }
+
+    .api-key-instructions h4 {
+      margin-top: 0;
+      color: #17a2b8;
+    }
+
+    .api-key-instructions pre {
+      background: #333;
+      color: #0f0;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-size: 11px;
+      margin: 10px 0;
+    }
+
+    .api-key-instructions ol {
+      margin: 10px 0;
+      padding-left: 20px;
+    }
+
+    .api-key-instructions li {
+      margin-bottom: 5px;
+    }
+
+    .transaction-config {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 4px;
+      margin-bottom: 15px;
+    }
+
+    .transaction-config h4 {
+      margin-top: 0;
+      color: #495057;
+      font-size: 16px;
+    }
+
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+
+    .toast-message {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #28a745;
+      color: white;
+      padding: 15px 20px;
+      border-radius: 4px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      z-index: 10001;
+      display: none;
+      animation: slideIn 0.3s ease-out;
+    }
+
+    .toast-message.error {
+      background: #dc3545;
+    }
+
+    .toast-message.active {
+      display: block;
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    .critical-error-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      z-index: 10002;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .critical-error-overlay.active {
+      display: flex;
+    }
+
+    .critical-error-modal {
+      background: white;
+      border-radius: 8px;
+      padding: 30px;
+      max-width: 500px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+
+    .critical-error-modal h3 {
+      margin-top: 0;
+      color: #dc3545;
+    }
+
+    .critical-error-modal pre {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .critical-error-modal button {
+      margin-top: 20px;
+      padding: 10px 20px;
+      background: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+    }
   </style>
 </head>
 <body>
   <div class="rv-overlay" id="overlay">
     <div class="rv-modal">
       <div class="rv-top-bar">
-        <button class="rv-export-btn" id="export-btn">Export</button>
-        <input type="text" class="rv-search" id="search-input" placeholder="Search all bookmarks...">
         <button class="rv-priority-btn" id="priority-btn">Priority View</button>
+        <input type="text" class="rv-search" id="search-input" placeholder="Search all bookmarks...">
+        <button class="rv-settings-btn" id="settings-btn">⚙️ Settings</button>
         <button class="rv-close-btn" id="close-btn">Close</button>
       </div>
       
@@ -285,7 +571,162 @@
     </div>
   </div>
 
+  <!-- Settings Modal -->
+  <div class="settings-overlay" id="settings-overlay">
+    <div class="settings-modal">
+      <div class="settings-header">
+        <h2>⚙️ Settings</h2>
+        <button class="settings-close-btn" id="settings-close-btn">Close</button>
+      </div>
+      <div class="settings-body">
+        <!-- LLM Gateway Setup Section -->
+        <div class="settings-section">
+          <h3>🔑 LLM Gateway Setup</h3>
+          <div class="settings-field">
+            <label for="gateway-api-key">Gateway API Key</label>
+            <input type="password" id="gateway-api-key" placeholder="kb-llm-yourapp-xyz123">
+            <div class="settings-help-text">
+              Your LLM Gateway API key provides access to 16+ AI providers through a unified interface.
+            </div>
+          </div>
+
+          <div class="settings-button-group">
+            <button class="settings-btn settings-btn-info" id="test-connection-btn">🔍 Test Connection</button>
+            <button class="settings-btn settings-btn-secondary" id="toggle-instructions-btn">📖 How to Get API Key</button>
+          </div>
+
+          <div class="api-key-instructions" id="api-key-instructions" style="display: none;">
+            <h4>How to Generate an LLM Gateway API Key</h4>
+            <ol>
+              <li>Open your terminal or command prompt</li>
+              <li>Copy and paste the following curl command:</li>
+            </ol>
+            <pre>curl -X POST https://llmproxy.api.sparkbright.me/admin/apps \
+  -H "Content-Type: application/json" \
+  -d '{"appName": "ReVisit Extension", "rateLimit": 120}'</pre>
+            <ol start="3">
+              <li>Press Enter to execute the command</li>
+              <li>Copy the "apiKey" value from the response (starts with "kb-llm-")</li>
+              <li>Paste it into the API Key field above</li>
+              <li>Click "Test Connection" to verify it works</li>
+            </ol>
+            <p><strong>Note:</strong> Save your API key immediately - it cannot be retrieved later!</p>
+          </div>
+        </div>
+
+        <!-- Transaction Settings Section -->
+        <div class="settings-section">
+          <h3>🎯 AI Provider Settings</h3>
+          <p class="settings-help-text">Configure which AI provider and model to use for each type of task.</p>
+
+          <!-- YouTube Summary Configuration -->
+          <div class="transaction-config">
+            <h4>📺 YouTube Video Summarization</h4>
+            <div class="settings-grid">
+              <div class="settings-field">
+                <label for="youtube-provider">Provider</label>
+                <select id="youtube-provider">
+                  <option value="groq">Groq (Fast Inference)</option>
+                  <option value="anthropic">Anthropic (Claude)</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="google">Google AI (Gemini)</option>
+                  <option value="deepseek">Deepseek</option>
+                  <option value="perplexity">Perplexity</option>
+                  <option value="xai">xAI (Grok)</option>
+                </select>
+              </div>
+              <div class="settings-field">
+                <label for="youtube-model">Model</label>
+                <select id="youtube-model">
+                  <option value="openai/gpt-oss-120b">GPT-OSS 120B</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Transcript Formatting Configuration -->
+          <div class="transaction-config">
+            <h4>📝 Transcript Formatting</h4>
+            <div class="settings-grid">
+              <div class="settings-field">
+                <label for="transcript-provider">Provider</label>
+                <select id="transcript-provider">
+                  <option value="groq">Groq (Fast Inference)</option>
+                  <option value="anthropic">Anthropic (Claude)</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="google">Google AI (Gemini)</option>
+                  <option value="deepseek">Deepseek</option>
+                  <option value="perplexity">Perplexity</option>
+                  <option value="xai">xAI (Grok)</option>
+                </select>
+              </div>
+              <div class="settings-field">
+                <label for="transcript-model">Model</label>
+                <select id="transcript-model">
+                  <option value="openai/gpt-oss-120b">GPT-OSS 120B</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Page Summary Configuration -->
+          <div class="transaction-config">
+            <h4>🌐 Web Page Summarization</h4>
+            <div class="settings-grid">
+              <div class="settings-field">
+                <label for="page-provider">Provider</label>
+                <select id="page-provider">
+                  <option value="groq">Groq (Fast Inference)</option>
+                  <option value="anthropic">Anthropic (Claude)</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="google">Google AI (Gemini)</option>
+                  <option value="deepseek">Deepseek</option>
+                  <option value="perplexity">Perplexity</option>
+                  <option value="xai">xAI (Grok)</option>
+                </select>
+              </div>
+              <div class="settings-field">
+                <label for="page-model">Model</label>
+                <select id="page-model">
+                  <option value="openai/gpt-oss-120b">GPT-OSS 120B</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Backup & Restore Section -->
+        <div class="settings-section">
+          <h3>💾 Backup & Restore</h3>
+          <p class="settings-help-text">Backup your bookmarks, categories, and transcripts to a JSON file. Restore from a previous backup. Note: Settings are not backed up.</p>
+          <div class="settings-button-group">
+            <button class="settings-btn settings-btn-secondary" id="export-data-btn">📥 Backup Data</button>
+            <button class="settings-btn settings-btn-info" id="import-data-btn">📤 Restore Data</button>
+          </div>
+        </div>
+
+        <!-- Save Settings Button -->
+        <div class="settings-button-group">
+          <button class="settings-btn settings-btn-primary" id="save-settings-btn">💾 Save Settings</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Message -->
+  <div class="toast-message" id="toast-message"></div>
+
+  <!-- Critical Error Modal -->
+  <div class="critical-error-overlay" id="critical-error-overlay">
+    <div class="critical-error-modal">
+      <h3>⚠️ Critical Error</h3>
+      <pre id="critical-error-message"></pre>
+      <button id="critical-error-close-btn">Close</button>
+    </div>
+  </div>
+
   <script src="utils.js"></script>
+  <script src="llm-gateway.js"></script>
   <script src="list-modal.js"></script>
 </body>
 </html>

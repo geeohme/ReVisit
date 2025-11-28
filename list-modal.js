@@ -57,8 +57,8 @@ async function init() {
     document.getElementById('priority-btn').classList.toggle('active');
     renderLinks();
   });
-  
-  document.getElementById('export-btn').addEventListener('click', exportData);
+
+  document.getElementById('settings-btn').addEventListener('click', openSettings);
   document.getElementById('close-btn').addEventListener('click', () => window.close());
   
   // ESC to close
@@ -510,7 +510,17 @@ async function saveData() {
 }
 
 async function exportData() {
-  const data = { bookmarks, categories, settings };
+  // Get transcripts from storage
+  const transcriptData = await chrome.storage.local.get('rvTranscripts');
+  const transcripts = transcriptData.rvTranscripts || {};
+
+  // Only backup data (bookmarks, categories, transcripts) - NOT configuration/settings
+  const data = {
+    bookmarks,
+    categories,
+    transcripts
+  };
+
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -518,6 +528,73 @@ async function exportData() {
   a.download = `rv-backup-${new Date().toISOString().split('T')[0]}.json`;
   a.click();
   URL.revokeObjectURL(url);
+  showToast('✅ Backup created successfully!', 'success');
+}
+
+async function importData() {
+  // Create file input element
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const backupData = JSON.parse(text);
+
+      // Validate backup data
+      if (!backupData || typeof backupData !== 'object') {
+        throw new Error('Invalid backup file format');
+      }
+
+      // Restore bookmarks (replace existing)
+      if (backupData.bookmarks && Array.isArray(backupData.bookmarks)) {
+        bookmarks = backupData.bookmarks;
+      }
+
+      // Merge categories (deduplicate)
+      if (backupData.categories && Array.isArray(backupData.categories)) {
+        // Combine existing categories with backup categories and deduplicate
+        const mergedCategories = [...categories, ...backupData.categories];
+        categories = Array.from(new Set(mergedCategories));
+      }
+
+      // Restore transcripts if present
+      if (backupData.transcripts && typeof backupData.transcripts === 'object') {
+        await chrome.storage.local.set({ rvTranscripts: backupData.transcripts });
+      }
+
+      // Note: We intentionally IGNORE settings from backup
+      // Settings should be configured through onboarding/settings panel
+
+      // Save the restored data
+      await saveData();
+
+      // Refresh the UI
+      renderCategories();
+      renderLinks();
+
+      showToast('✅ Data restored successfully!', 'success');
+
+      // Show summary of what was restored
+      const summary = [];
+      if (backupData.bookmarks) summary.push(`${backupData.bookmarks.length} bookmarks`);
+      if (backupData.categories) summary.push(`${backupData.categories.length} categories`);
+      if (backupData.transcripts) summary.push(`${Object.keys(backupData.transcripts).length} transcripts`);
+
+      console.log(`Restored: ${summary.join(', ')}`);
+
+    } catch (error) {
+      console.error('Import failed:', error);
+      showToast(`❌ Import failed: ${error.message}`, 'error');
+    }
+  };
+
+  // Trigger file picker
+  input.click();
 }
 
 async function saveEdit(bookmarkId) {
@@ -548,5 +625,410 @@ window.addEventListener('message', async (event) => {
     // Already handled in the function
   }
 });
+
+/* ============================================
+   SETTINGS PANEL FUNCTIONALITY
+   ============================================ */
+
+/**
+ * Provider model configurations
+ */
+const PROVIDER_MODELS = {
+  groq: [
+    { id: 'openai/gpt-oss-120b', name: 'GPT-OSS 120B (Recommended)' },
+    { id: 'llama-3.1-70b-versatile', name: 'Llama 3.1 70B (Versatile)' },
+    { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B (Ultra Fast)' },
+    { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B (Long Context)' }
+  ],
+  anthropic: [
+    { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet (Latest)' },
+    { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus (Flagship)' },
+    { id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku (Fast)' }
+  ],
+  openai: [
+    { id: 'gpt-4', name: 'GPT-4 (Most Capable)' },
+    { id: 'gpt-4-turbo', name: 'GPT-4 Turbo (Faster, Cheaper)' },
+    { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo (Fast, Cost-Effective)' }
+  ],
+  google: [
+    { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash (Experimental)' },
+    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Most Capable)' },
+    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Fast, Efficient)' }
+  ],
+  deepseek: [
+    { id: 'deepseek-chat', name: 'Deepseek Chat' },
+    { id: 'deepseek-coder', name: 'Deepseek Coder (Specialized)' }
+  ],
+  perplexity: [
+    { id: 'llama-3.1-sonar-large-128k-online', name: 'Sonar Large (Online Search)' },
+    { id: 'llama-3.1-sonar-small-128k-online', name: 'Sonar Small (Online)' },
+    { id: 'llama-3.1-sonar-large-128k-chat', name: 'Sonar Large (Chat)' }
+  ],
+  xai: [
+    { id: 'grok-beta', name: 'Grok Beta' }
+  ]
+};
+
+/**
+ * Open settings modal and populate with current settings
+ */
+function openSettings() {
+  const overlay = document.getElementById('settings-overlay');
+  overlay.classList.add('active');
+
+  // Initialize llmGateway settings if not present
+  if (!settings.llmGateway) {
+    settings.llmGateway = getDefaultSettings();
+  }
+
+  // Populate fields
+  document.getElementById('gateway-api-key').value = settings.llmGateway.apiKey || '';
+
+  // If we have stored models data, populate dropdowns dynamically
+  const modelsData = settings.llmGateway.modelsData;
+  if (modelsData) {
+    populateProviderDropdowns(modelsData);
+
+    // Set selected values
+    const youtubeConfig = settings.llmGateway.transactions?.youtubeSummary || { provider: 'groq', model: 'openai/gpt-oss-120b' };
+    const transcriptConfig = settings.llmGateway.transactions?.transcriptFormatting || { provider: 'groq', model: 'openai/gpt-oss-120b' };
+    const pageConfig = settings.llmGateway.transactions?.pageSummary || { provider: 'groq', model: 'openai/gpt-oss-120b' };
+
+    document.getElementById('youtube-provider').value = youtubeConfig.provider;
+    updateModelDropdownFromGateway('youtube-model', youtubeConfig.provider, modelsData);
+    document.getElementById('youtube-model').value = youtubeConfig.model;
+
+    document.getElementById('transcript-provider').value = transcriptConfig.provider;
+    updateModelDropdownFromGateway('transcript-model', transcriptConfig.provider, modelsData);
+    document.getElementById('transcript-model').value = transcriptConfig.model;
+
+    document.getElementById('page-provider').value = pageConfig.provider;
+    updateModelDropdownFromGateway('page-model', pageConfig.provider, modelsData);
+    document.getElementById('page-model').value = pageConfig.model;
+  } else {
+    // Fallback to static models if no gateway data
+    const youtubeConfig = settings.llmGateway.transactions?.youtubeSummary || { provider: 'groq', model: 'openai/gpt-oss-120b' };
+    document.getElementById('youtube-provider').value = youtubeConfig.provider;
+    updateModelDropdown('youtube-model', youtubeConfig.provider, youtubeConfig.model);
+
+    const transcriptConfig = settings.llmGateway.transactions?.transcriptFormatting || { provider: 'groq', model: 'openai/gpt-oss-120b' };
+    document.getElementById('transcript-provider').value = transcriptConfig.provider;
+    updateModelDropdown('transcript-model', transcriptConfig.provider, transcriptConfig.model);
+
+    const pageConfig = settings.llmGateway.transactions?.pageSummary || { provider: 'groq', model: 'openai/gpt-oss-120b' };
+    document.getElementById('page-provider').value = pageConfig.provider;
+    updateModelDropdown('page-model', pageConfig.provider, pageConfig.model);
+  }
+
+  // Setup event listeners
+  setupSettingsEventListeners();
+}
+
+/**
+ * Update model dropdown based on selected provider
+ */
+function updateModelDropdown(dropdownId, provider, selectedModel = null) {
+  const dropdown = document.getElementById(dropdownId);
+  dropdown.innerHTML = '';
+
+  const models = PROVIDER_MODELS[provider] || [];
+  models.forEach(model => {
+    const option = document.createElement('option');
+    option.value = model.id;
+    option.textContent = model.name;
+    if (model.id === selectedModel) {
+      option.selected = true;
+    }
+    dropdown.appendChild(option);
+  });
+
+  // If no model selected, select first
+  if (!selectedModel && models.length > 0) {
+    dropdown.value = models[0].id;
+  }
+}
+
+/**
+ * Setup event listeners for settings panel
+ */
+function setupSettingsEventListeners() {
+  // Close settings
+  document.getElementById('settings-close-btn').onclick = closeSettings;
+
+  // Toggle instructions
+  document.getElementById('toggle-instructions-btn').onclick = () => {
+    const instructions = document.getElementById('api-key-instructions');
+    instructions.style.display = instructions.style.display === 'none' ? 'block' : 'none';
+  };
+
+  // Test connection
+  document.getElementById('test-connection-btn').onclick = testGatewayConnection;
+
+  // Provider change listeners - update model dropdowns
+  const modelsData = settings.llmGateway?.modelsData;
+
+  document.getElementById('youtube-provider').onchange = (e) => {
+    if (modelsData) {
+      updateModelDropdownFromGateway('youtube-model', e.target.value, modelsData);
+    } else {
+      updateModelDropdown('youtube-model', e.target.value);
+    }
+  };
+
+  document.getElementById('transcript-provider').onchange = (e) => {
+    if (modelsData) {
+      updateModelDropdownFromGateway('transcript-model', e.target.value, modelsData);
+    } else {
+      updateModelDropdown('transcript-model', e.target.value);
+    }
+  };
+
+  document.getElementById('page-provider').onchange = (e) => {
+    if (modelsData) {
+      updateModelDropdownFromGateway('page-model', e.target.value, modelsData);
+    } else {
+      updateModelDropdown('page-model', e.target.value);
+    }
+  };
+
+  // Backup data
+  document.getElementById('export-data-btn').onclick = exportData;
+
+  // Restore data
+  document.getElementById('import-data-btn').onclick = importData;
+
+  // Save settings
+  document.getElementById('save-settings-btn').onclick = saveSettings;
+
+  // Critical error close
+  document.getElementById('critical-error-close-btn').onclick = closeCriticalError;
+}
+
+/**
+ * Close settings modal
+ */
+function closeSettings() {
+  document.getElementById('settings-overlay').classList.remove('active');
+}
+
+/**
+ * Test LLM Gateway connection (via background service worker)
+ */
+async function testGatewayConnection() {
+  const apiKey = document.getElementById('gateway-api-key').value.trim();
+
+  if (!apiKey) {
+    showToast('Please enter an API key first', 'error');
+    return;
+  }
+
+  showToast('Testing connection...', 'info');
+
+  try {
+    // Call background service worker to test connection
+    const response = await chrome.runtime.sendMessage({
+      action: 'testGatewayConnection',
+      apiKey: apiKey
+    });
+
+    if (response.success) {
+      showToast(`✅ Connection successful!`, 'success');
+
+      // Store the models data for dynamic dropdown population
+      if (response.modelsData) {
+        settings.llmGateway = settings.llmGateway || {};
+        settings.llmGateway.modelsData = response.modelsData;
+        await saveData();
+
+        // Refresh dropdowns with new models data
+        populateProviderDropdowns(response.modelsData);
+        showToast('✅ Models loaded successfully!', 'success');
+      }
+    } else {
+      showToast(`❌ Connection failed: ${response.message}`, 'error');
+    }
+  } catch (error) {
+    showToast(`❌ Test failed: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Populate provider/model dropdowns dynamically from gateway models data
+ */
+function populateProviderDropdowns(modelsData) {
+  console.log('DEBUG: Populating provider dropdowns with models data');
+
+  // Build provider options from modelsData
+  const providers = Object.keys(modelsData);
+  const providerDropdowns = [
+    document.getElementById('youtube-provider'),
+    document.getElementById('transcript-provider'),
+    document.getElementById('page-provider')
+  ];
+
+  // Update each provider dropdown
+  providerDropdowns.forEach(dropdown => {
+    const currentValue = dropdown.value;
+    dropdown.innerHTML = '';
+
+    providers.forEach(provider => {
+      const option = document.createElement('option');
+      option.value = provider;
+      option.textContent = getProviderDisplayName(provider);
+      dropdown.appendChild(option);
+    });
+
+    // Restore selected value if it exists
+    if (providers.includes(currentValue)) {
+      dropdown.value = currentValue;
+    }
+  });
+
+  // Update model dropdowns based on selected providers
+  updateModelDropdownFromGateway('youtube-model', document.getElementById('youtube-provider').value, modelsData);
+  updateModelDropdownFromGateway('transcript-model', document.getElementById('transcript-provider').value, modelsData);
+  updateModelDropdownFromGateway('page-model', document.getElementById('page-provider').value, modelsData);
+}
+
+/**
+ * Update model dropdown based on provider (using gateway models data)
+ */
+function updateModelDropdownFromGateway(dropdownId, provider, modelsData) {
+  const dropdown = document.getElementById(dropdownId);
+  const currentValue = dropdown.value;
+  dropdown.innerHTML = '';
+
+  if (!modelsData || !modelsData[provider]) {
+    console.warn('No models data available for provider:', provider);
+    return;
+  }
+
+  const models = modelsData[provider].models || [];
+  models.forEach(modelObj => {
+    const option = document.createElement('option');
+    option.value = modelObj.id;
+    option.textContent = `${modelObj.id}`;
+    dropdown.appendChild(option);
+  });
+
+  // Restore selected value if it exists
+  if (models.find(m => m.id === currentValue)) {
+    dropdown.value = currentValue;
+  } else if (models.length > 0) {
+    dropdown.value = models[0].id;
+  }
+}
+
+/**
+ * Get display name for provider
+ */
+function getProviderDisplayName(provider) {
+  const names = {
+    groq: 'Groq (Fast Inference)',
+    anthropic: 'Anthropic (Claude)',
+    openai: 'OpenAI',
+    google: 'Google AI (Gemini)',
+    deepseek: 'Deepseek',
+    perplexity: 'Perplexity',
+    xai: 'xAI (Grok)',
+    sambanova: 'SambaNova',
+    moonshot: 'Moonshot',
+    qwen: 'Alibaba/Qwen',
+    cohere: 'Cohere',
+    mistral: 'Mistral',
+    cerebras: 'Cerebras',
+    together: 'Together AI',
+    featherai: 'Feather AI',
+    openrouter: 'OpenRouter'
+  };
+  return names[provider] || provider.charAt(0).toUpperCase() + provider.slice(1);
+}
+
+/**
+ * Save settings to storage
+ */
+async function saveSettings() {
+  const apiKey = document.getElementById('gateway-api-key').value.trim();
+
+  if (!apiKey) {
+    showToast('Please enter an API key', 'error');
+    return;
+  }
+
+  // Build settings object (preserve modelsData if it exists)
+  const existingModelsData = settings.llmGateway?.modelsData;
+
+  settings.llmGateway = {
+    enabled: true,
+    apiKey: apiKey,
+    modelsData: existingModelsData, // PRESERVE MODELS DATA
+    transactions: {
+      youtubeSummary: {
+        provider: document.getElementById('youtube-provider').value,
+        model: document.getElementById('youtube-model').value,
+        options: {
+          temperature: 0.7,
+          maxTokens: 10000
+        }
+      },
+      transcriptFormatting: {
+        provider: document.getElementById('transcript-provider').value,
+        model: document.getElementById('transcript-model').value,
+        options: {
+          temperature: 0.3,
+          maxTokens: 64000
+        }
+      },
+      pageSummary: {
+        provider: document.getElementById('page-provider').value,
+        model: document.getElementById('page-model').value,
+        options: {
+          temperature: 0.7,
+          maxTokens: 2500
+        }
+      }
+    }
+  };
+
+  await saveData();
+  showToast('✅ Settings saved successfully!', 'success');
+  closeSettings();
+}
+
+/**
+ * Show toast message
+ */
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('toast-message');
+  toast.textContent = message;
+  toast.className = 'toast-message active';
+
+  if (type === 'error') {
+    toast.classList.add('error');
+  }
+
+  setTimeout(() => {
+    toast.classList.remove('active');
+    toast.classList.remove('error');
+  }, 3000);
+}
+
+/**
+ * Show critical error modal
+ */
+function showCriticalError(errorMessage) {
+  const overlay = document.getElementById('critical-error-overlay');
+  const messageEl = document.getElementById('critical-error-message');
+
+  messageEl.textContent = errorMessage;
+  overlay.classList.add('active');
+}
+
+/**
+ * Close critical error modal
+ */
+function closeCriticalError() {
+  document.getElementById('critical-error-overlay').classList.remove('active');
+}
 
 init();
