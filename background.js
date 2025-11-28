@@ -15,17 +15,17 @@ const DEFAULT_DATA = {
       transactions: {
         youtubeSummary: {
           provider: 'groq',
-          model: 'openai/gpt-oss-120b',
+          model: 'llama-3.1-70b-versatile',
           options: { temperature: 0.7, maxTokens: 10000 }
         },
         transcriptFormatting: {
           provider: 'groq',
-          model: 'openai/gpt-oss-120b',
+          model: 'llama-3.1-70b-versatile',
           options: { temperature: 0.3, maxTokens: 64000 }
         },
         pageSummary: {
           provider: 'groq',
-          model: 'openai/gpt-oss-120b',
+          model: 'llama-3.1-70b-versatile',
           options: { temperature: 0.7, maxTokens: 2500 }
         }
       }
@@ -57,6 +57,16 @@ async function callLLMGateway(provider, model, messages, options = {}, apiKey, c
     requestBody.conversationId = conversationId;
   }
 
+  // Debug logging
+  console.log('DEBUG: LLM Gateway Request:', {
+    url: `${LLM_GATEWAY_URL}/v1/chat/completions`,
+    provider,
+    model,
+    messageCount: messages.length,
+    options,
+    requestBodyKeys: Object.keys(requestBody)
+  });
+
   try {
     const response = await fetch(`${LLM_GATEWAY_URL}/v1/chat/completions`, {
       method: 'POST',
@@ -70,6 +80,14 @@ async function callLLMGateway(provider, model, messages, options = {}, apiKey, c
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
 
+      // Log full error details
+      console.error('DEBUG: LLM Gateway Error Response:', {
+        status: response.status,
+        errorData,
+        provider,
+        model
+      });
+
       switch (response.status) {
         case 401:
           throw new Error(`Authentication failed: ${errorData.error || 'Invalid API key'}. Please check your LLM Gateway API key in Settings.`);
@@ -78,7 +96,8 @@ async function callLLMGateway(provider, model, messages, options = {}, apiKey, c
         case 400:
           throw new Error(`Invalid request: ${errorData.error || 'Bad request'}. Please check your provider/model configuration.`);
         case 500:
-          throw new Error(`Gateway error: ${errorData.error || 'Internal server error'}. The provider may be experiencing issues.`);
+          const details = errorData.details ? ` Details: ${JSON.stringify(errorData.details)}` : '';
+          throw new Error(`Gateway error: ${errorData.error || 'Internal server error'}.${details} Provider: ${provider}, Model: ${model}`);
         default:
           throw new Error(`Unexpected error (${response.status}): ${errorData.error || 'Unknown error'}`);
       }
