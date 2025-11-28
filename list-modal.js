@@ -11,17 +11,44 @@ let priorityView = false;
 // Load shared utilities from utils.js
 // Note: sendMessageWithRetry, isYouTubeUrl, extractVideoId are available from utils.js
 
+// Helper function to migrate old category format (string array) to new format (object array)
+function migrateCategoriesFormat(categories) {
+  if (!categories || categories.length === 0) return [];
+
+  // Check if already in new format (array of objects with name and priority)
+  if (typeof categories[0] === 'object' && categories[0].name !== undefined) {
+    return categories;
+  }
+
+  // Migrate from old format (string array) to new format
+  return categories.map((cat, index) => ({
+    name: cat,
+    priority: index + 1
+  }));
+}
+
+// Helper function to get category name (handle both string and object format)
+function getCategoryName(cat) {
+  return typeof cat === 'string' ? cat : cat.name;
+}
+
 async function init() {
   const urlParams = new URLSearchParams(window.location.search);
   const action = urlParams.get('action');
-  
+
   // Load data
   const data = await chrome.storage.local.get('rvData');
   const rvData = data.rvData || { bookmarks: [], categories: [], settings: {} };
   bookmarks = rvData.bookmarks || [];
-  categories = rvData.categories || [];
+  categories = migrateCategoriesFormat(rvData.categories || []);
   settings = rvData.settings || {};
-  
+
+  // Save migrated categories if format changed
+  if (rvData.categories && JSON.stringify(categories) !== JSON.stringify(rvData.categories)) {
+    await saveData();
+    console.log('Migrated categories to new format with priorities');
+  }
+
   if (!settings.onboardingComplete) {
     window.location.href = 'onboarding.html';
     return;
@@ -70,15 +97,18 @@ async function init() {
 function renderCategories() {
   const container = document.getElementById('categories-list');
   container.innerHTML = '';
-  
+
   // Add "All" category
   const allItem = createCategoryItem('All', bookmarks.length);
   container.appendChild(allItem);
-  
-  // Add individual categories
-  categories.forEach(cat => {
-    const count = bookmarks.filter(b => b.category === cat).length;
-    const item = createCategoryItem(cat, count);
+
+  // Sort categories by priority and add individual categories
+  const sortedCategories = [...categories].sort((a, b) => a.priority - b.priority);
+
+  sortedCategories.forEach(cat => {
+    const catName = getCategoryName(cat);
+    const count = bookmarks.filter(b => b.category === catName).length;
+    const item = createCategoryItem(catName, count);
     container.appendChild(item);
   });
 }
@@ -246,7 +276,10 @@ function renderDetails(bookmark) {
       <label>Title:</label>
       <input type="text" id="edit-title" value="${bookmark.title}">
       <label>Category:</label>
-      <select id="edit-category">${categories.map(c => `<option ${c === bookmark.category ? 'selected' : ''}>${c}</option>`).join('')}</select>
+      <select id="edit-category">${categories.map(c => {
+        const catName = getCategoryName(c);
+        return `<option ${catName === bookmark.category ? 'selected' : ''}>${catName}</option>`;
+      }).join('')}</select>
       <label>Revisit By:</label>
       <input type="date" id="edit-revisit" value="${bookmark.revisitBy.split('T')[0]}">
       <label>Summary:</label>
@@ -557,9 +590,25 @@ async function importData() {
 
       // Merge categories (deduplicate)
       if (backupData.categories && Array.isArray(backupData.categories)) {
-        // Combine existing categories with backup categories and deduplicate
-        const mergedCategories = [...categories, ...backupData.categories];
-        categories = Array.from(new Set(mergedCategories));
+        // Migrate backup categories to new format if needed
+        const migratedBackupCategories = migrateCategoriesFormat(backupData.categories);
+
+        // Combine existing categories with backup categories and deduplicate by name
+        const categoryMap = new Map();
+
+        // Add existing categories
+        categories.forEach(cat => {
+          categoryMap.set(cat.name, cat);
+        });
+
+        // Add/merge backup categories
+        migratedBackupCategories.forEach(cat => {
+          if (!categoryMap.has(cat.name)) {
+            categoryMap.set(cat.name, cat);
+          }
+        });
+
+        categories = Array.from(categoryMap.values());
       }
 
       // Restore transcripts if present
@@ -670,6 +719,106 @@ const PROVIDER_MODELS = {
 };
 
 /**
+ * Render categories in settings panel
+ */
+function renderCategoriesSettings() {
+  const container = document.getElementById('categories-settings-list');
+  container.innerHTML = '';
+
+  // Sort categories by priority
+  const sortedCategories = [...categories].sort((a, b) => a.priority - b.priority);
+
+  sortedCategories.forEach(cat => {
+    const catName = getCategoryName(cat);
+    const count = bookmarks.filter(b => b.category === catName).length;
+
+    const item = document.createElement('div');
+    item.className = 'category-settings-item';
+
+    item.innerHTML = `
+      <span class="cat-name">${catName}</span>
+      <span class="cat-count">${count}</span>
+      <div class="cat-priority">
+        <input type="number" class="cat-priority-input" data-category="${catName}"
+               value="${cat.priority}" min="1" max="100">
+      </div>
+    `;
+
+    container.appendChild(item);
+  });
+
+  // Add event listeners for priority inputs
+  document.querySelectorAll('.cat-priority-input').forEach(input => {
+    input.addEventListener('change', handleCategoryPriorityChange);
+  });
+}
+
+/**
+ * Handle category priority change
+ */
+function handleCategoryPriorityChange(e) {
+  const categoryName = e.target.getAttribute('data-category');
+  const newPriority = parseInt(e.target.value);
+
+  if (isNaN(newPriority) || newPriority < 1 || newPriority > 100) {
+    showToast('Priority must be between 1 and 100', 'error');
+    renderCategoriesSettings();
+    return;
+  }
+
+  // Find and update the category
+  const category = categories.find(cat => getCategoryName(cat) === categoryName);
+  if (category) {
+    category.priority = newPriority;
+    saveData();
+    renderCategoriesSettings();
+    renderCategories(); // Update sidebar
+    showToast('Category priority updated', 'success');
+  }
+}
+
+/**
+ * Add new category
+ */
+function handleAddCategory() {
+  const nameInput = document.getElementById('new-category-name');
+  const priorityInput = document.getElementById('new-category-priority');
+
+  const name = nameInput.value.trim();
+  const priority = parseInt(priorityInput.value);
+
+  if (!name) {
+    showToast('Please enter a category name', 'error');
+    return;
+  }
+
+  if (isNaN(priority) || priority < 1 || priority > 100) {
+    showToast('Priority must be between 1 and 100', 'error');
+    return;
+  }
+
+  // Check if category already exists
+  const exists = categories.some(cat => getCategoryName(cat) === name);
+  if (exists) {
+    showToast('Category already exists', 'error');
+    return;
+  }
+
+  // Add new category
+  categories.push({ name, priority });
+  saveData();
+
+  // Clear inputs
+  nameInput.value = '';
+  priorityInput.value = '1';
+
+  // Re-render
+  renderCategoriesSettings();
+  renderCategories(); // Update sidebar
+  showToast('Category added successfully', 'success');
+}
+
+/**
  * Open settings modal and populate with current settings
  */
 function openSettings() {
@@ -683,6 +832,9 @@ function openSettings() {
 
   // Populate fields
   document.getElementById('gateway-api-key').value = settings.llmGateway.apiKey || '';
+
+  // Render categories
+  renderCategoriesSettings();
 
   // If we have stored models data, populate dropdowns dynamically
   const modelsData = settings.llmGateway.modelsData;
@@ -796,6 +948,9 @@ function setupSettingsEventListeners() {
 
   // Restore data
   document.getElementById('import-data-btn').onclick = importData;
+
+  // Add category
+  document.getElementById('add-category-btn').onclick = handleAddCategory;
 
   // Save settings
   document.getElementById('save-settings-btn').onclick = saveSettings;
