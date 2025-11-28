@@ -193,16 +193,8 @@ async function completeOnboarding() {
     settings: {
       userName,
       defaultIntervalDays: interval,
-      apiKey: '',           // DEPRECATED: Keep for backward compatibility
-      groqApiKey: '',       // DEPRECATED: Keep for backward compatibility
       onboardingComplete: true,
       priorityThresholdDays: threshold,
-      // DEPRECATED: Old providers config
-      providers: {
-        summary: 'anthropic',
-        formatting: 'groq'
-      },
-      // NEW: LLM Gateway configuration
       llmGateway: {
         enabled: true,
         apiKey: gatewayApiKey,

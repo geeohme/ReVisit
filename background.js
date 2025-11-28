@@ -7,16 +7,8 @@ const DEFAULT_DATA = {
   settings: {
     userName: "",
     defaultIntervalDays: 7,
-    apiKey: "",           // Anthropic API key (DEPRECATED - use llmGateway instead)
-    groqApiKey: "",       // Groq API key (DEPRECATED - use llmGateway instead)
     onboardingComplete: false,
     priorityThresholdDays: 3,
-    // DEPRECATED: Old providers config
-    providers: {
-      summary: 'anthropic',    // 'anthropic', 'openai', 'groq'
-      formatting: 'groq'       // 'groq', 'sambanova', 'anthropic'
-    },
-    // NEW: LLM Gateway configuration
     llmGateway: {
       enabled: true,
       apiKey: '',
@@ -434,7 +426,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const categories = data.categories || [];
         
         console.log('DEBUG: 211 Settings loaded in addBookmark:', settings);
-        console.log('DEBUG: 212 API Key present in addBookmark:', !!settings.apiKey);
+        console.log('DEBUG: 212 LLM Gateway API Key present in addBookmark:', !!settings.llmGateway?.apiKey);
         console.log('DEBUG: 213 Categories in addBookmark:', categories);
         
         // Create preliminary bookmark
@@ -568,7 +560,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const categories = data.categories || [];
 
         console.log('DEBUG: 230 Settings loaded:', settings);
-        console.log('DEBUG: 231 API Key present:', !!settings.apiKey);
+        console.log('DEBUG: 231 LLM Gateway API Key present:', !!settings.llmGateway?.apiKey);
         console.log('DEBUG: 232 Categories:', categories);
         console.log('DEBUG: 233 Transcript provided:', !!request.transcript);
         console.log('DEBUG: 234 Is YouTube:', request.scrapedData.isYouTube);
@@ -716,13 +708,13 @@ async function updateTranscript(videoId, updates) {
 // Enhanced AI processing function
 async function processWithAI(scrapedData, settings, categories, transcript = null, tabId = null) {
   console.log('DEBUG: 247 processWithAI called with settings:', settings);
-  console.log('DEBUG: 248 API Key in processWithAI:', settings.apiKey ? 'PRESENT' : 'MISSING');
+  console.log('DEBUG: 248 LLM Gateway API Key in processWithAI:', settings.llmGateway?.apiKey ? 'PRESENT' : 'MISSING');
   console.log('DEBUG: 249 Is YouTube video:', scrapedData.isYouTube);
   console.log('DEBUG: 250 Transcript provided:', !!transcript);
 
   // Validate API key
-  if (!settings.apiKey) {
-    throw new Error('API key not found in settings. Please configure your API key in the extension settings.');
+  if (!settings.llmGateway?.apiKey) {
+    throw new Error('LLM Gateway API key not found in settings. Please configure your API key in the extension settings.');
   }
 
   // Handle YouTube videos with transcript
@@ -742,7 +734,7 @@ async function processWithAI(scrapedData, settings, categories, transcript = nul
 async function processYouTubeVideoWithTranscript(scrapedData, settings, categories, transcript, tabId) {
   console.log('DEBUG: 254 Processing YouTube video with parallel API calls');
   console.log('DEBUG: 255 Transcript length:', transcript.length);
-  console.log('DEBUG: 256 Using Groq for formatting:', !!settings.groqApiKey);
+  console.log('DEBUG: 256 LLM Gateway configured:', !!settings.llmGateway?.apiKey);
 
   try {
     // Save the raw transcript
