@@ -510,7 +510,17 @@ async function saveData() {
 }
 
 async function exportData() {
-  const data = { bookmarks, categories, settings };
+  // Get transcripts from storage
+  const transcriptData = await chrome.storage.local.get('rvTranscripts');
+  const transcripts = transcriptData.rvTranscripts || {};
+
+  // Only backup data (bookmarks, categories, transcripts) - NOT configuration/settings
+  const data = {
+    bookmarks,
+    categories,
+    transcripts
+  };
+
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -518,6 +528,73 @@ async function exportData() {
   a.download = `rv-backup-${new Date().toISOString().split('T')[0]}.json`;
   a.click();
   URL.revokeObjectURL(url);
+  showToast('✅ Backup created successfully!', 'success');
+}
+
+async function importData() {
+  // Create file input element
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const backupData = JSON.parse(text);
+
+      // Validate backup data
+      if (!backupData || typeof backupData !== 'object') {
+        throw new Error('Invalid backup file format');
+      }
+
+      // Restore bookmarks (replace existing)
+      if (backupData.bookmarks && Array.isArray(backupData.bookmarks)) {
+        bookmarks = backupData.bookmarks;
+      }
+
+      // Merge categories (deduplicate)
+      if (backupData.categories && Array.isArray(backupData.categories)) {
+        // Combine existing categories with backup categories and deduplicate
+        const mergedCategories = [...categories, ...backupData.categories];
+        categories = Array.from(new Set(mergedCategories));
+      }
+
+      // Restore transcripts if present
+      if (backupData.transcripts && typeof backupData.transcripts === 'object') {
+        await chrome.storage.local.set({ rvTranscripts: backupData.transcripts });
+      }
+
+      // Note: We intentionally IGNORE settings from backup
+      // Settings should be configured through onboarding/settings panel
+
+      // Save the restored data
+      await saveData();
+
+      // Refresh the UI
+      renderCategories();
+      renderLinks();
+
+      showToast('✅ Data restored successfully!', 'success');
+
+      // Show summary of what was restored
+      const summary = [];
+      if (backupData.bookmarks) summary.push(`${backupData.bookmarks.length} bookmarks`);
+      if (backupData.categories) summary.push(`${backupData.categories.length} categories`);
+      if (backupData.transcripts) summary.push(`${Object.keys(backupData.transcripts).length} transcripts`);
+
+      console.log(`Restored: ${summary.join(', ')}`);
+
+    } catch (error) {
+      console.error('Import failed:', error);
+      showToast(`❌ Import failed: ${error.message}`, 'error');
+    }
+  };
+
+  // Trigger file picker
+  input.click();
 }
 
 async function saveEdit(bookmarkId) {
@@ -714,8 +791,11 @@ function setupSettingsEventListeners() {
     }
   };
 
-  // Export data
+  // Backup data
   document.getElementById('export-data-btn').onclick = exportData;
+
+  // Restore data
+  document.getElementById('import-data-btn').onclick = importData;
 
   // Save settings
   document.getElementById('save-settings-btn').onclick = saveSettings;
