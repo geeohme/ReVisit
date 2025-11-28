@@ -15,18 +15,18 @@ const DEFAULT_DATA = {
       transactions: {
         youtubeSummary: {
           provider: 'groq',
-          model: 'llama-3.1-70b-versatile',
-          options: { temperature: 0.7, maxTokens: 10000 }
+          model: 'openai/gpt-oss-120b',  // GROQ requires provider-prefixed model names
+          options: { temperature: 0.7, maxTokens: 10000 }  // maxTokens removed by formatProviderRequest
         },
         transcriptFormatting: {
           provider: 'groq',
-          model: 'llama-3.1-70b-versatile',
-          options: { temperature: 0.3, maxTokens: 64000 }
+          model: 'openai/gpt-oss-120b',  // GROQ requires provider-prefixed model names
+          options: { temperature: 0.3, maxTokens: 64000 }  // maxTokens removed by formatProviderRequest
         },
         pageSummary: {
           provider: 'groq',
-          model: 'llama-3.1-70b-versatile',
-          options: { temperature: 0.7, maxTokens: 2500 }
+          model: 'openai/gpt-oss-120b',  // GROQ requires provider-prefixed model names
+          options: { temperature: 0.7, maxTokens: 2500 }  // maxTokens removed by formatProviderRequest
         }
       }
     }
@@ -40,31 +40,104 @@ const DEFAULT_DATA = {
 
 const LLM_GATEWAY_URL = 'https://llmproxy.api.sparkbright.me';
 
+/**
+ * Format request body for provider-specific requirements
+ * Different providers have different requirements for token limits and request structure
+ */
+function formatProviderRequest(provider, model, messages, options = {}) {
+  const normalizedProvider = provider.toLowerCase();
+  const requestBody = {
+    provider: normalizedProvider,
+    model,
+    messages,
+    standardFormat: true,
+  };
+
+  // Extract maxTokens from options
+  const maxTokens = options.maxTokens || options.max_tokens;
+  const temperature = options.temperature;
+
+  // GROQ: No token limits supported, model names must include provider prefix
+  // Examples: "openai/gpt-oss-120b", "moonshotai/kimi-k2-instruct-0905", "qwen/qwen3-32b"
+  if (normalizedProvider === 'groq') {
+    // Remove all token-related options
+    const cleanOptions = { ...options };
+    delete cleanOptions.maxTokens;
+    delete cleanOptions.max_tokens;
+
+    if (temperature !== undefined) {
+      requestBody.options = { temperature };
+    }
+  }
+
+  // OPENAI: No maxTokens parameter supported
+  else if (normalizedProvider === 'openai') {
+    // Remove all token-related options
+    const cleanOptions = { ...options };
+    delete cleanOptions.maxTokens;
+    delete cleanOptions.max_tokens;
+
+    if (temperature !== undefined) {
+      requestBody.options = { temperature };
+    }
+  }
+
+  // ANTHROPIC: max_tokens as TOP-LEVEL field (not in options)
+  else if (normalizedProvider === 'anthropic') {
+    if (maxTokens) {
+      requestBody.max_tokens = maxTokens;
+    }
+
+    // Add temperature to options if provided
+    if (temperature !== undefined) {
+      requestBody.options = { temperature };
+    }
+  }
+
+  // MISTRAL: max_tokens in options (not maxTokens)
+  else if (normalizedProvider === 'mistral') {
+    const providerOptions = {};
+
+    if (maxTokens) {
+      providerOptions.max_tokens = maxTokens;
+    }
+    if (temperature !== undefined) {
+      providerOptions.temperature = temperature;
+    }
+
+    if (Object.keys(providerOptions).length > 0) {
+      requestBody.options = providerOptions;
+    }
+  }
+
+  // Other providers: use standard options format
+  else {
+    if (Object.keys(options).length > 0) {
+      requestBody.options = options;
+    }
+  }
+
+  return requestBody;
+}
+
 async function callLLMGateway(provider, model, messages, options = {}, apiKey, conversationId = null) {
   if (!apiKey) {
     throw new Error('LLM Gateway API key is required. Please configure it in Settings.');
   }
 
-  const requestBody = {
-    provider,
-    model,
-    messages,
-    options,
-    standardFormat: true,
-  };
+  const requestBody = formatProviderRequest(provider, model, messages, options);
 
   if (conversationId) {
     requestBody.conversationId = conversationId;
   }
 
-  // Debug logging
+  // Debug logging - show formatted request body
   console.log('DEBUG: LLM Gateway Request:', {
     url: `${LLM_GATEWAY_URL}/v1/chat/completions`,
     provider,
     model,
     messageCount: messages.length,
-    options,
-    requestBodyKeys: Object.keys(requestBody)
+    formattedRequestBody: JSON.stringify(requestBody, null, 2)
   });
 
   try {
