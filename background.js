@@ -523,37 +523,84 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         await chrome.tabs.create({ url: request.url, active: true });
         sendResponse({ success: true });
       } else if (request.action === 'injectFloatingModal') {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        // Use the provided tabId or fall back to active tab
+        let targetTabId = request.tabId;
+        if (!targetTabId) {
+          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          targetTabId = tab.id;
+        }
+
+        // First inject content script to enable notifications
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: targetTabId },
+            files: ['content.js']
+          });
+        } catch (err) {
+          // Content script may already be injected, that's okay
+          console.log('Content script already injected or injection failed:', err.message);
+        }
+
+        // Wait a moment for content script to initialize
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Inject the floating modal
         await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
+          target: { tabId: targetTabId },
           func: injectFloatingModal,
           args: [request.bookmarkId, request.revisitBy]
         });
+
         sendResponse({ success: true });
       } else if (request.action === 'addBookmark') {
         console.log('DEBUG: 208 Background received addBookmark request');
-        
+
         // Get current tab
         const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
         console.log('DEBUG: 209 Current tab:', currentTab);
-        
+
         if (!currentTab) {
           throw new Error('No active tab found');
         }
-        
+
+        // FIRST: Inject content script to enable notifications
+        console.log('DEBUG: 210 Ensuring content script is loaded for notifications');
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: currentTab.id },
+            files: ['content.js']
+          });
+          // Wait for content script to initialize
+          await new Promise(resolve => setTimeout(resolve, 200));
+        } catch (err) {
+          console.log('Content script already injected:', err.message);
+        }
+
+        // SECOND: Show initial "Gathering Details" notification
+        console.log('DEBUG: 211 Sending initial notification');
+        try {
+          await chrome.tabs.sendMessage(currentTab.id, {
+            action: 'showNotification',
+            message: 'Gathering Details...',
+            type: 'info'
+          });
+        } catch (err) {
+          console.warn('Could not show initial notification:', err.message);
+        }
+
         // Check if this is a YouTube URL
         const isYouTube = currentTab.url && (currentTab.url.includes('youtube.com/watch') || currentTab.url.includes('youtu.be/'));
-        console.log('DEBUG: 210 Is YouTube URL:', isYouTube);
-        
+        console.log('DEBUG: 212 Is YouTube URL:', isYouTube);
+
         // Get storage data
         const data = await getStorageData();
         const settings = data.settings || {};
         const categories = data.categories || [];
-        
-        console.log('DEBUG: 211 Settings loaded in addBookmark:', settings);
-        console.log('DEBUG: 212 LLM Gateway API Key present in addBookmark:', !!settings.llmGateway?.apiKey);
-        console.log('DEBUG: 213 Categories in addBookmark:', categories);
-        
+
+        console.log('DEBUG: 213 Settings loaded in addBookmark:', settings);
+        console.log('DEBUG: 214 LLM Gateway API Key present in addBookmark:', !!settings.llmGateway?.apiKey);
+        console.log('DEBUG: 215 Categories in addBookmark:', categories);
+
         // Create preliminary bookmark
         const preliminaryBookmark = {
           id: 'rv-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
@@ -570,9 +617,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           isPreliminary: true, // Mark as preliminary
           isYouTube: isYouTube // Mark if YouTube video
         };
-        
-        console.log('DEBUG: 214 Preliminary bookmark created:', preliminaryBookmark);
-        
+
+        console.log('DEBUG: 216 Preliminary bookmark created:', preliminaryBookmark);
+
         // Save preliminary bookmark
         data.bookmarks = data.bookmarks || [];
         data.bookmarks.push(preliminaryBookmark);
@@ -650,18 +697,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             await saveStorageData(data);
           }
 
-          // Inject content script and then overlay
-          console.log('DEBUG: 229 Injecting content script for overlay');
-          await chrome.scripting.executeScript({
-            target: { tabId: currentTab.id },
-            files: ['content.js']
-          });
-
-          // Wait for content script to initialize
-          await new Promise(resolve => setTimeout(resolve, 300));
-
-          // Send message to content script to inject overlay with AI results
-          console.log('DEBUG: 230 Sending injectOverlayWithAIResults message');
+          // Content script already injected at the beginning, just send overlay message
+          console.log('DEBUG: 229 Sending injectOverlayWithAIResults message');
           await chrome.tabs.sendMessage(currentTab.id, {
             action: 'injectOverlayWithAIResults',
             bookmarkId: preliminaryBookmark.id,
