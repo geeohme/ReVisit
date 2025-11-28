@@ -571,15 +571,38 @@
       margin-bottom: 8px;
       align-items: center;
       border: 1px solid #dee2e6;
+      cursor: move;
+      transition: all 0.2s ease;
     }
 
     .category-settings-item:hover {
       background: #f0f7ff;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .category-settings-item.dragging {
+      opacity: 0.5;
+      background: #e3f2fd;
+      border: 2px dashed #4a90e2;
+    }
+
+    .category-settings-item.drag-over {
+      border-top: 3px solid #4a90e2;
     }
 
     .cat-name {
       font-weight: 500;
       color: #333;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .cat-name::before {
+      content: '⋮⋮';
+      color: #999;
+      font-size: 16px;
+      font-weight: bold;
     }
 
     .cat-count {

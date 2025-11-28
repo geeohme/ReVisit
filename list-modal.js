@@ -728,12 +728,15 @@ function renderCategoriesSettings() {
   // Sort categories by priority
   const sortedCategories = [...categories].sort((a, b) => a.priority - b.priority);
 
-  sortedCategories.forEach(cat => {
+  sortedCategories.forEach((cat, index) => {
     const catName = getCategoryName(cat);
     const count = bookmarks.filter(b => b.category === catName).length;
 
     const item = document.createElement('div');
     item.className = 'category-settings-item';
+    item.draggable = true;
+    item.dataset.categoryName = catName;
+    item.dataset.categoryIndex = index;
 
     item.innerHTML = `
       <span class="cat-name">${catName}</span>
@@ -744,17 +747,139 @@ function renderCategoriesSettings() {
       </div>
     `;
 
+    // Add drag event listeners
+    item.addEventListener('dragstart', handleDragStart);
+    item.addEventListener('dragend', handleDragEnd);
+    item.addEventListener('dragover', handleDragOver);
+    item.addEventListener('drop', handleDrop);
+    item.addEventListener('dragleave', handleDragLeave);
+
     container.appendChild(item);
   });
 
-  // Add event listeners for priority inputs
+  // Add event listeners for priority inputs with instant reordering
   document.querySelectorAll('.cat-priority-input').forEach(input => {
-    input.addEventListener('change', handleCategoryPriorityChange);
+    input.addEventListener('input', handleCategoryPriorityInput); // instant reorder on type
+    input.addEventListener('change', handleCategoryPriorityChange); // save on blur
+  });
+}
+
+let draggedElement = null;
+
+/**
+ * Handle drag start
+ */
+function handleDragStart(e) {
+  draggedElement = this;
+  this.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/html', this.innerHTML);
+}
+
+/**
+ * Handle drag end
+ */
+function handleDragEnd(e) {
+  this.classList.remove('dragging');
+
+  // Remove drag-over class from all items
+  document.querySelectorAll('.category-settings-item').forEach(item => {
+    item.classList.remove('drag-over');
   });
 }
 
 /**
- * Handle category priority change
+ * Handle drag over
+ */
+function handleDragOver(e) {
+  if (e.preventDefault) {
+    e.preventDefault();
+  }
+
+  e.dataTransfer.dropEffect = 'move';
+
+  // Add visual indicator
+  if (this !== draggedElement) {
+    this.classList.add('drag-over');
+  }
+
+  return false;
+}
+
+/**
+ * Handle drag leave
+ */
+function handleDragLeave(e) {
+  this.classList.remove('drag-over');
+}
+
+/**
+ * Handle drop
+ */
+function handleDrop(e) {
+  if (e.stopPropagation) {
+    e.stopPropagation();
+  }
+
+  if (draggedElement !== this) {
+    // Get the category names
+    const draggedCatName = draggedElement.dataset.categoryName;
+    const targetCatName = this.dataset.categoryName;
+
+    // Find categories
+    const draggedCategory = categories.find(cat => getCategoryName(cat) === draggedCatName);
+    const targetCategory = categories.find(cat => getCategoryName(cat) === targetCatName);
+
+    if (draggedCategory && targetCategory) {
+      // Remove dragged category from array
+      const draggedIndex = categories.findIndex(cat => getCategoryName(cat) === draggedCatName);
+      categories.splice(draggedIndex, 1);
+
+      // Find new insertion point
+      const targetIndex = categories.findIndex(cat => getCategoryName(cat) === targetCatName);
+      categories.splice(targetIndex, 0, draggedCategory);
+
+      // Renumber all priorities based on new order
+      categories.forEach((cat, index) => {
+        cat.priority = index + 1;
+      });
+
+      // Save and re-render
+      saveData();
+      renderCategoriesSettings();
+      renderCategories(); // Update sidebar
+      showToast('Categories reordered', 'success');
+    }
+  }
+
+  this.classList.remove('drag-over');
+  return false;
+}
+
+/**
+ * Handle category priority input (instant reordering as user types)
+ */
+function handleCategoryPriorityInput(e) {
+  const categoryName = e.target.getAttribute('data-category');
+  const newPriority = parseInt(e.target.value);
+
+  if (isNaN(newPriority) || newPriority < 1 || newPriority > 100) {
+    return; // Don't reorder if invalid
+  }
+
+  // Find and update the category priority
+  const category = categories.find(cat => getCategoryName(cat) === categoryName);
+  if (category) {
+    category.priority = newPriority;
+
+    // Re-render to show new order instantly
+    renderCategoriesSettings();
+    renderCategories(); // Update sidebar
+  }
+}
+
+/**
+ * Handle category priority change (on blur/enter - save to storage)
  */
 function handleCategoryPriorityChange(e) {
   const categoryName = e.target.getAttribute('data-category');
@@ -766,15 +891,9 @@ function handleCategoryPriorityChange(e) {
     return;
   }
 
-  // Find and update the category
-  const category = categories.find(cat => getCategoryName(cat) === categoryName);
-  if (category) {
-    category.priority = newPriority;
-    saveData();
-    renderCategoriesSettings();
-    renderCategories(); // Update sidebar
-    showToast('Category priority updated', 'success');
-  }
+  // Save to storage (input handler already updated priority and re-rendered)
+  saveData();
+  showToast('Category priority saved', 'success');
 }
 
 /**
