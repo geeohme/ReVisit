@@ -875,10 +875,13 @@ async function saveSettings() {
     return;
   }
 
-  // Build settings object
+  // Build settings object (preserve modelsData if it exists)
+  const existingModelsData = settings.llmGateway?.modelsData;
+
   settings.llmGateway = {
     enabled: true,
     apiKey: apiKey,
+    modelsData: existingModelsData, // PRESERVE MODELS DATA
     transactions: {
       youtubeSummary: {
         provider: document.getElementById('youtube-provider').value,

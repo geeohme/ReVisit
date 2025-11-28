@@ -34,6 +34,39 @@
     .step-dot.active {
       background: #4a90e2;
     }
+    .loading-message {
+      text-align: center;
+      color: #4a90e2;
+      margin: 15px 0;
+      display: none;
+    }
+    .loading-message.active {
+      display: block;
+    }
+    .transaction-config {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 4px;
+      margin-bottom: 15px;
+    }
+    .transaction-config h4 {
+      margin-top: 0;
+      color: #495057;
+    }
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+    .settings-field {
+      margin-bottom: 15px;
+    }
+    .settings-field label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 5px;
+      color: #333;
+    }
     input, textarea, select {
       width: 100%;
       padding: 10px;
@@ -78,6 +111,7 @@
       <span class="step-dot" data-step="2"></span>
       <span class="step-dot" data-step="3"></span>
       <span class="step-dot" data-step="4"></span>
+      <span class="step-dot" data-step="5"></span>
     </div>
     
     <div id="step-1" class="step active">
@@ -146,13 +180,84 @@
         </div>
       </div>
 
+      <div class="loading-message" id="loading-message">
+        ⏳ Testing connection and fetching available models...
+      </div>
+
       <div class="button-group" style="margin-top: 25px;">
         <button class="btn-secondary" id="prev-btn-4">Back</button>
+        <button class="btn-primary" id="next-btn-4">Next</button>
+      </div>
+    </div>
+
+    <div id="step-5" class="step">
+      <h2>Step 5: AI Provider Selection</h2>
+      <p>Choose which AI provider and model to use for each task.</p>
+
+      <!-- YouTube Summary Configuration -->
+      <div class="transaction-config">
+        <h4>📺 YouTube Video Summarization</h4>
+        <div class="settings-grid">
+          <div class="settings-field">
+            <label for="youtube-provider">Provider</label>
+            <select id="youtube-provider">
+              <option value="">Loading...</option>
+            </select>
+          </div>
+          <div class="settings-field">
+            <label for="youtube-model">Model</label>
+            <select id="youtube-model">
+              <option value="">Select provider first</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transcript Formatting Configuration -->
+      <div class="transaction-config">
+        <h4>📝 Transcript Formatting</h4>
+        <div class="settings-grid">
+          <div class="settings-field">
+            <label for="transcript-provider">Provider</label>
+            <select id="transcript-provider">
+              <option value="">Loading...</option>
+            </select>
+          </div>
+          <div class="settings-field">
+            <label for="transcript-model">Model</label>
+            <select id="transcript-model">
+              <option value="">Select provider first</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Page Summary Configuration -->
+      <div class="transaction-config">
+        <h4>🌐 Web Page Summarization</h4>
+        <div class="settings-grid">
+          <div class="settings-field">
+            <label for="page-provider">Provider</label>
+            <select id="page-provider">
+              <option value="">Loading...</option>
+            </select>
+          </div>
+          <div class="settings-field">
+            <label for="page-model">Model</label>
+            <select id="page-model">
+              <option value="">Select provider first</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="button-group" style="margin-top: 25px;">
+        <button class="btn-secondary" id="prev-btn-5">Back</button>
         <button class="btn-primary" id="complete-btn">Complete Setup</button>
       </div>
     </div>
   </div>
-  
+
   <script src="onboarding.js"></script>
 </body>
 </html>
