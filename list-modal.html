@@ -539,6 +539,125 @@
       font-size: 14px;
       font-weight: 500;
     }
+
+    /* Categories Manager Styles */
+    #categories-manager {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+    }
+
+    .categories-list-header {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      gap: 10px;
+      padding: 10px;
+      background: #e9ecef;
+      border-radius: 4px;
+      font-weight: 600;
+      color: #495057;
+      margin-bottom: 10px;
+    }
+
+    .categories-settings-list {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .category-settings-item {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      gap: 10px;
+      padding: 10px;
+      background: white;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      align-items: center;
+      border: 1px solid #dee2e6;
+      cursor: move;
+      transition: all 0.2s ease;
+    }
+
+    .category-settings-item:hover {
+      background: #f0f7ff;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .category-settings-item.dragging {
+      opacity: 0.5;
+      background: #e3f2fd;
+      border: 2px dashed #4a90e2;
+    }
+
+    .category-settings-item.drag-over {
+      border-top: 3px solid #4a90e2;
+    }
+
+    .cat-name {
+      font-weight: 500;
+      color: #333;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .cat-name::before {
+      content: '⋮⋮';
+      color: #999;
+      font-size: 16px;
+      font-weight: bold;
+    }
+
+    .cat-count {
+      color: #666;
+      text-align: center;
+    }
+
+    .cat-priority {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+    }
+
+    .cat-priority input {
+      width: 60px;
+      padding: 5px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      text-align: center;
+    }
+
+    .add-category-form {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 4px;
+      border-left: 4px solid #4a90e2;
+    }
+
+    .add-category-form h4 {
+      margin-top: 0;
+      color: #4a90e2;
+    }
+
+    .add-category-inputs {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .add-category-inputs input {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .add-category-inputs input[type="number"] {
+      flex: 0 0 120px;
+    }
   </style>
 </head>
 <body>
@@ -706,6 +825,32 @@
           <div class="settings-button-group">
             <button class="settings-btn settings-btn-secondary" id="export-data-btn">📥 Backup Data</button>
             <button class="settings-btn settings-btn-info" id="import-data-btn">📤 Restore Data</button>
+          </div>
+        </div>
+
+        <!-- Categories Section -->
+        <div class="settings-section">
+          <h3>📁 Categories</h3>
+          <p class="settings-help-text">Manage your bookmark categories. Priority determines the display order (1 ranks highest).</p>
+
+          <div id="categories-manager">
+            <div class="categories-list-header">
+              <span class="cat-name-header">Category Name</span>
+              <span class="cat-count-header">Bookmarks</span>
+              <span class="cat-priority-header">Priority</span>
+            </div>
+            <div id="categories-settings-list" class="categories-settings-list">
+              <!-- Categories will be dynamically populated here -->
+            </div>
+          </div>
+
+          <div class="add-category-form">
+            <h4>Add New Category</h4>
+            <div class="add-category-inputs">
+              <input type="text" id="new-category-name" placeholder="Category name">
+              <input type="number" id="new-category-priority" placeholder="Priority (1-100)" min="1" max="100" value="1">
+              <button class="settings-btn settings-btn-primary" id="add-category-btn">➕ Add Category</button>
+            </div>
           </div>
         </div>
 

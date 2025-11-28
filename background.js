@@ -3,7 +3,12 @@
 // Default data structure
 const DEFAULT_DATA = {
   bookmarks: [],
-  categories: ["Articles", "Research", "Work", "Personal"],
+  categories: [
+    { name: "Articles", priority: 1 },
+    { name: "Research", priority: 2 },
+    { name: "Work", priority: 3 },
+    { name: "Personal", priority: 4 }
+  ],
   settings: {
     userName: "",
     defaultIntervalDays: 7,
@@ -32,6 +37,35 @@ const DEFAULT_DATA = {
     }
   }
 };
+
+// Helper function to migrate old category format (string array) to new format (object array)
+function migrateCategoriesFormat(categories) {
+  if (!categories || categories.length === 0) return [];
+
+  // Check if already in new format (array of objects with name and priority)
+  if (typeof categories[0] === 'object' && categories[0].name !== undefined) {
+    return categories;
+  }
+
+  // Migrate from old format (string array) to new format
+  return categories.map((cat, index) => ({
+    name: cat,
+    priority: index + 1
+  }));
+}
+
+// Helper function to get category names as array (for backward compatibility)
+function getCategoryNames(categories) {
+  if (!categories || categories.length === 0) return [];
+
+  // If already strings, return as is
+  if (typeof categories[0] === 'string') return categories;
+
+  // Extract names from objects, sorted by priority
+  return categories
+    .sort((a, b) => a.priority - b.priority)
+    .map(cat => cat.name);
+}
 
 // ============================================================================
 // LLM GATEWAY INTEGRATION
@@ -455,7 +489,19 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 // Helper to get storage data
 async function getStorageData() {
   const result = await chrome.storage.local.get('rvData');
-  return result.rvData || DEFAULT_DATA;
+  let data = result.rvData || DEFAULT_DATA;
+
+  // Migrate categories format if needed
+  if (data.categories) {
+    const migratedCategories = migrateCategoriesFormat(data.categories);
+    if (JSON.stringify(migratedCategories) !== JSON.stringify(data.categories)) {
+      data.categories = migratedCategories;
+      await saveStorageData(data);
+      console.log('Migrated categories to new format with priorities');
+    }
+  }
+
+  return data;
 }
 
 // Helper to save storage data
@@ -595,12 +641,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // Get storage data
         const data = await getStorageData();
         const settings = data.settings || {};
-        const categories = data.categories || [];
+        const categoriesData = data.categories || [];
+
+        // Extract category names for AI processing
+        const categories = getCategoryNames(categoriesData);
 
         console.log('DEBUG: 213 Settings loaded in addBookmark:', settings);
         console.log('DEBUG: 214 LLM Gateway API Key present in addBookmark:', !!settings.llmGateway?.apiKey);
         console.log('DEBUG: 215 Categories in addBookmark:', categories);
-
+        
         // Create preliminary bookmark
         const preliminaryBookmark = {
           id: 'rv-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
@@ -719,7 +768,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // Load settings and categories from storage
         const data = await getStorageData();
         const settings = data.settings || {};
-        const categories = data.categories || [];
+        const categoriesData = data.categories || [];
+
+        // Extract category names for AI processing
+        const categories = getCategoryNames(categoriesData);
 
         console.log('DEBUG: 230 Settings loaded:', settings);
         console.log('DEBUG: 231 LLM Gateway API Key present:', !!settings.llmGateway?.apiKey);
@@ -740,12 +792,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           // Check if category has been updated by user and is new
           const updatedCategory = request.updatedData.category;
           const existingCategories = data.categories || [];
-          
-          if (updatedCategory && !existingCategories.includes(updatedCategory)) {
+
+          // Check if category exists (handle both old string format and new object format)
+          const categoryExists = existingCategories.some(cat =>
+            typeof cat === 'string' ? cat === updatedCategory : cat.name === updatedCategory
+          );
+
+          if (updatedCategory && !categoryExists) {
             console.log('DEBUG: 236 New category detected, adding to categories list:', updatedCategory);
             // Add new category to the categories array
-            existingCategories.push(updatedCategory);
-            existingCategories.sort(); // Keep categories sorted
+            // Find the highest priority and add 1
+            const maxPriority = existingCategories.reduce((max, cat) => {
+              const priority = typeof cat === 'object' ? cat.priority : 0;
+              return Math.max(max, priority);
+            }, 0);
+
+            existingCategories.push({ name: updatedCategory, priority: maxPriority + 1 });
+            existingCategories.sort((a, b) => a.priority - b.priority);
             data.categories = existingCategories;
           }
           
