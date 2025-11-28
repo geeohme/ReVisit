@@ -618,8 +618,57 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.log('DEBUG: 238 Background getting transcript for video:', request.videoId);
         const transcriptData = await getTranscript(request.videoId);
         sendResponse({ success: true, transcript: transcriptData });
+      } else if (request.action === 'testGatewayConnection') {
+        // Test LLM Gateway connection and fetch models
+        console.log('DEBUG: Testing LLM Gateway connection');
+        try {
+          // Step 1: Check /health endpoint (no auth required)
+          const healthResponse = await fetch(`${LLM_GATEWAY_URL}/health`);
+
+          if (!healthResponse.ok) {
+            throw new Error(`Health check failed: Gateway may be down (status: ${healthResponse.status})`);
+          }
+
+          const healthData = await healthResponse.json();
+          console.log('DEBUG: Gateway health check passed:', healthData);
+
+          // Step 2: Test authentication by fetching models
+          const modelsResponse = await fetch(`${LLM_GATEWAY_URL}/v1/models`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${request.apiKey}`,
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (!modelsResponse.ok) {
+            const errorData = await modelsResponse.json().catch(() => ({}));
+
+            if (modelsResponse.status === 401) {
+              throw new Error('Authentication failed: Invalid API key');
+            }
+
+            throw new Error(`Failed to fetch models: ${errorData.error || 'Unknown error'}`);
+          }
+
+          const modelsData = await modelsResponse.json();
+          console.log('DEBUG: Models fetched successfully');
+
+          sendResponse({
+            success: true,
+            message: 'Connection successful!',
+            healthData,
+            modelsData
+          });
+        } catch (error) {
+          console.error('ERROR: Gateway connection test failed:', error);
+          sendResponse({
+            success: false,
+            message: error.message
+          });
+        }
       }
-      
+
     } catch (error) {
       console.error('ERROR: 239 Background processing failed:', error);
       sendResponse({ success: false, error: error.message });

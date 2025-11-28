@@ -607,20 +607,41 @@ function openSettings() {
   // Populate fields
   document.getElementById('gateway-api-key').value = settings.llmGateway.apiKey || '';
 
-  // YouTube settings
-  const youtubeConfig = settings.llmGateway.transactions?.youtubeSummary || { provider: 'groq', model: 'openai/gpt-oss-120b' };
-  document.getElementById('youtube-provider').value = youtubeConfig.provider;
-  updateModelDropdown('youtube-model', youtubeConfig.provider, youtubeConfig.model);
+  // If we have stored models data, populate dropdowns dynamically
+  const modelsData = settings.llmGateway.modelsData;
+  if (modelsData) {
+    populateProviderDropdowns(modelsData);
 
-  // Transcript settings
-  const transcriptConfig = settings.llmGateway.transactions?.transcriptFormatting || { provider: 'groq', model: 'openai/gpt-oss-120b' };
-  document.getElementById('transcript-provider').value = transcriptConfig.provider;
-  updateModelDropdown('transcript-model', transcriptConfig.provider, transcriptConfig.model);
+    // Set selected values
+    const youtubeConfig = settings.llmGateway.transactions?.youtubeSummary || { provider: 'groq', model: 'openai/gpt-oss-120b' };
+    const transcriptConfig = settings.llmGateway.transactions?.transcriptFormatting || { provider: 'groq', model: 'openai/gpt-oss-120b' };
+    const pageConfig = settings.llmGateway.transactions?.pageSummary || { provider: 'groq', model: 'openai/gpt-oss-120b' };
 
-  // Page settings
-  const pageConfig = settings.llmGateway.transactions?.pageSummary || { provider: 'groq', model: 'openai/gpt-oss-120b' };
-  document.getElementById('page-provider').value = pageConfig.provider;
-  updateModelDropdown('page-model', pageConfig.provider, pageConfig.model);
+    document.getElementById('youtube-provider').value = youtubeConfig.provider;
+    updateModelDropdownFromGateway('youtube-model', youtubeConfig.provider, modelsData);
+    document.getElementById('youtube-model').value = youtubeConfig.model;
+
+    document.getElementById('transcript-provider').value = transcriptConfig.provider;
+    updateModelDropdownFromGateway('transcript-model', transcriptConfig.provider, modelsData);
+    document.getElementById('transcript-model').value = transcriptConfig.model;
+
+    document.getElementById('page-provider').value = pageConfig.provider;
+    updateModelDropdownFromGateway('page-model', pageConfig.provider, modelsData);
+    document.getElementById('page-model').value = pageConfig.model;
+  } else {
+    // Fallback to static models if no gateway data
+    const youtubeConfig = settings.llmGateway.transactions?.youtubeSummary || { provider: 'groq', model: 'openai/gpt-oss-120b' };
+    document.getElementById('youtube-provider').value = youtubeConfig.provider;
+    updateModelDropdown('youtube-model', youtubeConfig.provider, youtubeConfig.model);
+
+    const transcriptConfig = settings.llmGateway.transactions?.transcriptFormatting || { provider: 'groq', model: 'openai/gpt-oss-120b' };
+    document.getElementById('transcript-provider').value = transcriptConfig.provider;
+    updateModelDropdown('transcript-model', transcriptConfig.provider, transcriptConfig.model);
+
+    const pageConfig = settings.llmGateway.transactions?.pageSummary || { provider: 'groq', model: 'openai/gpt-oss-120b' };
+    document.getElementById('page-provider').value = pageConfig.provider;
+    updateModelDropdown('page-model', pageConfig.provider, pageConfig.model);
+  }
 
   // Setup event listeners
   setupSettingsEventListeners();
@@ -667,16 +688,30 @@ function setupSettingsEventListeners() {
   document.getElementById('test-connection-btn').onclick = testGatewayConnection;
 
   // Provider change listeners - update model dropdowns
+  const modelsData = settings.llmGateway?.modelsData;
+
   document.getElementById('youtube-provider').onchange = (e) => {
-    updateModelDropdown('youtube-model', e.target.value);
+    if (modelsData) {
+      updateModelDropdownFromGateway('youtube-model', e.target.value, modelsData);
+    } else {
+      updateModelDropdown('youtube-model', e.target.value);
+    }
   };
 
   document.getElementById('transcript-provider').onchange = (e) => {
-    updateModelDropdown('transcript-model', e.target.value);
+    if (modelsData) {
+      updateModelDropdownFromGateway('transcript-model', e.target.value, modelsData);
+    } else {
+      updateModelDropdown('transcript-model', e.target.value);
+    }
   };
 
   document.getElementById('page-provider').onchange = (e) => {
-    updateModelDropdown('page-model', e.target.value);
+    if (modelsData) {
+      updateModelDropdownFromGateway('page-model', e.target.value, modelsData);
+    } else {
+      updateModelDropdown('page-model', e.target.value);
+    }
   };
 
   // Export data
@@ -697,7 +732,7 @@ function closeSettings() {
 }
 
 /**
- * Test LLM Gateway connection
+ * Test LLM Gateway connection (via background service worker)
  */
 async function testGatewayConnection() {
   const apiKey = document.getElementById('gateway-api-key').value.trim();
@@ -707,22 +742,126 @@ async function testGatewayConnection() {
     return;
   }
 
-  const provider = document.getElementById('youtube-provider').value;
-  const model = document.getElementById('youtube-model').value;
-
   showToast('Testing connection...', 'info');
 
   try {
-    const result = await testConnection(apiKey, provider, model);
+    // Call background service worker to test connection
+    const response = await chrome.runtime.sendMessage({
+      action: 'testGatewayConnection',
+      apiKey: apiKey
+    });
 
-    if (result.success) {
-      showToast(`✅ Connection successful! Provider: ${result.provider}, Model: ${result.model}`, 'success');
+    if (response.success) {
+      showToast(`✅ Connection successful!`, 'success');
+
+      // Store the models data for dynamic dropdown population
+      if (response.modelsData) {
+        settings.llmGateway = settings.llmGateway || {};
+        settings.llmGateway.modelsData = response.modelsData;
+        await saveData();
+
+        // Refresh dropdowns with new models data
+        populateProviderDropdowns(response.modelsData);
+        showToast('✅ Models loaded successfully!', 'success');
+      }
     } else {
-      showToast(`❌ Connection failed: ${result.message}`, 'error');
+      showToast(`❌ Connection failed: ${response.message}`, 'error');
     }
   } catch (error) {
     showToast(`❌ Test failed: ${error.message}`, 'error');
   }
+}
+
+/**
+ * Populate provider/model dropdowns dynamically from gateway models data
+ */
+function populateProviderDropdowns(modelsData) {
+  console.log('DEBUG: Populating provider dropdowns with models data');
+
+  // Build provider options from modelsData
+  const providers = Object.keys(modelsData);
+  const providerDropdowns = [
+    document.getElementById('youtube-provider'),
+    document.getElementById('transcript-provider'),
+    document.getElementById('page-provider')
+  ];
+
+  // Update each provider dropdown
+  providerDropdowns.forEach(dropdown => {
+    const currentValue = dropdown.value;
+    dropdown.innerHTML = '';
+
+    providers.forEach(provider => {
+      const option = document.createElement('option');
+      option.value = provider;
+      option.textContent = getProviderDisplayName(provider);
+      dropdown.appendChild(option);
+    });
+
+    // Restore selected value if it exists
+    if (providers.includes(currentValue)) {
+      dropdown.value = currentValue;
+    }
+  });
+
+  // Update model dropdowns based on selected providers
+  updateModelDropdownFromGateway('youtube-model', document.getElementById('youtube-provider').value, modelsData);
+  updateModelDropdownFromGateway('transcript-model', document.getElementById('transcript-provider').value, modelsData);
+  updateModelDropdownFromGateway('page-model', document.getElementById('page-provider').value, modelsData);
+}
+
+/**
+ * Update model dropdown based on provider (using gateway models data)
+ */
+function updateModelDropdownFromGateway(dropdownId, provider, modelsData) {
+  const dropdown = document.getElementById(dropdownId);
+  const currentValue = dropdown.value;
+  dropdown.innerHTML = '';
+
+  if (!modelsData || !modelsData[provider]) {
+    console.warn('No models data available for provider:', provider);
+    return;
+  }
+
+  const models = modelsData[provider].data || [];
+  models.forEach(modelObj => {
+    const option = document.createElement('option');
+    option.value = modelObj.id;
+    option.textContent = `${modelObj.id}`;
+    dropdown.appendChild(option);
+  });
+
+  // Restore selected value if it exists
+  if (models.find(m => m.id === currentValue)) {
+    dropdown.value = currentValue;
+  } else if (models.length > 0) {
+    dropdown.value = models[0].id;
+  }
+}
+
+/**
+ * Get display name for provider
+ */
+function getProviderDisplayName(provider) {
+  const names = {
+    groq: 'Groq (Fast Inference)',
+    anthropic: 'Anthropic (Claude)',
+    openai: 'OpenAI',
+    google: 'Google AI (Gemini)',
+    deepseek: 'Deepseek',
+    perplexity: 'Perplexity',
+    xai: 'xAI (Grok)',
+    sambanova: 'SambaNova',
+    moonshot: 'Moonshot',
+    qwen: 'Alibaba/Qwen',
+    cohere: 'Cohere',
+    mistral: 'Mistral',
+    cerebras: 'Cerebras',
+    together: 'Together AI',
+    featherai: 'Feather AI',
+    openrouter: 'OpenRouter'
+  };
+  return names[provider] || provider.charAt(0).toUpperCase() + provider.slice(1);
 }
 
 /**

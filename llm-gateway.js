@@ -281,29 +281,48 @@ function getDefaultSettings() {
 }
 
 /**
- * Test LLM Gateway connection
+ * Test LLM Gateway connection using /health endpoint
  *
  * @param {string} apiKey - LLM Gateway API key
- * @param {string} provider - Optional provider to test (default: 'groq')
- * @param {string} model - Optional model to test (default: 'openai/gpt-oss-120b')
  * @returns {Promise<Object>} Test result with success status
  */
-async function testConnection(apiKey, provider = 'groq', model = 'openai/gpt-oss-120b') {
+async function testConnection(apiKey) {
   try {
-    const result = await callLLMGateway(
-      provider,
-      model,
-      [{ role: 'user', content: 'Say "Hello" in one word.' }],
-      { maxTokens: 10, temperature: 0.5 },
-      apiKey
-    );
+    // Step 1: Check /health endpoint (no auth required)
+    const healthResponse = await fetch(`${LLM_GATEWAY_URL}/health`);
+
+    if (!healthResponse.ok) {
+      throw new Error(`Health check failed: Gateway may be down (status: ${healthResponse.status})`);
+    }
+
+    const healthData = await healthResponse.json();
+
+    // Step 2: Test authentication by fetching models
+    const modelsResponse = await fetch(`${LLM_GATEWAY_URL}/v1/models`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!modelsResponse.ok) {
+      const errorData = await modelsResponse.json().catch(() => ({}));
+
+      if (modelsResponse.status === 401) {
+        throw new Error('Authentication failed: Invalid API key');
+      }
+
+      throw new Error(`Failed to fetch models: ${errorData.error || 'Unknown error'}`);
+    }
+
+    const modelsData = await modelsResponse.json();
 
     return {
       success: true,
       message: 'Connection successful!',
-      provider: result.provider,
-      model: result.model,
-      usage: result.usage
+      healthData,
+      modelsData
     };
   } catch (error) {
     return {
