@@ -384,44 +384,32 @@ function renderMarkdown(text) {
 }
 
 async function handleReVisitAction(bookmark) {
-  // Open URL
-  await chrome.tabs.create({ url: bookmark.url, active: true });
-  
-  // Inject floating modal
-  await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for tab to load
-  await chrome.runtime.sendMessage({
-    action: 'injectFloatingModal',
-    bookmarkId: bookmark.id,
-    revisitBy: bookmark.revisitBy
-  });
-  
-  // Listen for action from floating modal
-  window.addEventListener('message', async (event) => {
-    if (event.data.type === 'REVISIT_ACTION') {
-      const action = event.data.action;
-      const bookmarkId = event.data.bookmarkId;
-      
-      const bm = bookmarks.find(b => b.id === bookmarkId);
-      if (!bm) return;
-      
-      bm.history = bm.history || [];
-      bm.history.push({
-        timestamp: Date.now(),
-        action: action
-      });
-      
-      if (action === 'Complete') {
-        bm.status = 'Complete';
-      } else if (action === 'ReVisited') {
-        bm.status = 'ReVisited';
-        const newDate = prompt('Set new revisit date (YYYY-MM-DD):', new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
-        if (newDate) bm.revisitBy = new Date(newDate).toISOString();
-      }
-      
-      await saveData();
-      renderLinks();
-    }
-  });
+  try {
+    // Show immediate feedback
+    showToast('Opening page...', 'info');
+
+    // Open URL in new tab
+    const newTab = await chrome.tabs.create({ url: bookmark.url, active: true });
+
+    // Wait for tab to load
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // Show processing notification
+    showToast('Preparing ReVisit options...', 'info');
+
+    // Inject floating modal with the correct tab ID
+    await chrome.runtime.sendMessage({
+      action: 'injectFloatingModal',
+      tabId: newTab.id, // Pass the tab ID
+      bookmarkId: bookmark.id,
+      revisitBy: bookmark.revisitBy
+    });
+
+    showToast('ReVisit modal ready!', 'success');
+  } catch (error) {
+    console.error('ERROR: handleReVisitAction failed:', error);
+    showToast('Failed to open ReVisit page', 'error');
+  }
 }
 
 async function openAddBookmarkModal() {
@@ -668,10 +656,35 @@ function cancelEdit() {
   document.getElementById('edit-form').classList.remove('active');
 }
 
-// Listen for messages from floating modal
+// Listen for messages from floating modal (handles modal button clicks)
 window.addEventListener('message', async (event) => {
   if (event.data.type === 'REVISIT_ACTION') {
-    // Already handled in the function
+    const action = event.data.action;
+    const bookmarkId = event.data.bookmarkId;
+
+    const bm = bookmarks.find(b => b.id === bookmarkId);
+    if (!bm) return;
+
+    bm.history = bm.history || [];
+    bm.history.push({
+      timestamp: Date.now(),
+      action: action
+    });
+
+    if (action === 'Complete') {
+      bm.status = 'Complete';
+      showToast('Bookmark marked as Complete', 'success');
+    } else if (action === 'ReVisited') {
+      bm.status = 'ReVisited';
+      const newDate = prompt('Set new revisit date (YYYY-MM-DD):', new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+      if (newDate) {
+        bm.revisitBy = new Date(newDate).toISOString();
+        showToast('Revisit date updated', 'success');
+      }
+    }
+
+    await saveData();
+    renderLinks();
   }
 });
 
@@ -1279,11 +1292,14 @@ function showToast(message, type = 'success') {
 
   if (type === 'error') {
     toast.classList.add('error');
+  } else if (type === 'info') {
+    toast.classList.add('info');
   }
 
   setTimeout(() => {
     toast.classList.remove('active');
     toast.classList.remove('error');
+    toast.classList.remove('info');
   }, 3000);
 }
 

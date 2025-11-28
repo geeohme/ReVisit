@@ -242,7 +242,7 @@ async function handleScrapeAndShowOverlay(bookmarkId, preliminaryBookmark) {
   console.log('DEBUG: 136 Sending to background for AI processing: processWithAI');
 
   // Show processing notification to user
-  showNotification('ReVisit Processing', 'info');
+  showNotification('Analyzing content...', 'info');
 
   const message = {
     action: 'processWithAI',
