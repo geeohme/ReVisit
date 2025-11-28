@@ -42,7 +42,40 @@ const LLM_GATEWAY_URL = 'https://llmproxy.api.sparkbright.me';
 
 /**
  * Format request body for provider-specific requirements
- * Different providers have different requirements for token limits and request structure
+ *
+ * Different providers have different requirements for token limits and request structure.
+ * This function transforms the generic options into provider-specific format.
+ *
+ * PROVIDER-SPECIFIC REQUIREMENTS:
+ *
+ * GROQ:
+ *   - Does NOT support maxTokens parameter (will error if included)
+ *   - Model names MUST include provider prefix
+ *   - Examples: "openai/gpt-oss-120b", "moonshotai/kimi-k2-instruct-0905", "meta-llama/llama-guard-4-12b", "qwen/qwen3-32b"
+ *   - Only temperature is supported in options
+ *
+ * OPENAI:
+ *   - Does NOT support maxTokens parameter (error: "Unrecognized request argument supplied: maxTokens")
+ *   - Model names are simple: "gpt-4-0613", "gpt-5.1", "gpt-3.5-turbo"
+ *   - Only temperature is supported in options
+ *
+ * ANTHROPIC:
+ *   - Does NOT support maxTokens in options
+ *   - REQUIRES max_tokens as TOP-LEVEL field (not in options)
+ *   - Model names: "claude-haiku-4-5-20251001", "claude-opus-4-5-20251101", "claude-sonnet-4-5-20250929"
+ *   - Temperature goes in options
+ *
+ * MISTRAL:
+ *   - Does NOT support maxTokens (camelCase)
+ *   - Uses max_tokens (snake_case) in options
+ *   - Model names: "mistral-large-latest", "mistral-medium-2505"
+ *   - Temperature goes in options
+ *
+ * @param {string} provider - Provider name (groq, openai, anthropic, mistral, etc.)
+ * @param {string} model - Model identifier (format varies by provider)
+ * @param {Array} messages - Array of message objects
+ * @param {Object} options - Options object (maxTokens, temperature, etc.)
+ * @returns {Object} Formatted request body for the specific provider
  */
 function formatProviderRequest(provider, model, messages, options = {}) {
   const normalizedProvider = provider.toLowerCase();
