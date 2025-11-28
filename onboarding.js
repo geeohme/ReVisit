@@ -119,7 +119,7 @@ function updateModelDropdown(dropdownId, provider) {
     return;
   }
 
-  const models = modelsData[provider].data || [];
+  const models = modelsData[provider].models || [];
   models.forEach(modelObj => {
     const option = document.createElement('option');
     option.value = modelObj.id;
