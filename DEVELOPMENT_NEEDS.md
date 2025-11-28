@@ -23,23 +23,41 @@ This document tracks planned features, enhancements, and fixes for the ReVisit p
 ---
 
 ### Bug #5: Category Deduplication Missing
-**Status**: Not Fixed
+**Status**: ✅ FIXED
 **Priority**: CRITICAL (Quick Win)
-**Location**: `onboarding.js:43-53`
-**Estimated Fix Time**: 5 minutes
+**Location**: `onboarding.js:164-169`
+**Fixed Date**: 2025-11-28
 
 **Impact**:
 - Users can enter "Tech, Tech, Tech" and create duplicate categories
 - Results in cluttered category list
 - Poor user experience during onboarding
 
-**Fix Required**:
-- Add `Array.from(new Set(categories))` to deduplicate categories
-- Validate before saving to storage
+**Fix Applied**:
+- Added `Array.from(new Set(categories))` to deduplicate categories
+- Categories are now properly deduplicated before saving to storage
 
 ---
 
 ## 🟡 Priority 0.5: Medium Priority Bugs & Issues
+
+### Bug #9: Inconsistent Processing Toast Notification
+**Status**: Not Fixed
+**Priority**: Medium (UX)
+**Estimated Fix Time**: 30 minutes
+
+**Impact**:
+- Users don't see consistent "Processing" feedback when saving bookmarks
+- Either YouTube or non-YouTube page saving lacks toast notification
+- Inconsistent user experience during bookmark creation
+
+**Fix Required**:
+- Investigate which bookmark type (YouTube vs non-YouTube) is missing the processing toast
+- Add toast notification for "Processing..." when bookmark is being saved
+- Ensure consistent feedback across both YouTube and non-YouTube workflows
+- Toast should appear immediately when save action begins and dismiss when complete
+
+---
 
 ### Bug #6: XSS Vulnerability (Likely Fixed, Needs Audit)
 **Status**: Partially Mitigated
@@ -320,9 +338,10 @@ This document tracks planned features, enhancements, and fixes for the ReVisit p
 ### Development Order Suggestion:
 
 #### Immediate (Sprint 1 - Critical Bugs)
-1. **Bug #5: Category Deduplication** - 5 minutes, quick win
+1. ~~**Bug #5: Category Deduplication**~~ - ✅ COMPLETED
 2. **Bug #1: Missing updateBookmarkStatus Handler** - 1 hour, critical functionality
 3. **Transcript Display Alignment** - Quick fix, immediate UX improvement
+4. **Bug #9: Inconsistent Processing Toast Notification** - 30 minutes, UX improvement
 
 #### Short Term (Sprint 2 - Foundation)
 4. **Settings Panel & LLM Configuration** - Foundation for other features
@@ -350,9 +369,32 @@ This document tracks planned features, enhancements, and fixes for the ReVisit p
 
 ## Completed Items
 
-_(Move items here as they are completed)_
+### ✅ Backup & Restore Functionality (Completed: 2025-11-28)
+**Implementation**:
+- Updated backup to only export data (bookmarks, categories, transcripts)
+- Backup no longer includes application configuration (settings, API keys, etc.)
+- Created restore function with backward compatibility for old backup format
+- Restore merges categories with existing categories (with deduplication)
+- Restore ignores settings from old backup files
+- Added restore button on settings panel
+- Both backup and restore provide toast notifications for user feedback
+
+**Files Modified**:
+- `list-modal.js`: Updated `exportData()` and added `importData()` function
+- `list-modal.html`: Added restore button in settings panel
 
 ---
 
-**Last Updated**: 2025-11-18 (Added critical bugs and open issues from ARCHITECTURE.md analysis)
+### ✅ Bug #5: Category Deduplication (Completed: 2025-11-28)
+**Fix Applied**:
+- Added `Array.from(new Set(categories))` in onboarding.js to deduplicate categories
+- Users can no longer create duplicate categories during onboarding
+- Improved data quality and user experience
+
+**Files Modified**:
+- `onboarding.js`: Lines 164-169
+
+---
+
+**Last Updated**: 2025-11-28 (Completed Bug #5, added Backup & Restore functionality, added Bug #9)
 **Document Owner**: Development Team

@@ -161,10 +161,12 @@ function getProviderDisplayName(provider) {
 
 async function completeOnboarding() {
   const userName = document.getElementById('user-name').value.trim();
-  const categories = document.getElementById('initial-categories').value
-    .split(',')
-    .map(c => c.trim())
-    .filter(c => c.length > 0);
+  const categories = Array.from(new Set(
+    document.getElementById('initial-categories').value
+      .split(',')
+      .map(c => c.trim())
+      .filter(c => c.length > 0)
+  ));
   const interval = parseInt(document.getElementById('default-interval').value);
   const threshold = parseInt(document.getElementById('priority-threshold').value);
   const gatewayApiKey = document.getElementById('gateway-api-key').value.trim();
