@@ -730,6 +730,45 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         data.bookmarks = data.bookmarks.filter(b => b.id !== request.bookmarkId);
         await saveStorageData(data);
         sendResponse({ success: true });
+      } else if (request.action === 'updateBookmarkStatus') {
+        // Update bookmark status from floating modal actions
+        console.log('DEBUG: 243 Background updating bookmark status:', request.bookmarkId, request.actionType);
+        const data = await getStorageData();
+        const bookmarkIndex = data.bookmarks.findIndex(b => b.id === request.bookmarkId);
+
+        if (bookmarkIndex !== -1) {
+          const bookmark = data.bookmarks[bookmarkIndex];
+
+          if (request.actionType === 'Complete') {
+            // Mark as complete
+            bookmark.status = 'Complete';
+            bookmark.history = bookmark.history || [];
+            bookmark.history.push({
+              timestamp: Date.now(),
+              action: 'Marked as Complete'
+            });
+            console.log('DEBUG: 244 Bookmark marked as Complete');
+          } else if (request.actionType === 'ReVisited') {
+            // Update revisit date
+            const defaultIntervalDays = data.settings?.defaultIntervalDays || 7;
+            bookmark.revisitBy = new Date(Date.now() + defaultIntervalDays * 24 * 60 * 60 * 1000).toISOString();
+            bookmark.status = 'Active';
+            bookmark.history = bookmark.history || [];
+            bookmark.history.push({
+              timestamp: Date.now(),
+              action: 'ReVisited - Updated revisit date'
+            });
+            console.log('DEBUG: 245 Bookmark revisit date updated');
+          }
+
+          data.bookmarks[bookmarkIndex] = bookmark;
+          await saveStorageData(data);
+          console.log('DEBUG: 246 Bookmark status updated successfully');
+          sendResponse({ success: true });
+        } else {
+          console.error('ERROR: 247 Bookmark not found:', request.bookmarkId);
+          throw new Error('Bookmark not found');
+        }
       } else if (request.action === 'getTranscript') {
         // Get transcript for a video
         console.log('DEBUG: 238 Background getting transcript for video:', request.videoId);

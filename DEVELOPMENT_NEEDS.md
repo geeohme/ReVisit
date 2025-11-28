@@ -5,26 +5,28 @@ This document tracks planned features, enhancements, and fixes for the ReVisit p
 ## 🔴 Priority 0: Critical Bugs (Must Fix Immediately)
 
 ### Bug #1: Missing updateBookmarkStatus Handler
-**Status**: Not Fixed
+**Status**: ✅ FIXED
 **Priority**: CRITICAL
-**Location**: `content.js` sends the message, but `background.js` has no handler
-**Estimated Fix Time**: 1 hour
+**Location**: `background.js:494-532`
+**Fixed**: 2025-11-18
 
-**Impact**:
-- The floating modal's "Complete" and "Keep" buttons fail silently
-- Users cannot mark bookmarks as complete from the floating modal
-- Core feature is broken
-
-**Fix Required**:
-- Add message handler in `background.js` for `updateBookmarkStatus` messages
-- Implement status update logic
-- Test Complete and Keep button functionality
+**What was fixed**:
+- Added message handler in `background.js` for `updateBookmarkStatus` messages
+- Implemented status update logic for both "Complete" and "ReVisited" actions
+- "Complete" action now properly marks bookmarks as complete with history tracking
+- "Keep" action (ReVisited) now updates the revisit date and maintains Active status
 
 ---
 
 ### Bug #5: Category Deduplication Missing
 **Status**: ✅ FIXED
 **Priority**: CRITICAL (Quick Win)
+**Location**: `onboarding.js:29-34`
+**Fixed**: 2025-11-18
+
+**What was fixed**:
+- Added `Array.from(new Set(...))` to deduplicate categories during onboarding
+- Users can no longer create duplicate categories (e.g., "Tech, Tech, Tech")
 **Location**: `onboarding.js:164-169`
 **Fixed Date**: 2025-11-28
 
@@ -369,6 +371,15 @@ This document tracks planned features, enhancements, and fixes for the ReVisit p
 
 ## Completed Items
 
+### ✅ Bug #1: Missing updateBookmarkStatus Handler (Fixed 2025-11-18)
+- Added message handler in `background.js:494-532` for `updateBookmarkStatus` messages
+- Implemented status update logic for "Complete" and "ReVisited" actions
+- Floating modal buttons now work properly
+
+
+---
+
+**Last Updated**: 2025-11-18 (Fixed Priority 0 Critical Bugs #1 and #5)
 ### ✅ Backup & Restore Functionality (Completed: 2025-11-28)
 **Implementation**:
 - Updated backup to only export data (bookmarks, categories, transcripts)
@@ -384,6 +395,11 @@ This document tracks planned features, enhancements, and fixes for the ReVisit p
 - `list-modal.html`: Added restore button in settings panel
 
 ---
+
+### ✅ Bug #5: Category Deduplication (Fixed 2025-11-18)
+- Added category deduplication in `onboarding.js:29-34`
+- Prevents duplicate categories during onboarding
+- Uses `Array.from(new Set(...))` to ensure unique categories
 
 ### ✅ Bug #5: Category Deduplication (Completed: 2025-11-28)
 **Fix Applied**:
