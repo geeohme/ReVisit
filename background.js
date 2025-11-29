@@ -658,7 +658,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.log('DEBUG: 212 Is YouTube URL:', isYouTube);
 
         // Get storage data
-        const data = await getStorageData();
         const settings = data.settings || {};
         const categoriesData = data.categories || [];
 
