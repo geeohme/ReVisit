@@ -657,8 +657,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const isYouTube = currentTab.url && (currentTab.url.includes('youtube.com/watch') || currentTab.url.includes('youtu.be/'));
         console.log('DEBUG: 212 Is YouTube URL:', isYouTube);
 
-        // Get storage data
-        const data = await getStorageData();
+        // Use storage data already fetched above for duplicate check
         const settings = data.settings || {};
         const categoriesData = data.categories || [];
 
