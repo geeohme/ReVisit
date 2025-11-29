@@ -622,6 +622,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           console.log('Content script already injected:', err.message);
         }
 
+        // Check for duplicate bookmark by URL
+        const data = await getStorageData();
+        const existingBookmark = data.bookmarks?.find(b => b.url === currentTab.url);
+
+        if (existingBookmark) {
+          console.log('DEBUG: Duplicate bookmark found:', existingBookmark);
+          // Send message to content script to show duplicate confirmation dialog
+          try {
+            await chrome.tabs.sendMessage(currentTab.id, {
+              action: 'showDuplicateConfirmation',
+              existingBookmark: existingBookmark
+            });
+            sendResponse({ success: true, isDuplicate: true });
+            return;
+          } catch (err) {
+            console.warn('Could not show duplicate confirmation:', err.message);
+          }
+        }
+
         // SECOND: Show initial "Gathering Details" notification
         console.log('DEBUG: 211 Sending initial notification');
         try {
@@ -830,6 +849,142 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         data.bookmarks = data.bookmarks.filter(b => b.id !== request.bookmarkId);
         await saveStorageData(data);
         sendResponse({ success: true });
+      } else if (request.action === 'duplicateBookmarkResponse') {
+        // Handle user's response to duplicate bookmark confirmation
+        console.log('DEBUG: Handling duplicate bookmark response:', request.response);
+
+        if (request.response === 'yes') {
+          // User wants to save anyway - proceed with normal bookmark creation
+          // Re-trigger the addBookmark flow but skip the duplicate check
+          chrome.runtime.sendMessage({ action: 'proceedWithBookmark' });
+          sendResponse({ success: true });
+        } else if (request.response === 'edit') {
+          // User wants to edit the existing bookmark
+          // Open list-modal.html with bookmark ID in URL
+          chrome.tabs.create({
+            url: chrome.runtime.getURL('list-modal.html') + '?editBookmark=' + request.bookmarkId
+          });
+          sendResponse({ success: true });
+        } else {
+          // User chose 'no' - do nothing
+          sendResponse({ success: true });
+        }
+      } else if (request.action === 'proceedWithBookmark') {
+        // Proceed with bookmark creation without duplicate check
+        console.log('DEBUG: Proceeding with bookmark creation (duplicate override)');
+
+        // Get current tab
+        const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+        if (!currentTab) {
+          throw new Error('No active tab found');
+        }
+
+        // Inject content script if needed
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: currentTab.id },
+            files: ['content.js']
+          });
+          await new Promise(resolve => setTimeout(resolve, 200));
+        } catch (err) {
+          console.log('Content script already injected:', err.message);
+        }
+
+        // Show initial notification
+        try {
+          await chrome.tabs.sendMessage(currentTab.id, {
+            action: 'showNotification',
+            message: 'Gathering Details...',
+            type: 'info'
+          });
+        } catch (err) {
+          console.warn('Could not show initial notification:', err.message);
+        }
+
+        // Check if this is a YouTube URL
+        const isYouTube = currentTab.url && (currentTab.url.includes('youtube.com/watch') || currentTab.url.includes('youtu.be/'));
+
+        // Get storage data
+        const data = await getStorageData();
+        const settings = data.settings || {};
+        const categoriesData = data.categories || [];
+        const categories = getCategoryNames(categoriesData);
+
+        // Create preliminary bookmark
+        const preliminaryBookmark = {
+          id: 'rv-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+          url: currentTab.url,
+          title: currentTab.title || 'Untitled',
+          category: 'Uncategorized',
+          summary: '',
+          tags: [],
+          userNotes: '',
+          addedTimestamp: Date.now(),
+          revisitBy: new Date(Date.now() + (settings.defaultIntervalDays || 7) * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'Active',
+          history: [],
+          isPreliminary: true,
+          isYouTube: isYouTube
+        };
+
+        // Save preliminary bookmark
+        data.bookmarks = data.bookmarks || [];
+        data.bookmarks.push(preliminaryBookmark);
+        await saveStorageData(data);
+
+        // Continue with normal flow (YouTube or regular page)
+        if (isYouTube) {
+          const isAlreadyLoaded = await verifyContentScript(currentTab.id);
+          if (!isAlreadyLoaded) {
+            try {
+              await chrome.scripting.executeScript({
+                target: { tabId: currentTab.id },
+                files: ['content.js']
+              });
+              await new Promise(resolve => setTimeout(resolve, 500));
+            } catch (injectionError) {
+              console.error('ERROR: Content script injection failed:', injectionError);
+              throw new Error(`Content script injection failed: ${injectionError.message}`);
+            }
+            const isReady = await verifyContentScript(currentTab.id);
+            if (!isReady) {
+              throw new Error('Content script is not responding to ping');
+            }
+          }
+          await sendMessageWithRetry(currentTab.id, {
+            action: 'scrapeAndShowOverlay',
+            bookmarkId: preliminaryBookmark.id,
+            bookmarkData: preliminaryBookmark
+          });
+        } else {
+          const scrapeResult = await chrome.scripting.executeScript({
+            target: { tabId: currentTab.id },
+            func: scrapePageContent
+          });
+          const scrapedData = scrapeResult[0].result;
+          const result = await processWithAI(scrapedData, settings, categories, null);
+          const bookmarkIndex = data.bookmarks.findIndex(b => b.id === preliminaryBookmark.id);
+          if (bookmarkIndex !== -1) {
+            data.bookmarks[bookmarkIndex] = {
+              ...data.bookmarks[bookmarkIndex],
+              ...result,
+              isPreliminary: false
+            };
+            await saveStorageData(data);
+          }
+          await chrome.tabs.sendMessage(currentTab.id, {
+            action: 'injectOverlayWithAIResults',
+            bookmarkId: preliminaryBookmark.id,
+            bookmarkData: {
+              ...preliminaryBookmark,
+              category: result.category,
+              summary: result.summary,
+              tags: result.tags
+            }
+          });
+        }
+        sendResponse({ success: true, bookmarkId: preliminaryBookmark.id });
       } else if (request.action === 'updateBookmarkStatus') {
         // Update bookmark status from floating modal actions
         console.log('DEBUG: 243 Background updating bookmark status:', request.bookmarkId, request.actionType);
