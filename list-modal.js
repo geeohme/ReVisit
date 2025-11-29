@@ -35,6 +35,7 @@ function getCategoryName(cat) {
 async function init() {
   const urlParams = new URLSearchParams(window.location.search);
   const action = urlParams.get('action');
+  const editBookmarkId = urlParams.get('editBookmark');
 
   // Load data
   const data = await chrome.storage.local.get('rvData');
@@ -53,14 +54,37 @@ async function init() {
     window.location.href = 'onboarding.html';
     return;
   }
-  
+
   // If coming from popup to add bookmark
   if (action === 'add') {
     await openAddBookmarkModal();
   }
-  
+
   renderCategories();
   renderLinks();
+
+  // If editBookmark parameter is provided, open that bookmark in edit mode
+  if (editBookmarkId) {
+    const bookmark = bookmarks.find(b => b.id === editBookmarkId);
+    if (bookmark) {
+      // Set the bookmark's category as selected to show it in the list
+      selectedCategory = bookmark.category;
+      renderCategories();
+      renderLinks();
+
+      // Select and render the bookmark details
+      selectedBookmarkId = editBookmarkId;
+      renderDetails(bookmark);
+
+      // Wait a moment for the DOM to render, then open edit form
+      setTimeout(() => {
+        const editForm = document.getElementById('edit-form');
+        if (editForm) {
+          editForm.classList.add('active');
+        }
+      }, 100);
+    }
+  }
 
   // Event listeners
   let searchTimeout;

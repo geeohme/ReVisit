@@ -50,6 +50,13 @@ try {
       return;
     }
 
+    if (request.action === 'showDuplicateConfirmation') {
+      console.log('DEBUG: Showing duplicate confirmation dialog');
+      showDuplicateConfirmationDialog(request.existingBookmark);
+      sendResponse({ success: true });
+      return;
+    }
+
     console.warn('WARN: 108 Unknown action received:', request.action);
     sendResponse({ success: false, error: 'Unknown action' });
   });
@@ -444,11 +451,115 @@ function showNotification(message, type = 'info') {
   `;
   notification.textContent = message;
   console.log('DEBUG: 152 Showing notification:', message);
-  
+
   document.body.appendChild(notification);
-  
+
   // Remove after 3 seconds
   setTimeout(() => {
     notification.remove();
   }, 3000);
+}
+
+function showDuplicateConfirmationDialog(existingBookmark) {
+  console.log('DEBUG: Showing duplicate bookmark confirmation dialog');
+
+  // Remove any existing dialog
+  const existingDialog = document.getElementById('rv-duplicate-dialog');
+  if (existingDialog) {
+    existingDialog.remove();
+  }
+
+  // Format the date
+  const addedDate = new Date(existingBookmark.addedTimestamp);
+  const formattedDate = addedDate.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+
+  const dialogHtml = `
+    <div id="rv-duplicate-dialog" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 10001; display: flex; align-items: center; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+      <div style="background: white; border-radius: 12px; padding: 28px; width: 90%; max-width: 500px; box-shadow: 0 20px 40px rgba(0,0,0,0.3);">
+        <div style="display: flex; align-items: center; margin-bottom: 20px;">
+          <span style="font-size: 32px; margin-right: 12px;">⚠️</span>
+          <h2 style="margin: 0; color: #333; font-size: 20px;">Duplicate Bookmark Detected</h2>
+        </div>
+
+        <p style="color: #666; margin-bottom: 24px; line-height: 1.6; font-size: 15px;">
+          This page was saved on <strong>${formattedDate}</strong>. Do you want to save it again?
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <button id="rv-duplicate-yes" style="padding: 12px 20px; background: #4a90e2; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; color: white; font-weight: 600; transition: background 0.2s;">
+            Yes, Save Again
+          </button>
+          <button id="rv-duplicate-edit" style="padding: 12px 20px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; font-size: 14px; color: #333; font-weight: 600; transition: background 0.2s;">
+            Edit Existing Bookmark
+          </button>
+          <button id="rv-duplicate-no" style="padding: 12px 20px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; font-size: 14px; color: #666; transition: background 0.2s;">
+            No, Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', dialogHtml);
+
+  // Add hover effects
+  const yesBtn = document.getElementById('rv-duplicate-yes');
+  const editBtn = document.getElementById('rv-duplicate-edit');
+  const noBtn = document.getElementById('rv-duplicate-no');
+
+  yesBtn.addEventListener('mouseenter', () => {
+    yesBtn.style.background = '#3a7bc8';
+  });
+  yesBtn.addEventListener('mouseleave', () => {
+    yesBtn.style.background = '#4a90e2';
+  });
+
+  editBtn.addEventListener('mouseenter', () => {
+    editBtn.style.background = '#e8e8e8';
+  });
+  editBtn.addEventListener('mouseleave', () => {
+    editBtn.style.background = '#f5f5f5';
+  });
+
+  noBtn.addEventListener('mouseenter', () => {
+    noBtn.style.background = '#e8e8e8';
+  });
+  noBtn.addEventListener('mouseleave', () => {
+    noBtn.style.background = '#f5f5f5';
+  });
+
+  // Add click event listeners
+  yesBtn.addEventListener('click', () => {
+    console.log('DEBUG: User chose to save duplicate bookmark');
+    chrome.runtime.sendMessage({
+      action: 'duplicateBookmarkResponse',
+      response: 'yes'
+    });
+    document.getElementById('rv-duplicate-dialog').remove();
+  });
+
+  editBtn.addEventListener('click', () => {
+    console.log('DEBUG: User chose to edit existing bookmark');
+    chrome.runtime.sendMessage({
+      action: 'duplicateBookmarkResponse',
+      response: 'edit',
+      bookmarkId: existingBookmark.id
+    });
+    document.getElementById('rv-duplicate-dialog').remove();
+  });
+
+  noBtn.addEventListener('click', () => {
+    console.log('DEBUG: User chose to cancel');
+    chrome.runtime.sendMessage({
+      action: 'duplicateBookmarkResponse',
+      response: 'no'
+    });
+    document.getElementById('rv-duplicate-dialog').remove();
+  });
+
+  console.log('DEBUG: Duplicate confirmation dialog injected');
 }
