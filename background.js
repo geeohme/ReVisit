@@ -228,18 +228,30 @@ async function callLLMGateway(provider, model, messages, options = {}, apiKey, c
         model
       });
 
+      // Coerce errorData fields to readable strings — they may be objects,
+      // which would otherwise stringify as "[object Object]".
+      const stringify = (v) => {
+        if (v == null) return '';
+        if (typeof v === 'string') return v;
+        try { return JSON.stringify(v); } catch { return String(v); }
+      };
+      const errMsg = stringify(errorData.error) || stringify(errorData.message) || stringify(errorData);
+      const errDetails = stringify(errorData.details);
+
       switch (response.status) {
         case 401:
-          throw new Error(`Authentication failed: ${errorData.error || 'Invalid API key'}. Please check your LLM Gateway API key in Settings.`);
+          throw new Error(`Authentication failed: ${errMsg || 'Invalid API key'}. Please check your LLM Gateway API key in Settings.`);
+        case 403:
+          throw new Error(`Forbidden (403): ${errMsg || 'Access denied'}. ${errDetails} Your API key may be revoked, out of quota, or not authorized for ${provider}/${model}.`);
         case 429:
-          throw new Error(`Rate limit exceeded: ${errorData.details || 'Too many requests'}. Please wait a moment and try again.`);
+          throw new Error(`Rate limit exceeded: ${errDetails || errMsg || 'Too many requests'}. Please wait a moment and try again.`);
         case 400:
-          throw new Error(`Invalid request: ${errorData.error || 'Bad request'}. Please check your provider/model configuration.`);
+          throw new Error(`Invalid request: ${errMsg || 'Bad request'}. Please check your provider/model configuration.`);
         case 500:
-          const details = errorData.details ? ` Details: ${JSON.stringify(errorData.details)}` : '';
-          throw new Error(`Gateway error: ${errorData.error || 'Internal server error'}.${details} Provider: ${provider}, Model: ${model}`);
+          const detailsSuffix = errDetails ? ` Details: ${errDetails}` : '';
+          throw new Error(`Gateway error: ${errMsg || 'Internal server error'}.${detailsSuffix} Provider: ${provider}, Model: ${model}`);
         default:
-          throw new Error(`Unexpected error (${response.status}): ${errorData.error || 'Unknown error'}`);
+          throw new Error(`Unexpected error (${response.status}): ${errMsg || 'Unknown error'}`);
       }
     }
 
@@ -601,6 +613,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       } else if (request.action === 'addBookmark') {
         console.log('DEBUG: 208 Background received addBookmark request');
 
+        // ACK immediately so the popup can close cleanly. The popup awaits
+        // this response — if we delayed it (waiting for AI work below), the
+        // popup teardown could race with the message dispatch and on a cold
+        // service worker the first click would be silently dropped.
+        sendResponse({ success: true, ack: true });
+
         // Get current tab
         const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
         console.log('DEBUG: 209 Current tab:', currentTab);
@@ -871,6 +889,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       } else if (request.action === 'proceedWithBookmark') {
         // Proceed with bookmark creation without duplicate check
         console.log('DEBUG: Proceeding with bookmark creation (duplicate override)');
+
+        // ACK immediately — same reason as addBookmark above.
+        sendResponse({ success: true, ack: true });
 
         // Get current tab
         const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });

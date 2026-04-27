@@ -4,13 +4,19 @@ document.getElementById('add-bookmark').addEventListener('click', async () => {
   if (!data.rvData?.settings?.onboardingComplete) {
     chrome.tabs.create({ url: chrome.runtime.getURL('onboarding.html') });
   } else {
-    // Send message to background to start the bookmark addition process
+    // Send message to background to start the bookmark addition process.
+    // Await the ACK so the service worker has a chance to wake up and
+    // receive the message before the popup tears down — otherwise the
+    // first click after a fresh page load can be silently dropped.
     console.log('DEBUG: Sending addBookmark message to background');
-    chrome.runtime.sendMessage({ action: 'addBookmark' }, (response) => {
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'addBookmark' });
       if (response && !response.success) {
         console.error('ERROR: Background processing failed:', response.error);
       }
-    });
+    } catch (err) {
+      console.error('ERROR: Failed to send addBookmark message:', err);
+    }
   }
   window.close();
 });

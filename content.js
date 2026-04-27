@@ -8,7 +8,17 @@ console.log('DEBUG: Content script starting execution on:', window.location.href
 // Styles to be injected into Shadow DOM
 const OVERLAY_STYLES = `
 :host {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  all: initial !important;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 16px !important;
+  font-weight: 400 !important;
+  font-style: normal !important;
+  line-height: 1.5 !important;
+  letter-spacing: normal !important;
+  text-align: left !important;
+  text-transform: none !important;
+  text-indent: 0 !important;
+  color: #1F2937 !important;
   --color-primary: #3B82F6;
   --color-primary-hover: #2563EB;
   --color-bg-panel: #FFFFFF;
@@ -19,6 +29,44 @@ const OVERLAY_STYLES = `
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Reset every element inside the shadow root so the host page's inherited
+   styles (font-size, line-height, color, etc.) cannot leak through. */
+*, *::before, *::after {
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  font-style: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  text-transform: none;
+  text-indent: 0;
+  color: inherit;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  vertical-align: baseline;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Form controls don't inherit font by default — force them to. */
+input, textarea, select, button {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: none;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+button {
+  cursor: pointer;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -426,26 +474,37 @@ async function handleScrapeAndShowOverlay(bookmarkId, preliminaryBookmark) {
   });
 }
 
-// Inject the bookmark overlay into the current page using Shadow DOM
-function injectBookmarkOverlay(bookmarkId, bookmarkData) {
-  console.log('DEBUG: Injecting bookmark overlay (Shadow DOM)');
-  
-  // Remove existing host if any
-  const existingHost = document.getElementById('rv-overlay-host');
-  if (existingHost) existingHost.remove();
-  
-  // Create Host
+// Create a shadow-DOM host that prevents keyboard/input events from leaking
+// to the host page (e.g., YouTube's 'k', space, '/' shortcuts).
+function createIsolatedHost(id) {
   const host = document.createElement('div');
-  host.id = 'rv-overlay-host';
+  host.id = id;
+  // Bubble-phase listeners on the host stop events from reaching host-page
+  // listeners attached to window/document. Capture phase would prevent the
+  // event from reaching elements inside the shadow root in the first place.
+  const stop = (e) => e.stopPropagation();
+  ['keydown', 'keyup', 'keypress', 'input', 'beforeinput',
+   'mousedown', 'mouseup', 'click', 'dblclick',
+   'pointerdown', 'pointerup', 'wheel'].forEach(type => {
+    host.addEventListener(type, stop, false);
+  });
   document.body.appendChild(host);
-  
-  // Create Shadow Root
   const shadow = host.attachShadow({ mode: 'open' });
-  
-  // Inject Styles
   const styleSheet = document.createElement('style');
   styleSheet.textContent = OVERLAY_STYLES;
   shadow.appendChild(styleSheet);
+  return { host, shadow };
+}
+
+// Inject the bookmark overlay into the current page using Shadow DOM
+function injectBookmarkOverlay(bookmarkId, bookmarkData) {
+  console.log('DEBUG: Injecting bookmark overlay (Shadow DOM)');
+
+  // Remove existing host if any
+  const existingHost = document.getElementById('rv-overlay-host');
+  if (existingHost) existingHost.remove();
+
+  const { host, shadow } = createIsolatedHost('rv-overlay-host');
   
   // Create Overlay HTML
   const overlayContainer = document.createElement('div');
@@ -526,16 +585,8 @@ function injectErrorOverlay(bookmarkId, errorMessage) {
   const existingHost = document.getElementById('rv-overlay-host');
   if (existingHost) existingHost.remove();
 
-  const host = document.createElement('div');
-  host.id = 'rv-overlay-host';
-  document.body.appendChild(host);
-  
-  const shadow = host.attachShadow({ mode: 'open' });
-  
-  const styleSheet = document.createElement('style');
-  styleSheet.textContent = OVERLAY_STYLES;
-  shadow.appendChild(styleSheet);
-  
+  const { host, shadow } = createIsolatedHost('rv-overlay-host');
+
   const overlayContainer = document.createElement('div');
   overlayContainer.className = 'overlay-backdrop';
   overlayContainer.innerHTML = `
@@ -592,13 +643,7 @@ function showNotification(message, type = 'info') {
   // Check for existing notification host or create one
   let host = document.getElementById('rv-notification-host');
   if (!host) {
-    host = document.createElement('div');
-    host.id = 'rv-notification-host';
-    document.body.appendChild(host);
-    const shadow = host.attachShadow({ mode: 'open' });
-    const styleSheet = document.createElement('style');
-    styleSheet.textContent = OVERLAY_STYLES;
-    shadow.appendChild(styleSheet);
+    host = createIsolatedHost('rv-notification-host').host;
   }
   
   const shadow = host.shadowRoot;
@@ -620,15 +665,7 @@ function showDuplicateConfirmationDialog(existingBookmark) {
   const existingHost = document.getElementById('rv-overlay-host');
   if (existingHost) existingHost.remove();
 
-  const host = document.createElement('div');
-  host.id = 'rv-overlay-host';
-  document.body.appendChild(host);
-  
-  const shadow = host.attachShadow({ mode: 'open' });
-  
-  const styleSheet = document.createElement('style');
-  styleSheet.textContent = OVERLAY_STYLES;
-  shadow.appendChild(styleSheet);
+  const { host, shadow } = createIsolatedHost('rv-overlay-host');
 
   const addedDate = new Date(existingBookmark.addedTimestamp).toLocaleDateString();
 
