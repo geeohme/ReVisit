@@ -278,16 +278,27 @@ async function callLLMGateway(provider, model, messages, options = {}, apiKey, c
 }
 
 function extractJSON(content) {
-  try {
-    return JSON.parse(content);
-  } catch (e) {
-    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const jsonStr = jsonMatch[1] || jsonMatch[0];
-      return JSON.parse(jsonStr);
-    }
-    throw new Error('Failed to extract valid JSON from LLM response');
+  // Escape stray backslashes so that LLM output containing things like
+  // \(, \!, \$ (LaTeX/markdown), or paths doesn't break JSON.parse. JSON
+  // only permits \" \\ \/ \b \f \n \r \t \uXXXX after a backslash.
+  const sanitize = (s) => s.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
+
+  const tryParse = (s) => {
+    try { return JSON.parse(s); } catch (_) {}
+    try { return JSON.parse(sanitize(s)); } catch (_) {}
+    return undefined;
+  };
+
+  let parsed = tryParse(content);
+  if (parsed !== undefined) return parsed;
+
+  const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || content.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    const jsonStr = jsonMatch[1] || jsonMatch[0];
+    parsed = tryParse(jsonStr);
+    if (parsed !== undefined) return parsed;
   }
+  throw new Error('Failed to extract valid JSON from LLM response');
 }
 
 // ============================================================================

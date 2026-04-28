@@ -26,8 +26,8 @@ const OVERLAY_STYLES = `
   --color-text-secondary: #6B7280;
   --color-border: #E5E7EB;
   --color-bg-input: #FFFFFF;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
+  --radius-md: 6px;
+  --radius-lg: 8px;
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
 
@@ -115,7 +115,7 @@ button {
 
 .card-header h2 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 20px;
   font-weight: 600;
   color: var(--color-text-main);
 }
@@ -123,7 +123,7 @@ button {
 .close-btn {
   background: none;
   border: none;
-  font-size: 1.5rem;
+  font-size: 24px;
   cursor: pointer;
   color: var(--color-text-secondary);
   padding: 4px;
@@ -151,7 +151,7 @@ button {
 
 .form-group label {
   font-weight: 500;
-  font-size: 0.875rem;
+  font-size: 14px;
   color: var(--color-text-secondary);
 }
 
@@ -160,7 +160,7 @@ input, textarea, select {
   padding: 10px 12px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  font-size: 0.95rem;
+  font-size: 15px;
   background: var(--color-bg-input);
   color: var(--color-text-main);
   box-sizing: border-box;
@@ -192,7 +192,7 @@ textarea {
   padding: 10px 20px;
   border-radius: var(--radius-md);
   font-weight: 500;
-  font-size: 0.95rem;
+  font-size: 15px;
   cursor: pointer;
   border: none;
   transition: all 0.2s;
@@ -252,7 +252,7 @@ textarea {
   color: var(--color-text-secondary);
   padding: 2px 10px;
   border-radius: 4px;
-  font-size: 0.75rem;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
@@ -270,7 +270,7 @@ textarea {
   border-radius: var(--radius-md);
   background: var(--color-bg-input);
   color: var(--color-text-main);
-  font-size: 0.95rem;
+  font-size: 15px;
   line-height: 1.5;
 }
 .summary-rendered > *:first-child { margin-top: 0; }
@@ -280,9 +280,9 @@ textarea {
 .summary-rendered h4, .summary-rendered h5, .summary-rendered h6 {
   margin: 0.6em 0 0.3em; line-height: 1.25;
 }
-.summary-rendered h1 { font-size: 1.2rem; }
-.summary-rendered h2 { font-size: 1.1rem; }
-.summary-rendered h3 { font-size: 1rem; }
+.summary-rendered h1 { font-size: 19px; }
+.summary-rendered h2 { font-size: 18px; }
+.summary-rendered h3 { font-size: 16px; }
 .summary-rendered ul, .summary-rendered ol { margin: 0.3em 0 0.6em; padding-left: 1.4em; }
 .summary-rendered li { margin: 0.15em 0; }
 .summary-rendered code {
@@ -341,7 +341,7 @@ textarea {
 }
 .summary-zoom-header h3 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 18px;
   font-weight: 600;
   color: var(--color-text-main);
 }
@@ -349,7 +349,7 @@ textarea {
   flex: 1;
   padding: 20px 28px;
   overflow-y: auto;
-  font-size: 0.98rem;
+  font-size: 16px;
   line-height: 1.6;
   color: var(--color-text-main);
 }
