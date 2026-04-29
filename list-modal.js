@@ -393,18 +393,182 @@ function setupMarkdownEditor(elementId, initialText) {
 
 function renderMarkdown(text) {
   if (!text) return '';
-  // Basic Markdown to HTML converter
-  return text
-    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-    .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
-    .replace(/\*(.*)\*/gim, '<em>$1</em>')
-    .replace(/!\[(.*?)\]\((.*?)\)/gim, "<img alt='$1' src='$2' />")
-    .replace(/\[(.*?)\]\((.*?)\)/gim, "<a href='$2' target='_blank'>$1</a>")
-    .replace(/`(.*?)`/gim, '<code>$1</code>')
-    .replace(/\n$/gim, '<br />')
-    .replace(/\n/gim, '<br />');
+
+  const escapeHtml = (s) => s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  const escapeAttr = (s) => escapeHtml(s).replace(/"/g, '&quot;');
+
+  // Inline formatting: applied to already-escaped text.
+  // Order matters: images before links, bold before italic, code spans first
+  // (their contents must skip other inline processing).
+  const renderInline = (s) => {
+    const codeSpans = [];
+    s = s.replace(/`([^`\n]+)`/g, (_, c) => {
+      codeSpans.push(`<code>${c}</code>`);
+      return ` ${codeSpans.length - 1} `;
+    });
+    s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g,
+      (_, alt, src) => `<img alt="${escapeAttr(alt)}" src="${escapeAttr(src)}" />`);
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,
+      (_, label, href) => `<a href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer">${label}</a>`);
+    s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/__([^_\n]+)__/g, '<strong>$1</strong>');
+    s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+    s = s.replace(/(^|[^_\w])_([^_\n]+)_/g, '$1<em>$2</em>');
+    s = s.replace(/ (\d+) /g, (_, i) => codeSpans[Number(i)]);
+    return s;
+  };
+
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const out = [];
+  let i = 0;
+
+  // List state stack: each entry is { type: 'ul'|'ol', indent: number }
+  const listStack = [];
+  const closeListsTo = (indent) => {
+    while (listStack.length && listStack[listStack.length - 1].indent >= indent) {
+      out.push(`</li></${listStack.pop().type}>`);
+    }
+  };
+  const closeAllLists = () => {
+    while (listStack.length) out.push(`</li></${listStack.pop().type}>`);
+  };
+
+  // Paragraph buffer
+  let paraBuf = [];
+  const flushPara = () => {
+    if (paraBuf.length) {
+      out.push(`<p>${renderInline(escapeHtml(paraBuf.join('\n')))}</p>`);
+      paraBuf = [];
+    }
+  };
+
+  // Blockquote buffer
+  let quoteBuf = [];
+  const flushQuote = () => {
+    if (quoteBuf.length) {
+      out.push(`<blockquote>${renderMarkdown(quoteBuf.join('\n'))}</blockquote>`);
+      quoteBuf = [];
+    }
+  };
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Fenced code block
+    const fence = line.match(/^\s*(```+|~~~+)\s*([\w-]*)\s*$/);
+    if (fence) {
+      flushPara(); flushQuote(); closeAllLists();
+      const marker = fence[1];
+      const lang = fence[2];
+      const codeLines = [];
+      i++;
+      while (i < lines.length && !new RegExp(`^\\s*${marker[0]}{${marker.length},}\\s*$`).test(lines[i])) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      i++; // consume closing fence (if present)
+      const cls = lang ? ` class="language-${escapeAttr(lang)}"` : '';
+      out.push(`<pre><code${cls}>${escapeHtml(codeLines.join('\n'))}</code></pre>`);
+      continue;
+    }
+
+    // Blank line
+    if (/^\s*$/.test(line)) {
+      flushPara();
+      flushQuote();
+      closeAllLists();
+      i++;
+      continue;
+    }
+
+    // ATX heading
+    const heading = line.match(/^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/);
+    if (heading) {
+      flushPara(); flushQuote(); closeAllLists();
+      const level = heading[1].length;
+      out.push(`<h${level}>${renderInline(escapeHtml(heading[2]))}</h${level}>`);
+      i++;
+      continue;
+    }
+
+    // Setext heading (=== or ---)
+    if (i + 1 < lines.length && paraBuf.length === 0) {
+      const next = lines[i + 1];
+      if (/^\s{0,3}=+\s*$/.test(next) && line.trim() !== '') {
+        flushQuote(); closeAllLists();
+        out.push(`<h1>${renderInline(escapeHtml(line.trim()))}</h1>`);
+        i += 2;
+        continue;
+      }
+    }
+
+    // Horizontal rule
+    if (/^\s{0,3}([-*_])(\s*\1){2,}\s*$/.test(line)) {
+      flushPara(); flushQuote(); closeAllLists();
+      out.push('<hr />');
+      i++;
+      continue;
+    }
+
+    // Blockquote
+    const bq = line.match(/^\s{0,3}>\s?(.*)$/);
+    if (bq) {
+      flushPara(); closeAllLists();
+      quoteBuf.push(bq[1]);
+      i++;
+      continue;
+    } else {
+      flushQuote();
+    }
+
+    // List item (unordered or ordered)
+    const listMatch = line.match(/^(\s*)(?:([-*+])|(\d+)[.)])\s+(.*)$/);
+    if (listMatch) {
+      flushPara();
+      const indent = listMatch[1].length;
+      const type = listMatch[2] ? 'ul' : 'ol';
+      const content = listMatch[4];
+
+      // Pop deeper-or-equal lists with different type
+      while (listStack.length) {
+        const top = listStack[listStack.length - 1];
+        if (top.indent > indent || (top.indent === indent && top.type !== type)) {
+          out.push(`</li></${listStack.pop().type}>`);
+        } else {
+          break;
+        }
+      }
+
+      const top = listStack[listStack.length - 1];
+      if (!top || top.indent < indent) {
+        out.push(`<${type}>`);
+        listStack.push({ type, indent });
+      } else {
+        // same level, close previous <li>
+        out.push('</li>');
+      }
+
+      out.push(`<li>${renderInline(escapeHtml(content))}`);
+      i++;
+      continue;
+    }
+
+    // Paragraph line — but a non-list line at column 0 ends any open list
+    if (listStack.length && /^\S/.test(line)) closeAllLists();
+
+    paraBuf.push(line);
+    i++;
+  }
+
+  flushPara();
+  flushQuote();
+  closeAllLists();
+
+  return out.join('\n');
 }
 
 // --- Data Persistence ---

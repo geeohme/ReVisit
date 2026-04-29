@@ -273,39 +273,103 @@ textarea {
   font-size: 15px;
   line-height: 1.5;
 }
-.summary-rendered > *:first-child { margin-top: 0; }
-.summary-rendered > *:last-child { margin-bottom: 0; }
-.summary-rendered p { margin: 0 0 0.6em; }
+/* Typora-style markdown rendering — applies to both the inline summary box
+   and the zoomed full-screen view inside the overlay. */
+.summary-rendered > *:first-child,
+.summary-zoom-body > *:first-child { margin-top: 0; }
+.summary-rendered > *:last-child,
+.summary-zoom-body > *:last-child { margin-bottom: 0; }
+
+.summary-rendered p,
+.summary-zoom-body p { margin: 0 0 0.8em; }
+
 .summary-rendered h1, .summary-rendered h2, .summary-rendered h3,
-.summary-rendered h4, .summary-rendered h5, .summary-rendered h6 {
-  margin: 0.6em 0 0.3em; line-height: 1.25;
+.summary-rendered h4, .summary-rendered h5, .summary-rendered h6,
+.summary-zoom-body h1, .summary-zoom-body h2, .summary-zoom-body h3,
+.summary-zoom-body h4, .summary-zoom-body h5, .summary-zoom-body h6 {
+  margin: 1.2em 0 0.5em;
+  line-height: 1.25;
+  font-weight: 700;
+  color: var(--color-text-main);
 }
-.summary-rendered h1 { font-size: 19px; }
-.summary-rendered h2 { font-size: 18px; }
-.summary-rendered h3 { font-size: 16px; }
-.summary-rendered ul, .summary-rendered ol { margin: 0.3em 0 0.6em; padding-left: 1.4em; }
-.summary-rendered li { margin: 0.15em 0; }
-.summary-rendered code {
+
+.summary-rendered h1, .summary-zoom-body h1 {
+  font-size: 1.75em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--color-border);
+}
+.summary-rendered h2, .summary-zoom-body h2 {
+  font-size: 1.4em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--color-border);
+}
+.summary-rendered h3, .summary-zoom-body h3 { font-size: 1.2em; }
+.summary-rendered h4, .summary-zoom-body h4 { font-size: 1.05em; }
+.summary-rendered h5, .summary-zoom-body h5 { font-size: 0.95em; }
+.summary-rendered h6, .summary-zoom-body h6 {
+  font-size: 0.875em;
+  color: var(--color-text-secondary);
+}
+
+.summary-rendered ul, .summary-rendered ol,
+.summary-zoom-body ul, .summary-zoom-body ol {
+  margin: 0.4em 0 0.8em;
+  padding-left: 1.6em;
+}
+.summary-rendered li,
+.summary-zoom-body li { margin: 0.2em 0; }
+.summary-rendered li > ul, .summary-rendered li > ol,
+.summary-zoom-body li > ul, .summary-zoom-body li > ol { margin-bottom: 0; }
+
+.summary-rendered strong, .summary-zoom-body strong { font-weight: 700; }
+.summary-rendered em, .summary-zoom-body em { font-style: italic; }
+
+.summary-rendered code,
+.summary-zoom-body code {
   background: rgba(0,0,0,0.07);
   padding: 1px 5px;
   border-radius: 3px;
   font-size: 0.88em;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
-.summary-rendered pre {
+.summary-rendered pre,
+.summary-zoom-body pre {
   background: rgba(0,0,0,0.07);
-  padding: 10px;
+  padding: 10px 12px;
   border-radius: 6px;
   overflow-x: auto;
-  margin: 0.5em 0;
+  margin: 0.5em 0 1em;
+  line-height: 1.45;
 }
-.summary-rendered pre code { background: transparent; padding: 0; }
-.summary-rendered a { color: var(--color-primary); text-decoration: underline; }
-.summary-rendered blockquote {
-  margin: 0.5em 0;
+.summary-rendered pre code,
+.summary-zoom-body pre code {
+  background: transparent;
+  padding: 0;
+  white-space: pre;
+}
+.summary-rendered a,
+.summary-zoom-body a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+.summary-rendered blockquote,
+.summary-zoom-body blockquote {
+  margin: 0.5em 0 1em;
   padding: 4px 12px;
   border-left: 3px solid var(--color-border);
   color: var(--color-text-secondary);
+}
+.summary-rendered hr,
+.summary-zoom-body hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 1.2em 0;
+}
+.summary-rendered img,
+.summary-zoom-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
 }
 
 /* Zoom overlay layer (within overlay-card) */
