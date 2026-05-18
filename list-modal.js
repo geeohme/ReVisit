@@ -956,7 +956,7 @@ async function saveSettings() {
   const ollamaLocalUrl = document.getElementById('ollama-local-url').value.trim();
   const ollamaCloudKey = document.getElementById('ollama-cloud-api-key').value.trim();
   settings.ollama = {
-    localEnabled: !!ollamaLocalUrl,
+    localEnabled: true,
     localBaseUrl: ollamaLocalUrl || 'http://localhost:11434',
     cloudEnabled: !!ollamaCloudKey,
     cloudApiKey: ollamaCloudKey,
