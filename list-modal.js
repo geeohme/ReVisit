@@ -931,6 +931,11 @@ async function testOllamaConnection() {
       cloudApiKey: cloudApiKey || null
     });
 
+    if (!response) {
+      showToast('❌ No response from extension background', 'error');
+      return;
+    }
+
     if (response.success) {
       showToast(`✅ ${response.message}`, 'success');
     } else {
@@ -962,10 +967,17 @@ async function refreshOllamaModels() {
       cloudApiKey: cloudApiKey || null
     });
 
+    if (!response) {
+      showToast('❌ No response from extension background', 'error');
+      return;
+    }
+
     if (response.success) {
       // Merge returned modelsData into local settings and refresh dropdowns
       settings.llmGateway = settings.llmGateway || {};
       settings.llmGateway.modelsData = response.modelsData;
+      settings.ollama = settings.ollama || {};
+      settings.ollama.modelsLastUpdated = new Date().toISOString();
       await saveData();
 
       populateProviderDropdowns(response.modelsData);
