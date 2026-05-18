@@ -362,7 +362,7 @@ async function callOllama(provider, model, messages, options = {}, settings) {
 
     return { content, provider, model };
   } catch (error) {
-    if (error.message.includes('fetch') || error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED')) {
+    if (error instanceof TypeError || error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED')) {
       const target = isCloud ? 'Ollama Cloud' : `local Ollama at ${baseUrl}`;
       throw new Error(`Cannot reach ${target}. ${isCloud ? 'Check your internet connection.' : 'Is Ollama running? Try: ollama serve'}`);
     }
