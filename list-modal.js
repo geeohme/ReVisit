@@ -996,8 +996,14 @@ async function refreshOllamaModels() {
 async function saveSettings() {
   const apiKey = document.getElementById('gateway-api-key').value.trim();
 
-  if (!apiKey) {
-    showToast('Please enter an API key', 'error');
+  const allTransactionProviders = [
+    document.getElementById('youtube-provider')?.value,
+    document.getElementById('transcript-provider')?.value,
+    document.getElementById('page-provider')?.value
+  ].filter(Boolean);
+  const needsGatewayKey = allTransactionProviders.some(p => p !== 'ollama-local' && p !== 'ollama-cloud');
+  if (needsGatewayKey && !apiKey) {
+    showToast('Please enter an LLM Gateway API key for the selected providers', 'error');
     return;
   }
 
