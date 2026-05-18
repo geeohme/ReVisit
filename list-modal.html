@@ -147,6 +147,29 @@
                     </div>
                 </div>
 
+                <!-- Ollama Setup Section -->
+                <div class="settings-section">
+                    <h3>🦙 Ollama Setup</h3>
+                    <div class="settings-field">
+                        <label for="ollama-local-url">Local Ollama URL</label>
+                        <input type="text" id="ollama-local-url" placeholder="http://localhost:11434">
+                        <div class="settings-help-text">
+                            URL for your local Ollama instance. Leave blank to disable local Ollama.
+                        </div>
+                    </div>
+                    <div class="settings-field">
+                        <label for="ollama-cloud-api-key">Ollama Cloud API Key</label>
+                        <input type="password" id="ollama-cloud-api-key" placeholder="Ollama Cloud API key">
+                        <div class="settings-help-text">
+                            API key for Ollama Cloud (ollama.com). Leave blank to disable Ollama Cloud.
+                        </div>
+                    </div>
+                    <div class="settings-button-group">
+                        <button class="settings-btn settings-btn-info" id="test-ollama-connection-btn">🔍 Test Connection</button>
+                        <button class="settings-btn settings-btn-secondary" id="refresh-ollama-models-btn">🔄 Refresh Ollama Models</button>
+                    </div>
+                </div>
+
                 <!-- Transaction Settings Section -->
                 <div class="settings-section">
                     <h3>🎯 AI Provider Settings</h3>
