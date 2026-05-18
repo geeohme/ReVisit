@@ -488,15 +488,11 @@ ${transcript}
 Return ONLY the formatted markdown transcript.`;
 
   try {
-    const result = await callLLMGateway(
-      provider,
-      model,
-      [{ role: 'user', content: prompt }],
-      options,
-      apiKey
-    );
+    const result = isOllamaProvider(provider)
+      ? await callOllama(provider, model, [{ role: 'user', content: prompt }], options, settings)
+      : await callLLMGateway(provider, model, [{ role: 'user', content: prompt }], options, apiKey);
 
-    console.log('DEBUG: Transcript formatted successfully with LLM Gateway');
+    console.log(`DEBUG: Transcript formatted successfully with ${provider}`);
     return result.content;
   } catch (error) {
     console.error('ERROR: LLM Gateway transcript formatting failed:', error);
@@ -572,15 +568,11 @@ Return ONLY a JSON object with this exact structure:
 }`;
 
   try {
-    const result = await callLLMGateway(
-      provider,
-      model,
-      [{ role: 'user', content: prompt }],
-      options,
-      apiKey
-    );
+    const result = isOllamaProvider(provider)
+      ? await callOllama(provider, model, [{ role: 'user', content: prompt }], options, settings)
+      : await callLLMGateway(provider, model, [{ role: 'user', content: prompt }], options, apiKey);
 
-    console.log('DEBUG: YouTube video summarized successfully with LLM Gateway');
+    console.log(`DEBUG: YouTube video summarized successfully with ${provider}`);
     return extractJSON(result.content);
   } catch (error) {
     console.error('ERROR: LLM Gateway YouTube summarization failed:', error);
@@ -1255,8 +1247,10 @@ async function processWithAI(scrapedData, settings, categories, transcript = nul
   console.log('DEBUG: 249 Is YouTube video:', scrapedData.isYouTube);
   console.log('DEBUG: 250 Transcript provided:', !!transcript);
 
-  // Validate API key
-  if (!settings.llmGateway?.apiKey) {
+  // Validate API key — only required when at least one transaction uses the LLM Gateway
+  const transactions = settings.llmGateway?.transactions || {};
+  const needsGatewayKey = Object.values(transactions).some(t => t.provider && !isOllamaProvider(t.provider));
+  if (needsGatewayKey && !settings.llmGateway?.apiKey) {
     throw new Error('LLM Gateway API key not found in settings. Please configure your API key in the extension settings.');
   }
 
@@ -1368,15 +1362,11 @@ Return ONLY a JSON object with this exact structure:
 }`;
 
   try {
-    const result = await callLLMGateway(
-      provider,
-      model,
-      [{ role: 'user', content: prompt }],
-      options,
-      apiKey
-    );
+    const result = isOllamaProvider(provider)
+      ? await callOllama(provider, model, [{ role: 'user', content: prompt }], options, settings)
+      : await callLLMGateway(provider, model, [{ role: 'user', content: prompt }], options, apiKey);
 
-    console.log('DEBUG: Standard page processed successfully with LLM Gateway');
+    console.log(`DEBUG: Standard page processed successfully with ${provider}`);
     return extractJSON(result.content);
   } catch (error) {
     console.error('ERROR: LLM Gateway page processing failed:', error);
