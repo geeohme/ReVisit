@@ -1200,38 +1200,60 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         try {
           const results = { local: null, cloud: null };
 
-          // Test local Ollama if URL provided
-          if (request.localBaseUrl) {
-            const localResponse = await fetch(`${request.localBaseUrl}/api/version`);
-            if (!localResponse.ok) {
-              throw new Error(`Local Ollama returned status ${localResponse.status}`);
-            }
-            const localData = await localResponse.json();
-            results.local = { success: true, version: localData.version };
-            console.log('DEBUG: Local Ollama version:', localData.version);
-          }
-
-          // Test cloud Ollama if API key provided
-          if (request.cloudApiKey) {
-            const cloudResponse = await fetch('https://api.ollama.com/api/tags', {
-              headers: { 'Authorization': `Bearer ${request.cloudApiKey}` }
-            });
-            if (!cloudResponse.ok) {
-              const errData = await cloudResponse.json().catch(() => ({}));
-              throw new Error(`Ollama Cloud returned status ${cloudResponse.status}: ${errData.error || 'Auth failed'}`);
-            }
-            results.cloud = { success: true };
-            console.log('DEBUG: Ollama Cloud connection successful');
-          }
-
           if (!request.localBaseUrl && !request.cloudApiKey) {
             throw new Error('Enter a local URL or Cloud API key to test');
           }
 
+          // Test local Ollama if URL provided
+          if (request.localBaseUrl) {
+            try {
+              const localResponse = await fetch(`${request.localBaseUrl}/api/version`);
+              if (!localResponse.ok) {
+                throw new Error(`Local Ollama returned status ${localResponse.status}`);
+              }
+              const localData = await localResponse.json();
+              results.local = { success: true, version: localData.version };
+              console.log('DEBUG: Local Ollama version:', localData.version);
+            } catch (e) {
+              results.local = { success: false, error: e.message };
+              console.warn('DEBUG: Local Ollama test failed:', e.message);
+            }
+          }
+
+          // Test cloud Ollama if API key provided
+          if (request.cloudApiKey) {
+            try {
+              const cloudResponse = await fetch('https://api.ollama.com/api/tags', {
+                headers: { 'Authorization': `Bearer ${request.cloudApiKey}` }
+              });
+              if (!cloudResponse.ok) {
+                const errData = await cloudResponse.json().catch(() => ({}));
+                throw new Error(`Ollama Cloud returned status ${cloudResponse.status}: ${errData.error || 'Auth failed'}`);
+              }
+              results.cloud = { success: true };
+              console.log('DEBUG: Ollama Cloud connection successful');
+            } catch (e) {
+              results.cloud = { success: false, error: e.message };
+              console.warn('DEBUG: Ollama Cloud test failed:', e.message);
+            }
+          }
+
+          const anySuccess = results.local?.success || results.cloud?.success;
+          if (!anySuccess) {
+            const errors = [];
+            if (results.local?.error) errors.push(`Local: ${results.local.error}`);
+            if (results.cloud?.error) errors.push(`Cloud: ${results.cloud.error}`);
+            throw new Error(errors.join('; ') || 'Connection failed');
+          }
+
           const parts = [];
-          if (results.local) parts.push(`Local Ollama ${results.local.version}`);
-          if (results.cloud) parts.push('Ollama Cloud');
-          sendResponse({ success: true, message: `Connected: ${parts.join(', ')}` });
+          if (results.local?.success) parts.push(`Local Ollama ${results.local.version}`);
+          if (results.cloud?.success) parts.push('Ollama Cloud');
+          const warnings = [];
+          if (results.local?.error) warnings.push(`Local failed: ${results.local.error}`);
+          if (results.cloud?.error) warnings.push(`Cloud failed: ${results.cloud.error}`);
+          const message = `Connected: ${parts.join(', ')}${warnings.length ? ` (${warnings.join(', ')})` : ''}`;
+          sendResponse({ success: true, message });
         } catch (error) {
           console.error('ERROR: Ollama connection test failed:', error);
           sendResponse({ success: false, message: error.message });
@@ -1260,7 +1282,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
           // Fetch cloud models
           if (request.cloudApiKey) {
-            const cloudResponse = await fetch('https://ollama.com/api/tags', {
+            const cloudResponse = await fetch('https://api.ollama.com/api/tags', {
               headers: { 'Authorization': `Bearer ${request.cloudApiKey}` }
             });
             if (!cloudResponse.ok) {
@@ -1285,15 +1307,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           const existingModelsData = data.settings?.llmGateway?.modelsData || {};
           const updatedModelsData = { ...existingModelsData, ...mergedModels };
 
-          if (!data.settings) data.settings = {};
-          if (!data.settings.llmGateway) data.settings.llmGateway = {};
-          data.settings.llmGateway.modelsData = updatedModelsData;
+          const updatedData = {
+            ...data,
+            settings: {
+              ...data.settings,
+              llmGateway: {
+                ...data.settings?.llmGateway,
+                modelsData: updatedModelsData
+              },
+              ollama: {
+                ...data.settings?.ollama,
+                modelsLastUpdated: new Date().toISOString()
+              }
+            }
+          };
 
-          // Also update modelsLastUpdated in ollama settings
-          if (!data.settings.ollama) data.settings.ollama = {};
-          data.settings.ollama.modelsLastUpdated = new Date().toISOString();
-
-          await saveStorageData(data);
+          await saveStorageData(updatedData);
           console.log('DEBUG: Ollama models saved to storage');
 
           sendResponse({ success: true, modelsData: updatedModelsData });
