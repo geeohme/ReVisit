@@ -637,6 +637,10 @@ function openSettings() {
   // Populate fields
   document.getElementById('gateway-api-key').value = settings.llmGateway.apiKey || '';
 
+  // Populate Ollama fields
+  document.getElementById('ollama-local-url').value = settings.ollama?.localBaseUrl || 'http://localhost:11434';
+  document.getElementById('ollama-cloud-api-key').value = settings.ollama?.cloudApiKey || '';
+
   // Render categories
   renderCategoriesSettings();
 
@@ -839,6 +843,8 @@ function populateProviderDropdowns(modelsData) {
  */
 function getProviderDisplayName(provider) {
   const names = {
+    'ollama-local': 'Ollama (Local)',
+    'ollama-cloud': 'Ollama Cloud',
     groq: 'Groq (Fast Inference)',
     anthropic: 'Anthropic (Claude)',
     openai: 'OpenAI',
@@ -944,6 +950,17 @@ async function saveSettings() {
         }
       }
     }
+  };
+
+  // Save Ollama settings
+  const ollamaLocalUrl = document.getElementById('ollama-local-url').value.trim();
+  const ollamaCloudKey = document.getElementById('ollama-cloud-api-key').value.trim();
+  settings.ollama = {
+    localEnabled: !!ollamaLocalUrl,
+    localBaseUrl: ollamaLocalUrl || 'http://localhost:11434',
+    cloudEnabled: !!ollamaCloudKey,
+    cloudApiKey: ollamaCloudKey,
+    modelsLastUpdated: settings.ollama?.modelsLastUpdated || null
   };
 
   await saveData();
