@@ -707,6 +707,10 @@ function setupSettingsEventListeners() {
   // Test connection
   document.getElementById('test-connection-btn').onclick = testGatewayConnection;
 
+  // Ollama buttons
+  document.getElementById('test-ollama-connection-btn').onclick = testOllamaConnection;
+  document.getElementById('refresh-ollama-models-btn').onclick = refreshOllamaModels;
+
   // Provider change listeners - update model dropdowns
   const modelsData = settings.llmGateway?.modelsData;
 
@@ -903,6 +907,74 @@ async function testGatewayConnection() {
     }
   } catch (error) {
     showToast(`❌ Test failed: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Test Ollama connection (local and/or cloud) via background service worker
+ */
+async function testOllamaConnection() {
+  const localBaseUrl = document.getElementById('ollama-local-url').value.trim();
+  const cloudApiKey = document.getElementById('ollama-cloud-api-key').value.trim();
+
+  if (!localBaseUrl && !cloudApiKey) {
+    showToast('Enter a local URL or Cloud API key to test', 'error');
+    return;
+  }
+
+  showToast('Testing Ollama connection...', 'info');
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: 'testOllamaConnection',
+      localBaseUrl: localBaseUrl || null,
+      cloudApiKey: cloudApiKey || null
+    });
+
+    if (response.success) {
+      showToast(`✅ ${response.message}`, 'success');
+    } else {
+      showToast(`❌ ${response.message}`, 'error');
+    }
+  } catch (error) {
+    showToast(`❌ Test failed: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Fetch latest Ollama model lists and merge into modelsData dropdowns
+ */
+async function refreshOllamaModels() {
+  const localBaseUrl = document.getElementById('ollama-local-url').value.trim();
+  const cloudApiKey = document.getElementById('ollama-cloud-api-key').value.trim();
+
+  if (!localBaseUrl && !cloudApiKey) {
+    showToast('Enter a local URL or Cloud API key to refresh models', 'error');
+    return;
+  }
+
+  showToast('🔄 Refreshing Ollama models...', 'info');
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: 'refreshOllamaModels',
+      localBaseUrl: localBaseUrl || null,
+      cloudApiKey: cloudApiKey || null
+    });
+
+    if (response.success) {
+      // Merge returned modelsData into local settings and refresh dropdowns
+      settings.llmGateway = settings.llmGateway || {};
+      settings.llmGateway.modelsData = response.modelsData;
+      await saveData();
+
+      populateProviderDropdowns(response.modelsData);
+      showToast('✅ Ollama models loaded!', 'success');
+    } else {
+      showToast(`❌ Refresh failed: ${response.message}`, 'error');
+    }
+  } catch (error) {
+    showToast(`❌ Refresh failed: ${error.message}`, 'error');
   }
 }
 
