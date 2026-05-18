@@ -1194,6 +1194,113 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             message: error.message
           });
         }
+
+      } else if (request.action === 'testOllamaConnection') {
+        console.log('DEBUG: Testing Ollama connection');
+        try {
+          const results = { local: null, cloud: null };
+
+          // Test local Ollama if URL provided
+          if (request.localBaseUrl) {
+            const localResponse = await fetch(`${request.localBaseUrl}/api/version`);
+            if (!localResponse.ok) {
+              throw new Error(`Local Ollama returned status ${localResponse.status}`);
+            }
+            const localData = await localResponse.json();
+            results.local = { success: true, version: localData.version };
+            console.log('DEBUG: Local Ollama version:', localData.version);
+          }
+
+          // Test cloud Ollama if API key provided
+          if (request.cloudApiKey) {
+            const cloudResponse = await fetch('https://api.ollama.com/api/tags', {
+              headers: { 'Authorization': `Bearer ${request.cloudApiKey}` }
+            });
+            if (!cloudResponse.ok) {
+              const errData = await cloudResponse.json().catch(() => ({}));
+              throw new Error(`Ollama Cloud returned status ${cloudResponse.status}: ${errData.error || 'Auth failed'}`);
+            }
+            results.cloud = { success: true };
+            console.log('DEBUG: Ollama Cloud connection successful');
+          }
+
+          if (!request.localBaseUrl && !request.cloudApiKey) {
+            throw new Error('Enter a local URL or Cloud API key to test');
+          }
+
+          const parts = [];
+          if (results.local) parts.push(`Local Ollama ${results.local.version}`);
+          if (results.cloud) parts.push('Ollama Cloud');
+          sendResponse({ success: true, message: `Connected: ${parts.join(', ')}` });
+        } catch (error) {
+          console.error('ERROR: Ollama connection test failed:', error);
+          sendResponse({ success: false, message: error.message });
+        }
+
+      } else if (request.action === 'refreshOllamaModels') {
+        console.log('DEBUG: Refreshing Ollama models');
+        try {
+          const mergedModels = {};
+
+          // Fetch local models
+          if (request.localBaseUrl) {
+            const localResponse = await fetch(`${request.localBaseUrl}/api/tags`);
+            if (!localResponse.ok) {
+              throw new Error(`Local Ollama returned status ${localResponse.status}`);
+            }
+            const localData = await localResponse.json();
+            mergedModels['ollama-local'] = {
+              models: (localData.models || []).map(m => ({
+                id: m.model || m.name,
+                name: `${m.name}${m.details?.parameter_size ? ' (' + m.details.parameter_size + ')' : ''}`
+              }))
+            };
+            console.log('DEBUG: Local Ollama models fetched:', mergedModels['ollama-local'].models.length);
+          }
+
+          // Fetch cloud models
+          if (request.cloudApiKey) {
+            const cloudResponse = await fetch('https://ollama.com/api/tags', {
+              headers: { 'Authorization': `Bearer ${request.cloudApiKey}` }
+            });
+            if (!cloudResponse.ok) {
+              throw new Error(`Ollama Cloud returned status ${cloudResponse.status}`);
+            }
+            const cloudData = await cloudResponse.json();
+            mergedModels['ollama-cloud'] = {
+              models: (cloudData.models || []).map(m => ({
+                id: m.model || m.name,
+                name: `${m.name}${m.details?.parameter_size ? ' (' + m.details.parameter_size + ' · Cloud)' : ' (Cloud)'}`
+              }))
+            };
+            console.log('DEBUG: Ollama Cloud models fetched:', mergedModels['ollama-cloud'].models.length);
+          }
+
+          if (Object.keys(mergedModels).length === 0) {
+            throw new Error('Enter a local URL or Cloud API key to fetch models');
+          }
+
+          // Merge into existing modelsData in storage
+          const data = await getStorageData();
+          const existingModelsData = data.settings?.llmGateway?.modelsData || {};
+          const updatedModelsData = { ...existingModelsData, ...mergedModels };
+
+          if (!data.settings) data.settings = {};
+          if (!data.settings.llmGateway) data.settings.llmGateway = {};
+          data.settings.llmGateway.modelsData = updatedModelsData;
+
+          // Also update modelsLastUpdated in ollama settings
+          if (!data.settings.ollama) data.settings.ollama = {};
+          data.settings.ollama.modelsLastUpdated = new Date().toISOString();
+
+          await saveStorageData(data);
+          console.log('DEBUG: Ollama models saved to storage');
+
+          sendResponse({ success: true, modelsData: updatedModelsData });
+        } catch (error) {
+          console.error('ERROR: Ollama model refresh failed:', error);
+          sendResponse({ success: false, message: error.message });
+        }
       }
 
     } catch (error) {
