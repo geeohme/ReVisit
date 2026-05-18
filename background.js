@@ -284,6 +284,92 @@ async function callLLMGateway(provider, model, messages, options = {}, apiKey, c
   }
 }
 
+/**
+ * Returns true if the provider key refers to Ollama (local or cloud).
+ */
+function isOllamaProvider(provider) {
+  return provider === 'ollama-local' || provider === 'ollama-cloud';
+}
+
+/**
+ * Call Ollama API directly (local or cloud).
+ * Uses the same message array format as callLLMGateway so prompts are unchanged.
+ *
+ * @param {string} provider - 'ollama-local' or 'ollama-cloud'
+ * @param {string} model - Ollama model name (e.g. 'llama3.2')
+ * @param {Array} messages - [{role, content}] array
+ * @param {Object} options - { temperature, maxTokens }
+ * @param {Object} settings - full settings object (reads settings.ollama)
+ * @returns {Promise<{content, provider, model}>}
+ */
+async function callOllama(provider, model, messages, options = {}, settings) {
+  const ollamaSettings = settings.ollama || {};
+  const isCloud = provider === 'ollama-cloud';
+
+  const baseUrl = isCloud
+    ? 'https://api.ollama.com'
+    : (ollamaSettings.localBaseUrl || 'http://localhost:11434');
+
+  const headers = { 'Content-Type': 'application/json' };
+  if (isCloud && ollamaSettings.cloudApiKey) {
+    headers['Authorization'] = `Bearer ${ollamaSettings.cloudApiKey}`;
+  }
+
+  const body = {
+    model,
+    messages,
+    stream: false,
+    options: {}
+  };
+
+  if (options.temperature !== undefined) {
+    body.options.temperature = options.temperature;
+  }
+  if (options.maxTokens !== undefined) {
+    body.options.num_predict = options.maxTokens;
+  }
+
+  console.log(`DEBUG: Calling Ollama (${provider}) model: ${model} at ${baseUrl}`);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/chat`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errMsg = errorData.error || `HTTP ${response.status}`;
+      switch (response.status) {
+        case 401:
+          throw new Error(`Ollama authentication failed: ${errMsg}. Check your Cloud API key in Settings.`);
+        case 404:
+          throw new Error(`Ollama model not found: "${model}". Run "ollama pull ${model}" or select a different model.`);
+        case 500:
+          throw new Error(`Ollama server error: ${errMsg}`);
+        default:
+          throw new Error(`Ollama error (${response.status}): ${errMsg}`);
+      }
+    }
+
+    const data = await response.json();
+    const content = data.message?.content;
+
+    if (!content) {
+      throw new Error('Invalid Ollama response: missing message.content');
+    }
+
+    return { content, provider, model };
+  } catch (error) {
+    if (error.message.includes('fetch') || error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED')) {
+      const target = isCloud ? 'Ollama Cloud' : `local Ollama at ${baseUrl}`;
+      throw new Error(`Cannot reach ${target}. ${isCloud ? 'Check your internet connection.' : 'Is Ollama running? Try: ollama serve'}`);
+    }
+    throw error;
+  }
+}
+
 function extractJSON(content) {
   // Escape stray backslashes so that LLM output containing things like
   // \(, \!, \$ (LaTeX/markdown), or paths doesn't break JSON.parse. JSON
