@@ -34,6 +34,13 @@ const DEFAULT_DATA = {
           options: { temperature: 0.7, maxTokens: 2500 }  // maxTokens removed by formatProviderRequest
         }
       }
+    },
+    ollama: {
+      localEnabled: true,
+      localBaseUrl: 'http://localhost:11434',
+      cloudEnabled: false,
+      cloudApiKey: '',
+      modelsLastUpdated: null
     }
   }
 };
