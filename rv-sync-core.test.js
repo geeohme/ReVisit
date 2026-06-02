@@ -59,3 +59,24 @@ test('wrong password fails to decrypt', async () => {
   const enc = await core.encryptSecret('secret', k1);
   await assert.rejects(() => core.decryptSecret(enc, k2));
 });
+
+test('detectBackupVersion: no version field => 1 (legacy)', () => {
+  assert.strictEqual(core.detectBackupVersion({ bookmarks: [] }), 1);
+});
+test('detectBackupVersion: version 2', () => {
+  assert.strictEqual(core.detectBackupVersion({ version: 2, bookmarks: [] }), 2);
+});
+test('mergeBackupBookmarks: legacy id matched by legacyId, no dup', () => {
+  const existing = [{ id: 'uuid-1', legacyId: 'rv-1', title: 'current', updatedAt: '2026-02-01T00:00:00.000Z' }];
+  const incoming = [{ id: 'rv-1', title: 'older', updatedAt: '2026-01-01T00:00:00.000Z' }];
+  const out = core.mergeBackupBookmarks(existing, incoming, () => 'uuid-NEW');
+  assert.strictEqual(out.length, 1);            // matched by legacyId, not duplicated
+  assert.strictEqual(out[0].title, 'current');  // LWW: existing is newer
+});
+test('mergeBackupBookmarks: brand-new legacy bookmark gets uuid', () => {
+  const out = core.mergeBackupBookmarks([], [{ id: 'rv-9', title: 't', updatedAt: '2026-01-01T00:00:00.000Z' }], () => 'uuid-9');
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].id, 'uuid-9');
+  assert.strictEqual(out[0].legacyId, 'rv-9');
+  assert.strictEqual(out[0]._dirty, true);      // must push after restore
+});

@@ -61,5 +61,33 @@
     return _dec.decode(pt);
   }
 
-  return { stampRecord, mergeRecordLWW, applyRemoteList, ensureUuid, deriveEncKey, encryptSecret, decryptSecret };
+  // ── backup / restore ──
+  function detectBackupVersion(backup) { return backup && backup.version ? backup.version : 1; }
+
+  // Merge incoming backup bookmarks into existing, dedupe by id|legacyId|url, LWW.
+  function mergeBackupBookmarks(existing, incoming, genUuid) {
+    const byId = new Map(existing.map(b => [b.id, b]));
+    const byLegacy = new Map(existing.filter(b => b.legacyId).map(b => [b.legacyId, b]));
+    const byUrl = new Map(existing.filter(b => b.url).map(b => [b.url, b]));
+    for (const raw of incoming) {
+      const inc = ensureUuid(raw, genUuid);
+      let match = byId.get(inc.id) || (inc.legacyId && byLegacy.get(inc.legacyId)) || (inc.url && byUrl.get(inc.url));
+      if (match) {
+        const winner = mergeRecordLWW(match, inc);
+        if (winner === inc) { Object.assign(match, inc, { id: match.id, _dirty: true }); }
+      } else {
+        inc._dirty = true;
+        byId.set(inc.id, inc);
+        if (inc.legacyId) byLegacy.set(inc.legacyId, inc);
+        if (inc.url) byUrl.set(inc.url, inc);
+      }
+    }
+    return Array.from(byId.values());
+  }
+
+  return {
+    stampRecord, mergeRecordLWW, applyRemoteList, ensureUuid,
+    deriveEncKey, encryptSecret, decryptSecret,
+    detectBackupVersion, mergeBackupBookmarks
+  };
 });
