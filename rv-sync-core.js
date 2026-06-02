@@ -33,5 +33,11 @@
     return Array.from(map.values());
   }
 
-  return { stampRecord, mergeRecordLWW, applyRemoteList };
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  function ensureUuid(rec, genUuid) {
+    if (rec.id && UUID_RE.test(rec.id)) return rec;
+    return { ...rec, id: genUuid(), legacyId: rec.id };
+  }
+
+  return { stampRecord, mergeRecordLWW, applyRemoteList, ensureUuid };
 });

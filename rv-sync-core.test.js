@@ -32,3 +32,15 @@ test('applyRemoteList: new remote record is added', () => {
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].id, 'b');
 });
+
+test('ensureUuid: legacy rv- id gets a uuid and legacyId', () => {
+  const b = core.ensureUuid({ id: 'rv-123-abc', title: 't' }, () => '11111111-1111-1111-1111-111111111111');
+  assert.strictEqual(b.id, '11111111-1111-1111-1111-111111111111');
+  assert.strictEqual(b.legacyId, 'rv-123-abc');
+});
+test('ensureUuid: already-uuid id is left alone', () => {
+  const u = '22222222-2222-2222-2222-222222222222';
+  const b = core.ensureUuid({ id: u, title: 't' }, () => 'SHOULD-NOT-BE-USED');
+  assert.strictEqual(b.id, u);
+  assert.strictEqual(b.legacyId, undefined);
+});
