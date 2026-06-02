@@ -1,4 +1,6 @@
 // Cloud sync client (thin GoTrue + PostgREST). Loaded into the service worker.
+// rv-sync-core.js must load first — sync.js references self.RvSyncCore.
+importScripts('rv-sync-core.js');
 importScripts('sync.js');
 
 // Background service worker for ReVisit extension
