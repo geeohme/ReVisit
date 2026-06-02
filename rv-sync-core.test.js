@@ -44,3 +44,18 @@ test('ensureUuid: already-uuid id is left alone', () => {
   assert.strictEqual(b.id, u);
   assert.strictEqual(b.legacyId, undefined);
 });
+
+test('encrypt/decrypt round-trip with derived key', async () => {
+  const key = await core.deriveEncKey('hunter2', 'static-salt-123');
+  const enc = await core.encryptSecret('sk-abc-123', key);
+  assert.ok(enc.ct && enc.iv);
+  const dec = await core.decryptSecret(enc, key);
+  assert.strictEqual(dec, 'sk-abc-123');
+});
+
+test('wrong password fails to decrypt', async () => {
+  const k1 = await core.deriveEncKey('right', 'salt');
+  const k2 = await core.deriveEncKey('wrong', 'salt');
+  const enc = await core.encryptSecret('secret', k1);
+  await assert.rejects(() => core.decryptSecret(enc, k2));
+});
