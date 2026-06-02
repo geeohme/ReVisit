@@ -7,7 +7,8 @@
     "storage",
     "activeTab",
     "scripting",
-    "tabs"
+    "tabs",
+    "alarms"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -31,7 +32,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["styles.css", "utils.js"],
+      "resources": ["styles.css", "utils.js", "rv-sync-core.js", "sync.js"],
       "matches": ["<all_urls>"]
     }
   ],
