@@ -1287,7 +1287,7 @@ function handleAddCategory() {
 async function exportData() {
   const transcriptData = await chrome.storage.local.get('rvTranscripts');
   const transcripts = transcriptData.rvTranscripts || {};
-  const data = { bookmarks, categories, transcripts };
+  const data = { version: 2, exportedAt: new Date().toISOString(), bookmarks, categories, transcripts };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1309,23 +1309,30 @@ async function importData() {
       const text = await file.text();
       const backupData = JSON.parse(text);
       if (!backupData || typeof backupData !== 'object') throw new Error('Invalid backup file format');
-      if (backupData.bookmarks && Array.isArray(backupData.bookmarks)) bookmarks = backupData.bookmarks;
-      if (backupData.categories && Array.isArray(backupData.categories)) {
-        const migratedBackupCategories = migrateCategoriesFormat(backupData.categories);
-        const categoryMap = new Map();
-        categories.forEach(cat => categoryMap.set(cat.name, cat));
-        migratedBackupCategories.forEach(cat => {
-          if (!categoryMap.has(cat.name)) categoryMap.set(cat.name, cat);
-        });
-        categories = Array.from(categoryMap.values());
+      const ver = RvSyncCore.detectBackupVersion(backupData);
+
+      if (Array.isArray(backupData.bookmarks)) {
+        bookmarks = RvSyncCore.mergeBackupBookmarks(bookmarks, backupData.bookmarks, () => crypto.randomUUID());
+      }
+      if (Array.isArray(backupData.categories)) {
+        const migrated = migrateCategoriesFormat(backupData.categories);
+        const map = new Map(categories.map(c => [c.name, c]));
+        migrated.forEach(c => { if (!map.has(c.name)) map.set(c.name, { ...c, _dirty: true, updatedAt: new Date().toISOString() }); });
+        categories = Array.from(map.values());
       }
       if (backupData.transcripts && typeof backupData.transcripts === 'object') {
-        await chrome.storage.local.set({ rvTranscripts: backupData.transcripts });
+        const cur = (await chrome.storage.local.get('rvTranscripts')).rvTranscripts || {};
+        for (const [vid, t] of Object.entries(backupData.transcripts)) {
+          const stamped = { ...t, updatedAt: t.updatedAt || new Date().toISOString(), _dirty: true };
+          const local = cur[vid] || null;
+          cur[vid] = RvSyncCore.mergeRecordLWW(local, stamped);
+        }
+        await chrome.storage.local.set({ rvTranscripts: cur });
       }
-      await saveData();
+      await saveData();                 // stamps + triggers push
       renderCategories();
       renderLinks();
-      showToast('✅ Data restored successfully!', 'success');
+      showToast(`✅ Restored (v${ver}) and syncing…`, 'success');
     } catch (error) {
       console.error('Import failed:', error);
       showToast(`❌ Import failed: ${error.message}`, 'error');
