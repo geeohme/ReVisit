@@ -627,9 +627,22 @@ async function getStorageData() {
 }
 
 // Helper to save storage data
-async function saveStorageData(data) {
+async function saveStorageData(data, opts = {}) {
+  // Stamp every record dirty on each save (idempotent; push is idempotent).
+  // Skip when applying a remote pull (opts.fromRemote).
+  if (!opts.fromRemote) {
+    const now = new Date().toISOString();
+    (data.bookmarks || []).forEach(b => { b.updatedAt = now; b._dirty = true; });
+    (data.categories || []).forEach(c => { c.updatedAt = now; c._dirty = true; });
+  }
   await chrome.storage.local.set({ rvData: data });
+  if (!opts.fromRemote && self.RvSync && (await self.RvSync.isLoggedIn())) {
+    triggerPush();
+  }
 }
+
+// Fire-and-forget sync trigger after a local write (defined fully in Phase 2 sync wiring).
+function triggerPush() { if (self.RvSync && self.RvSync.syncCycle) self.RvSync.syncCycle(); }
 
 // Helper function to verify content script is ready
 async function verifyContentScript(tabId) {
@@ -1376,7 +1389,9 @@ async function saveTranscript(videoId, transcriptData) {
   
   transcripts[videoId] = {
     ...transcripts[videoId],
-    ...transcriptData
+    ...transcriptData,
+    updatedAt: new Date().toISOString(),
+    _dirty: true
   };
   console.log('DEBUG: 240 Saving transcript for video:', videoId);
   
@@ -1399,7 +1414,9 @@ async function updateTranscript(videoId, updates) {
   if (transcripts[videoId]) {
     transcripts[videoId] = {
       ...transcripts[videoId],
-      ...updates
+      ...updates,
+      updatedAt: new Date().toISOString(),
+      _dirty: true
     };
     await chrome.storage.local.set({ rvTranscripts: transcripts });
   }

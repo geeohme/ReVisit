@@ -239,6 +239,7 @@ function renderLinks() {
   container.innerHTML = '';
 
   let filtered = bookmarks.filter(b => {
+    if (b.deletedAt) return false; // hide soft-deleted (tombstoned) bookmarks
     if (selectedCategory !== 'All' && b.category !== selectedCategory) return false;
     if (statusFilter !== 'All' && b.status !== statusFilter) return false;
     if (searchQuery) {
@@ -606,7 +607,10 @@ async function saveCurrentBookmark() {
 async function deleteCurrentBookmark() {
   if (!confirm('Are you sure you want to delete this bookmark?')) return;
   
-  bookmarks = bookmarks.filter(b => b.id !== currentBookmarkId);
+  const now = new Date().toISOString();
+  bookmarks = bookmarks.map(b =>
+    b.id === currentBookmarkId ? { ...b, deletedAt: now, updatedAt: now, _dirty: true, status: 'Deleted' } : b
+  );
   await saveData();
   closeDetailOverlay();
   renderLinks();
@@ -615,9 +619,12 @@ async function deleteCurrentBookmark() {
 }
 
 async function saveData() {
-  await chrome.storage.local.set({
-    rvData: { bookmarks, categories, settings }
-  });
+  const now = new Date().toISOString();
+  bookmarks.forEach(b => { b.updatedAt = now; b._dirty = true; });
+  categories.forEach(c => { c.updatedAt = now; c._dirty = true; });
+  await chrome.storage.local.set({ rvData: { bookmarks, categories, settings } });
+  // Trigger a push if logged in (fire-and-forget via background).
+  chrome.runtime.sendMessage({ action: 'syncPush' }).catch(() => {});
 }
 
 // --- Settings Functions ---
