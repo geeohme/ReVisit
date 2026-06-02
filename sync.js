@@ -49,7 +49,11 @@
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(json.msg || json.error_description || `Sign-up failed (${res.status})`);
     // If autoconfirm is on, signup returns a session; otherwise user must confirm.
-    if (json.access_token) { const s = toSession(json); await setSession(s); return s; }
+    if (json.access_token) {
+      const s = toSession(json); await setSession(s);
+      try { await deriveKeyForSession(password); } catch (e) { console.warn('enc key derive failed:', e.message); }
+      return s;
+    }
     return null;
   }
 
@@ -64,6 +68,7 @@
     if (!res.ok) throw new Error(json.error_description || json.msg || `Sign-in failed (${res.status})`);
     const s = toSession(json);
     await setSession(s);
+    try { await deriveKeyForSession(password); } catch (e) { console.warn('enc key derive failed:', e.message); }
     return s;
   }
 
@@ -96,6 +101,27 @@
   async function isLoggedIn() {
     return !!(await getSession());
   }
+
+  // ── settings-secret encryption key (derived from the login password) ──
+  const SALT_KEY = 'rvEncSalt';
+  let _encKey = null;  // CryptoKey, in-memory only (lost on worker sleep; re-derived at next sign-in)
+
+  async function ensureSaltRow(userId) {
+    const res = await authedFetch(`/rest/v1/user_settings?user_id=eq.${userId}&select=enc_salt`, { method: 'GET' });
+    const rows = res.ok ? await res.json() : [];
+    if (rows.length && rows[0].enc_salt) return rows[0].enc_salt;
+    const salt = crypto.randomUUID();
+    await upsertRows('user_settings', [{ user_id: userId, enc_salt: salt, updated_at: new Date().toISOString() }]);
+    return salt;
+  }
+
+  async function deriveKeyForSession(password) {
+    const s = await getSession(); if (!s || !s.user) return;
+    const salt = await ensureSaltRow(s.user.id);
+    await chrome.storage.local.set({ [SALT_KEY]: salt });
+    _encKey = await root.RvSyncCore.deriveEncKey(password, salt);
+  }
+  function getEncKey() { return _encKey; }
 
   // ── PostgREST helpers ──
   async function authedFetch(path, opts = {}) {
@@ -216,9 +242,60 @@
     if (newest) await setSyncState({ ...st, lastPulledAt: newest });
   }
 
+  // ── settings sync (non-secret plaintext in `data`, secrets encrypted in `secrets`) ──
+  const SECRET_PATHS = [['llmGateway', 'apiKey'], ['ollama', 'cloudApiKey']];
+  function getPath(o, p) { return p.reduce((x, k) => (x ? x[k] : undefined), o); }
+  function setPath(o, p, v) { let x = o; for (let i = 0; i < p.length - 1; i++) { x[p[i]] = x[p[i]] || {}; x = x[p[i]]; } x[p[p.length - 1]] = v; }
+
+  async function pushSettings() {
+    const s = await ensureFreshSession(); if (!s) return;
+    const key = getEncKey();
+    const data = await getRvData();
+    const settings = JSON.parse(JSON.stringify(data.settings || {}));
+    const secrets = {};
+    if (key) {
+      for (const path of SECRET_PATHS) {
+        const val = getPath(settings, path);
+        if (val) { secrets[path.join('.')] = await root.RvSyncCore.encryptSecret(val, key); setPath(settings, path, ''); }
+      }
+    } else {
+      // No key available: never upload plaintext secrets; leave server `secrets` untouched.
+      for (const path of SECRET_PATHS) setPath(settings, path, '');
+    }
+    const row = { user_id: s.user.id, data: settings, updated_at: new Date().toISOString() };
+    if (key) row.secrets = secrets;
+    await upsertRows('user_settings', [row]);
+  }
+
+  async function pullSettings() {
+    const s = await ensureFreshSession(); if (!s) return;
+    const res = await authedFetch(`/rest/v1/user_settings?user_id=eq.${s.user.id}&select=data,secrets`, { method: 'GET' });
+    if (!res.ok) return;
+    const rows = await res.json(); if (!rows.length) return;
+    const remote = rows[0].data || {};
+    const key = getEncKey();
+    if (key && rows[0].secrets) {
+      for (const path of SECRET_PATHS) {
+        const enc = rows[0].secrets[path.join('.')];
+        if (enc) { try { setPath(remote, path, await root.RvSyncCore.decryptSecret(enc, key)); } catch (e) { /* keep local secret */ } }
+      }
+    }
+    const data = await getRvData();
+    const localSettings = data.settings || {};
+    // Preserve local secret values wherever remote can't supply a real one (no key / decrypt failed).
+    for (const path of SECRET_PATHS) {
+      const rv = getPath(remote, path);
+      if (!rv) { const lv = getPath(localSettings, path); if (lv) setPath(remote, path, lv); }
+    }
+    data.settings = { ...localSettings, ...remote };
+    await setRvData(data);
+  }
+
   async function syncCycle() {
-    try { await pushLocalChanges(); await pullRemoteChanges(); }
-    catch (e) { console.warn('syncCycle failed (will retry):', e.message); }
+    try {
+      await pushLocalChanges(); await pushSettings();
+      await pullRemoteChanges(); await pullSettings();
+    } catch (e) { console.warn('syncCycle failed (will retry):', e.message); }
   }
 
   root.RvSync = {
@@ -227,6 +304,7 @@
     authHeaders, toSession, CONFIG_KEY, SESSION_KEY,
     authedFetch, upsertRows, fetchSince,
     pushLocalChanges, pullRemoteChanges, syncCycle,
+    pushSettings, pullSettings, deriveKeyForSession, getEncKey,
     bookmarkToRow, rowToBookmark
   };
 })(typeof self !== 'undefined' ? self : globalThis);
