@@ -196,7 +196,9 @@
       if (conv !== b) conv._dirty = true;
       return conv;
     });
-    const dirtyBookmarks = data.bookmarks.filter(b => b._dirty);
+    // Skip preliminary (mid-AI-enrichment) bookmarks — don't sync half-processed
+    // placeholders. When enrichment completes, the content change re-stamps them.
+    const dirtyBookmarks = data.bookmarks.filter(b => b._dirty && !b.isPreliminary);
     const dirtyCats = (data.categories || []).filter(c => c._dirty);
     if (dirtyBookmarks.length) await upsertRows('bookmarks', dirtyBookmarks.map(b => bookmarkToRow(b, userId)));
     if (dirtyCats.length)      await upsertRows('categories', dirtyCats.map(c => catToRow(c, userId)));

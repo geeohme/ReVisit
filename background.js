@@ -600,7 +600,10 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 });
 
 // Keep the session fresh: refresh on startup and on a periodic alarm.
-chrome.runtime.onStartup.addListener(() => { self.RvSync.ensureFreshSession(); self.RvSync.syncCycle(); });
+chrome.runtime.onStartup.addListener(() => {
+  Promise.resolve(self.RvSync.ensureFreshSession()).catch(() => {});
+  Promise.resolve(self.RvSync.syncCycle()).catch(() => {});
+});
 
 chrome.alarms.create('rvSyncTick', { periodInMinutes: 5 });
 chrome.alarms.onAlarm.addListener((alarm) => {
