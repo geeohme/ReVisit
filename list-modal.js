@@ -805,6 +805,14 @@ function setupSettingsEventListeners() {
   if (signinBtn)  signinBtn.onclick  = () => handleAuth('authSignIn');
   if (signupBtn)  signupBtn.onclick  = () => handleAuth('authSignUp');
   if (signoutBtn) signoutBtn.onclick = handleSignOut;
+
+  const syncNowBtn = document.getElementById('sync-now-btn');
+  if (syncNowBtn) syncNowBtn.onclick = async () => {
+    const statusEl = document.getElementById('sync-status');
+    if (statusEl) statusEl.textContent = 'Syncing…';
+    await chrome.runtime.sendMessage({ action: 'syncNow' });
+    if (statusEl) statusEl.textContent = 'Synced ✓';
+  };
 }
 
 /**
@@ -1361,4 +1369,6 @@ document.addEventListener('DOMContentLoaded', init);
   const SUPABASE_URL = 'https://supabase.generationai.cloud';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzgwNDM0NDM2LCJleHAiOjE5MzgxMTQ0MzZ9.nTULGxKu8CDVjpmS9-6Efc3zoUlKOhfrwOTHurKmDxo';
   try { await chrome.runtime.sendMessage({ action: 'setSyncConfig', url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY }); } catch (e) {}
+  // Pull any remote changes when the list view opens (no-op when logged out).
+  try { await chrome.runtime.sendMessage({ action: 'syncPush' }); } catch (e) {}
 })();

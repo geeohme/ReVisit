@@ -600,13 +600,13 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 });
 
 // Keep the session fresh: refresh on startup and on a periodic alarm.
-chrome.runtime.onStartup.addListener(() => { self.RvSync.ensureFreshSession(); });
+chrome.runtime.onStartup.addListener(() => { self.RvSync.ensureFreshSession(); self.RvSync.syncCycle(); });
 
 chrome.alarms.create('rvSyncTick', { periodInMinutes: 5 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'rvSyncTick') {
-    self.RvSync.ensureFreshSession();
-    // Phase 2 adds: syncCycle();
+    // syncCycle() refreshes the session internally and no-ops when logged out.
+    self.RvSync.syncCycle();
   }
 });
 
@@ -708,6 +708,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: true, loggedIn: !!s, email: s && s.user ? s.user.email : null });
       } else if (request.action === 'setSyncConfig') {
         await self.RvSync.setConfig({ url: request.url, anonKey: request.anonKey });
+        sendResponse({ success: true });
+      } else if (request.action === 'syncPush') {
+        if (await self.RvSync.isLoggedIn()) self.RvSync.syncCycle();
+        sendResponse({ success: true });
+      } else if (request.action === 'syncNow') {
+        await self.RvSync.syncCycle();
         sendResponse({ success: true });
       } else if (request.action === 'scrapePage') {
         // Execute scraping in content script
