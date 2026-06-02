@@ -630,12 +630,14 @@ async function getStorageData() {
 
 // Helper to save storage data
 async function saveStorageData(data, opts = {}) {
-  // Stamp every record dirty on each save (idempotent; push is idempotent).
+  // Stamp ONLY records whose content changed vs what's stored (per-record LWW).
+  // A blanket stamp would let any save overwrite newer cloud edits on another device.
   // Skip when applying a remote pull (opts.fromRemote).
-  if (!opts.fromRemote) {
+  if (!opts.fromRemote && self.RvSyncCore) {
     const now = new Date().toISOString();
-    (data.bookmarks || []).forEach(b => { b.updatedAt = now; b._dirty = true; });
-    (data.categories || []).forEach(c => { c.updatedAt = now; c._dirty = true; });
+    const prev = (await chrome.storage.local.get('rvData')).rvData || {};
+    data.bookmarks = self.RvSyncCore.stampChangedList(prev.bookmarks || [], data.bookmarks || [], 'id', now);
+    data.categories = self.RvSyncCore.stampChangedList(prev.categories || [], data.categories || [], 'name', now);
   }
   await chrome.storage.local.set({ rvData: data });
   if (!opts.fromRemote && self.RvSync && (await self.RvSync.isLoggedIn())) {

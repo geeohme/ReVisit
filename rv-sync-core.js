@@ -9,6 +9,30 @@
     return { ...rec, updatedAt: isoNow, _dirty: true };
   }
 
+  // Content fingerprint that ignores sync-meta fields, so a record is only
+  // considered "changed" when its actual data changed (not its stamp).
+  function _contentKey(rec) {
+    const c = { ...rec };
+    delete c._dirty; delete c.updatedAt;
+    return JSON.stringify(c);
+  }
+
+  // Stamp ONLY the records whose content changed vs `prevList` (keyed by `key`),
+  // plus brand-new records. Unchanged records are returned untouched, preserving
+  // any prior _dirty/updatedAt (so a not-yet-pushed edit stays pending, and a
+  // freshly-pulled record is NOT re-stamped → no echo, and per-record LWW is
+  // preserved across devices). Returns a new array; changed records are new objects.
+  function stampChangedList(prevList, nextList, key, isoNow) {
+    const prevMap = new Map((prevList || []).map(r => [r[key], r]));
+    return (nextList || []).map(rec => {
+      const prev = prevMap.get(rec[key]);
+      if (!prev || _contentKey(prev) !== _contentKey(rec)) {
+        return { ...rec, updatedAt: isoNow, _dirty: true };
+      }
+      return rec;
+    });
+  }
+
   // Newer updatedAt wins; ties keep remote (server is canonical on equal stamps).
   function mergeRecordLWW(local, remote) {
     if (!local) return remote;
@@ -86,7 +110,7 @@
   }
 
   return {
-    stampRecord, mergeRecordLWW, applyRemoteList, ensureUuid,
+    stampRecord, stampChangedList, mergeRecordLWW, applyRemoteList, ensureUuid,
     deriveEncKey, encryptSecret, decryptSecret,
     detectBackupVersion, mergeBackupBookmarks
   };

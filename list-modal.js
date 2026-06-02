@@ -619,9 +619,12 @@ async function deleteCurrentBookmark() {
 }
 
 async function saveData() {
+  // Stamp ONLY records whose content actually changed (per-record LWW). A blanket
+  // stamp would let an unrelated edit overwrite a newer cloud edit on another device.
   const now = new Date().toISOString();
-  bookmarks.forEach(b => { b.updatedAt = now; b._dirty = true; });
-  categories.forEach(c => { c.updatedAt = now; c._dirty = true; });
+  const prev = (await chrome.storage.local.get('rvData')).rvData || {};
+  bookmarks = RvSyncCore.stampChangedList(prev.bookmarks || [], bookmarks, 'id', now);
+  categories = RvSyncCore.stampChangedList(prev.categories || [], categories, 'name', now);
   await chrome.storage.local.set({ rvData: { bookmarks, categories, settings } });
   // Trigger a push if logged in (fire-and-forget via background).
   chrome.runtime.sendMessage({ action: 'syncPush' }).catch(() => {});

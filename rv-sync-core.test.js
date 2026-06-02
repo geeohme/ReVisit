@@ -80,3 +80,38 @@ test('mergeBackupBookmarks: brand-new legacy bookmark gets uuid', () => {
   assert.strictEqual(out[0].legacyId, 'rv-9');
   assert.strictEqual(out[0]._dirty, true);      // must push after restore
 });
+
+// ── stampChangedList (C1 fix: only stamp records whose content actually changed) ──
+test('stampChangedList: unchanged record is NOT re-stamped', () => {
+  const prev = [{ id: 'a', title: 'x', updatedAt: '2026-01-01T00:00:00.000Z' }];
+  const next = [{ id: 'a', title: 'x', updatedAt: '2026-01-01T00:00:00.000Z' }];
+  const out = core.stampChangedList(prev, next, 'id', '2026-09-09T00:00:00.000Z');
+  assert.strictEqual(out[0].updatedAt, '2026-01-01T00:00:00.000Z'); // untouched
+  assert.strictEqual(out[0]._dirty, undefined);
+});
+test('stampChangedList: changed content IS stamped', () => {
+  const prev = [{ id: 'a', title: 'x', updatedAt: '2026-01-01T00:00:00.000Z' }];
+  const next = [{ id: 'a', title: 'EDITED', updatedAt: '2026-01-01T00:00:00.000Z' }];
+  const out = core.stampChangedList(prev, next, 'id', '2026-09-09T00:00:00.000Z');
+  assert.strictEqual(out[0].updatedAt, '2026-09-09T00:00:00.000Z');
+  assert.strictEqual(out[0]._dirty, true);
+});
+test('stampChangedList: brand-new record is stamped', () => {
+  const out = core.stampChangedList([], [{ id: 'b', title: 't' }], 'id', '2026-09-09T00:00:00.000Z');
+  assert.strictEqual(out[0]._dirty, true);
+  assert.strictEqual(out[0].updatedAt, '2026-09-09T00:00:00.000Z');
+});
+test('stampChangedList: a record already dirty but unchanged stays dirty, not re-timestamped', () => {
+  const prev = [{ id: 'a', title: 'x', updatedAt: '2026-02-02T00:00:00.000Z', _dirty: true }];
+  const next = [{ id: 'a', title: 'x', updatedAt: '2026-02-02T00:00:00.000Z', _dirty: true }];
+  const out = core.stampChangedList(prev, next, 'id', '2026-09-09T00:00:00.000Z');
+  assert.strictEqual(out[0].updatedAt, '2026-02-02T00:00:00.000Z'); // pending push preserved
+  assert.strictEqual(out[0]._dirty, true);
+});
+test('stampChangedList: meta-only difference (stamp) does NOT count as change', () => {
+  const prev = [{ id: 'a', title: 'x', updatedAt: '2026-01-01T00:00:00.000Z' }];
+  const next = [{ id: 'a', title: 'x', updatedAt: '2026-05-05T00:00:00.000Z', _dirty: true }];
+  const out = core.stampChangedList(prev, next, 'id', '2026-09-09T00:00:00.000Z');
+  // content identical → returned as-is (whatever next already had), not re-stamped to isoNow
+  assert.strictEqual(out[0].updatedAt, '2026-05-05T00:00:00.000Z');
+});
