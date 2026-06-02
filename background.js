@@ -1,3 +1,6 @@
+// Cloud sync client (thin GoTrue + PostgREST). Loaded into the service worker.
+importScripts('sync.js');
+
 // Background service worker for ReVisit extension
 
 // Default data structure
@@ -594,6 +597,17 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   }
 });
 
+// Keep the session fresh: refresh on startup and on a periodic alarm.
+chrome.runtime.onStartup.addListener(() => { self.RvSync.ensureFreshSession(); });
+
+chrome.alarms.create('rvSyncTick', { periodInMinutes: 5 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'rvSyncTick') {
+    self.RvSync.ensureFreshSession();
+    // Phase 2 adds: syncCycle();
+  }
+});
+
 // Helper to get storage data
 async function getStorageData() {
   const result = await chrome.storage.local.get('rvData');
@@ -664,6 +678,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: true, data });
       } else if (request.action === 'saveData') {
         await saveStorageData(request.data);
+        sendResponse({ success: true });
+      } else if (request.action === 'authSignIn') {
+        const s = await self.RvSync.signIn(request.email, request.password);
+        sendResponse({ success: true, user: s.user });
+      } else if (request.action === 'authSignUp') {
+        const s = await self.RvSync.signUp(request.email, request.password);
+        sendResponse({ success: true, user: s ? s.user : null, needsConfirm: !s });
+      } else if (request.action === 'authSignOut') {
+        await self.RvSync.signOut();
+        sendResponse({ success: true });
+      } else if (request.action === 'authStatus') {
+        const s = await self.RvSync.ensureFreshSession();
+        sendResponse({ success: true, loggedIn: !!s, email: s && s.user ? s.user.email : null });
+      } else if (request.action === 'setSyncConfig') {
+        await self.RvSync.setConfig({ url: request.url, anonKey: request.anonKey });
         sendResponse({ success: true });
       } else if (request.action === 'scrapePage') {
         // Execute scraping in content script
