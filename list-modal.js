@@ -682,6 +682,8 @@ function openSettings() {
 
   // Setup event listeners
   setupSettingsEventListeners();
+
+  refreshAccountUI();
 }
 
 /**
@@ -689,6 +691,45 @@ function openSettings() {
  */
 function closeSettings() {
   document.getElementById('settings-overlay').classList.remove('active');
+}
+
+async function refreshAccountUI() {
+  const status = await chrome.runtime.sendMessage({ action: 'authStatus' });
+  const loggedOut = document.getElementById('account-logged-out');
+  const loggedIn  = document.getElementById('account-logged-in');
+  if (!loggedOut || !loggedIn) return;
+  if (status && status.loggedIn) {
+    loggedOut.style.display = 'none';
+    loggedIn.style.display = '';
+    document.getElementById('account-email').textContent = status.email || '';
+  } else {
+    loggedOut.style.display = '';
+    loggedIn.style.display = 'none';
+  }
+}
+
+async function handleAuth(action) {
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  if (!email || !password) { showToast('Enter email and password', 'error'); return; }
+  try {
+    const res = await chrome.runtime.sendMessage({ action, email, password });
+    if (!res || !res.success) throw new Error((res && res.error) || 'Auth failed');
+    if (action === 'authSignUp' && res.needsConfirm) {
+      showToast('Account created — check your email to confirm.', 'success');
+    } else {
+      showToast('Signed in!', 'success');
+    }
+    await refreshAccountUI();
+  } catch (e) {
+    showToast(`❌ ${e.message}`, 'error');
+  }
+}
+
+async function handleSignOut() {
+  await chrome.runtime.sendMessage({ action: 'authSignOut' });
+  showToast('Signed out.', 'success');
+  await refreshAccountUI();
 }
 
 /**
@@ -749,6 +790,14 @@ function setupSettingsEventListeners() {
 
   // Save settings
   document.getElementById('save-settings-btn').onclick = saveSettings;
+
+  // Account / auth
+  const signinBtn  = document.getElementById('auth-signin-btn');
+  const signupBtn  = document.getElementById('auth-signup-btn');
+  const signoutBtn = document.getElementById('auth-signout-btn');
+  if (signinBtn)  signinBtn.onclick  = () => handleAuth('authSignIn');
+  if (signupBtn)  signupBtn.onclick  = () => handleAuth('authSignUp');
+  if (signoutBtn) signoutBtn.onclick = handleSignOut;
 }
 
 /**
@@ -1299,3 +1348,10 @@ function showToast(msg, type = 'info') {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', init);
+
+// One-time per load: ensure the extension knows the Supabase endpoint.
+(async () => {
+  const SUPABASE_URL = 'https://supabase.generationai.cloud';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzgwNDM0NDM2LCJleHAiOjE5MzgxMTQ0MzZ9.nTULGxKu8CDVjpmS9-6Efc3zoUlKOhfrwOTHurKmDxo';
+  try { await chrome.runtime.sendMessage({ action: 'setSyncConfig', url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY }); } catch (e) {}
+})();
