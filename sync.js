@@ -239,7 +239,15 @@
       await chrome.storage.local.set({ rvTranscripts: tr });
     }
     const newest = [...bRows, ...cRows, ...trRows].map(r => r.updated_at).filter(Boolean).sort().pop();
-    if (newest) await setSyncState({ ...st, lastPulledAt: newest });
+    if (newest) {
+      // updated_at is the PUSHING client's clock. Rewind the watermark by a skew
+      // buffer so a row written by a device whose clock is slightly behind isn't
+      // permanently skipped by the `gt` filter. Re-fetching the recent window is
+      // cheap and idempotent (applyRemoteList is LWW, local edits still win).
+      const WATERMARK_SKEW_MS = 2 * 60 * 1000;
+      const rewound = new Date(Date.parse(newest) - WATERMARK_SKEW_MS).toISOString();
+      await setSyncState({ ...st, lastPulledAt: rewound });
+    }
   }
 
   // ── settings sync (non-secret plaintext in `data`, secrets encrypted in `secrets`) ──
@@ -291,11 +299,27 @@
     await setRvData(data);
   }
 
-  async function syncCycle() {
+  // Single-flight guard: triggers (save, alarm, list-open, syncPush) can overlap.
+  // Concurrent cycles do read-modify-write on rvData and would clobber each other,
+  // so coalesce — while one cycle runs, callers await the in-flight promise. If a
+  // trigger arrives mid-cycle, run exactly one more cycle afterward (so the latest
+  // local change isn't missed).
+  let _inFlight = null;
+  let _rerun = false;
+  async function _runCycle() {
     try {
       await pushLocalChanges(); await pushSettings();
       await pullRemoteChanges(); await pullSettings();
     } catch (e) { console.warn('syncCycle failed (will retry):', e.message); }
+  }
+  async function syncCycle() {
+    if (_inFlight) { _rerun = true; return _inFlight; }
+    _inFlight = (async () => {
+      try {
+        do { _rerun = false; await _runCycle(); } while (_rerun);
+      } finally { _inFlight = null; }
+    })();
+    return _inFlight;
   }
 
   root.RvSync = {
