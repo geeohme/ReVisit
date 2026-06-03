@@ -180,6 +180,21 @@
         </div>
       </div>
 
+      <div class="api-key-section" style="margin-bottom: 25px;">
+        <h3 style="margin-bottom: 10px;">🦙 Ollama (Optional)</h3>
+        <p style="margin-bottom: 10px;">Use a local Ollama instance and/or Ollama Cloud. Leave blank to skip — you can add these later in Settings.</p>
+        <div class="settings-field">
+          <label for="ollama-local-url">Local Ollama URL</label>
+          <input type="text" id="ollama-local-url" placeholder="http://localhost:11434">
+          <div class="alert" style="background:#f8f9fa;border-color:#ddd;font-size:12px;">Leave blank to disable local Ollama.</div>
+        </div>
+        <div class="settings-field">
+          <label for="ollama-cloud-api-key">Ollama Cloud API Key</label>
+          <input type="password" id="ollama-cloud-api-key" placeholder="Ollama Cloud API key">
+          <div class="alert" style="background:#f8f9fa;border-color:#ddd;font-size:12px;">API key for Ollama Cloud (ollama.com). Leave blank to disable.</div>
+        </div>
+      </div>
+
       <div class="loading-message" id="loading-message">
         ⏳ Testing connection and fetching available models...
       </div>
@@ -258,6 +273,7 @@
     </div>
   </div>
 
+  <script src="utils.js"></script>
   <script src="onboarding.js"></script>
 </body>
 </html>
