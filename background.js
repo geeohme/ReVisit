@@ -1,3 +1,8 @@
+// Cloud sync client (thin GoTrue + PostgREST). Loaded into the service worker.
+// rv-sync-core.js must load first — sync.js references self.RvSyncCore.
+importScripts('rv-sync-core.js');
+importScripts('sync.js');
+
 // Background service worker for ReVisit extension
 
 // Default data structure
@@ -36,8 +41,8 @@ const DEFAULT_DATA = {
       }
     },
     ollama: {
-      localEnabled: true,
-      localBaseUrl: 'http://localhost:11434',
+      localEnabled: false,
+      localBaseUrl: '',
       cloudEnabled: false,
       cloudApiKey: '',
       modelsLastUpdated: null
@@ -594,6 +599,20 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   }
 });
 
+// Keep the session fresh: refresh on startup and on a periodic alarm.
+chrome.runtime.onStartup.addListener(() => {
+  Promise.resolve(self.RvSync.ensureFreshSession()).catch(() => {});
+  Promise.resolve(self.RvSync.syncCycle()).catch(() => {});
+});
+
+chrome.alarms.create('rvSyncTick', { periodInMinutes: 5 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'rvSyncTick') {
+    // syncCycle() refreshes the session internally and no-ops when logged out.
+    self.RvSync.syncCycle();
+  }
+});
+
 // Helper to get storage data
 async function getStorageData() {
   const result = await chrome.storage.local.get('rvData');
@@ -613,9 +632,24 @@ async function getStorageData() {
 }
 
 // Helper to save storage data
-async function saveStorageData(data) {
+async function saveStorageData(data, opts = {}) {
+  // Stamp ONLY records whose content changed vs what's stored (per-record LWW).
+  // A blanket stamp would let any save overwrite newer cloud edits on another device.
+  // Skip when applying a remote pull (opts.fromRemote).
+  if (!opts.fromRemote && self.RvSyncCore) {
+    const now = new Date().toISOString();
+    const prev = (await chrome.storage.local.get('rvData')).rvData || {};
+    data.bookmarks = self.RvSyncCore.stampChangedList(prev.bookmarks || [], data.bookmarks || [], 'id', now);
+    data.categories = self.RvSyncCore.stampChangedList(prev.categories || [], data.categories || [], 'name', now);
+  }
   await chrome.storage.local.set({ rvData: data });
+  if (!opts.fromRemote && self.RvSync && (await self.RvSync.isLoggedIn())) {
+    triggerPush();
+  }
 }
+
+// Fire-and-forget sync trigger after a local write (defined fully in Phase 2 sync wiring).
+function triggerPush() { if (self.RvSync && self.RvSync.syncCycle) self.RvSync.syncCycle(); }
 
 // Helper function to verify content script is ready
 async function verifyContentScript(tabId) {
@@ -664,6 +698,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: true, data });
       } else if (request.action === 'saveData') {
         await saveStorageData(request.data);
+        sendResponse({ success: true });
+      } else if (request.action === 'authSignIn') {
+        const s = await self.RvSync.signIn(request.email, request.password);
+        sendResponse({ success: true, user: s.user });
+      } else if (request.action === 'authSignUp') {
+        const s = await self.RvSync.signUp(request.email, request.password);
+        sendResponse({ success: true, user: s ? s.user : null, needsConfirm: !s });
+      } else if (request.action === 'authSignOut') {
+        await self.RvSync.signOut();
+        sendResponse({ success: true });
+      } else if (request.action === 'authStatus') {
+        const s = await self.RvSync.ensureFreshSession();
+        sendResponse({ success: true, loggedIn: !!s, email: s && s.user ? s.user.email : null });
+      } else if (request.action === 'setSyncConfig') {
+        await self.RvSync.setConfig({ url: request.url, anonKey: request.anonKey });
+        sendResponse({ success: true });
+      } else if (request.action === 'syncPush') {
+        if (await self.RvSync.isLoggedIn()) self.RvSync.syncCycle();
+        sendResponse({ success: true });
+      } else if (request.action === 'syncNow') {
+        await self.RvSync.syncCycle();
         sendResponse({ success: true });
       } else if (request.action === 'scrapePage') {
         // Execute scraping in content script
@@ -784,7 +839,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         
         // Create preliminary bookmark
         const preliminaryBookmark = {
-          id: 'rv-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+          id: crypto.randomUUID(), // UUID from birth — sync layer needs UUIDs; avoids mid-enrichment id rewrite
           url: currentTab.url,
           title: currentTab.title || 'Untitled',
           category: 'Uncategorized',
@@ -1029,7 +1084,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         // Create preliminary bookmark
         const preliminaryBookmark = {
-          id: 'rv-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+          id: crypto.randomUUID(), // UUID from birth — sync layer needs UUIDs; avoids mid-enrichment id rewrite
           url: currentTab.url,
           title: currentTab.title || 'Untitled',
           category: 'Uncategorized',
@@ -1347,7 +1402,9 @@ async function saveTranscript(videoId, transcriptData) {
   
   transcripts[videoId] = {
     ...transcripts[videoId],
-    ...transcriptData
+    ...transcriptData,
+    updatedAt: new Date().toISOString(),
+    _dirty: true
   };
   console.log('DEBUG: 240 Saving transcript for video:', videoId);
   
@@ -1370,7 +1427,9 @@ async function updateTranscript(videoId, updates) {
   if (transcripts[videoId]) {
     transcripts[videoId] = {
       ...transcripts[videoId],
-      ...updates
+      ...updates,
+      updatedAt: new Date().toISOString(),
+      _dirty: true
     };
     await chrome.storage.local.set({ rvTranscripts: transcripts });
   }

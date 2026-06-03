@@ -83,6 +83,26 @@ async function init() {
   // Event Listeners
   setupEventListeners();
 
+  // Live-refresh the list when a background sync pull writes new data to storage.
+  // (The page otherwise only reads rvData once, at init.)
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local' || !changes.rvData || !changes.rvData.newValue) return;
+    const nv = changes.rvData.newValue;
+    // Re-render only when the stored content actually differs from what's in memory.
+    // Content comparison (rather than a self-write flag) robustly ignores the page's
+    // own writes without the flag-leak/race a boolean guard has: a no-op save can't
+    // strand the flag, and a background pull landing mid-save can't be suppressed.
+    // (Errs toward an extra harmless render, never a missed update.)
+    const same = JSON.stringify(nv.bookmarks || []) === JSON.stringify(bookmarks)
+              && JSON.stringify(nv.categories || []) === JSON.stringify(categories);
+    if (same) return;
+    bookmarks = nv.bookmarks || [];
+    categories = migrateCategoriesFormat(nv.categories || []);
+    settings = nv.settings || {};
+    renderCategories();
+    renderLinks();
+  });
+
   // Check for URL params (e.g. open specific bookmark)
   const urlParams = new URLSearchParams(window.location.search);
   const editBookmarkId = urlParams.get('editBookmark');
@@ -239,6 +259,7 @@ function renderLinks() {
   container.innerHTML = '';
 
   let filtered = bookmarks.filter(b => {
+    if (b.deletedAt) return false; // hide soft-deleted (tombstoned) bookmarks
     if (selectedCategory !== 'All' && b.category !== selectedCategory) return false;
     if (statusFilter !== 'All' && b.status !== statusFilter) return false;
     if (searchQuery) {
@@ -606,7 +627,10 @@ async function saveCurrentBookmark() {
 async function deleteCurrentBookmark() {
   if (!confirm('Are you sure you want to delete this bookmark?')) return;
   
-  bookmarks = bookmarks.filter(b => b.id !== currentBookmarkId);
+  const now = new Date().toISOString();
+  bookmarks = bookmarks.map(b =>
+    b.id === currentBookmarkId ? { ...b, deletedAt: now, updatedAt: now, _dirty: true, status: 'Deleted' } : b
+  );
   await saveData();
   closeDetailOverlay();
   renderLinks();
@@ -615,9 +639,15 @@ async function deleteCurrentBookmark() {
 }
 
 async function saveData() {
-  await chrome.storage.local.set({
-    rvData: { bookmarks, categories, settings }
-  });
+  // Stamp ONLY records whose content actually changed (per-record LWW). A blanket
+  // stamp would let an unrelated edit overwrite a newer cloud edit on another device.
+  const now = new Date().toISOString();
+  const prev = (await chrome.storage.local.get('rvData')).rvData || {};
+  bookmarks = RvSyncCore.stampChangedList(prev.bookmarks || [], bookmarks, 'id', now);
+  categories = RvSyncCore.stampChangedList(prev.categories || [], categories, 'name', now);
+  await chrome.storage.local.set({ rvData: { bookmarks, categories, settings } });
+  // Trigger a push if logged in (fire-and-forget via background).
+  chrome.runtime.sendMessage({ action: 'syncPush' }).catch(() => {});
 }
 
 // --- Settings Functions ---
@@ -638,7 +668,7 @@ function openSettings() {
   document.getElementById('gateway-api-key').value = settings.llmGateway.apiKey || '';
 
   // Populate Ollama fields
-  document.getElementById('ollama-local-url').value = settings.ollama?.localBaseUrl || 'http://localhost:11434';
+  document.getElementById('ollama-local-url').value = settings.ollama?.localBaseUrl || '';
   document.getElementById('ollama-cloud-api-key').value = settings.ollama?.cloudApiKey || '';
 
   // Render categories
@@ -682,6 +712,8 @@ function openSettings() {
 
   // Setup event listeners
   setupSettingsEventListeners();
+
+  refreshAccountUI();
 }
 
 /**
@@ -689,6 +721,45 @@ function openSettings() {
  */
 function closeSettings() {
   document.getElementById('settings-overlay').classList.remove('active');
+}
+
+async function refreshAccountUI() {
+  const status = await chrome.runtime.sendMessage({ action: 'authStatus' });
+  const loggedOut = document.getElementById('account-logged-out');
+  const loggedIn  = document.getElementById('account-logged-in');
+  if (!loggedOut || !loggedIn) return;
+  if (status && status.loggedIn) {
+    loggedOut.style.display = 'none';
+    loggedIn.style.display = '';
+    document.getElementById('account-email').textContent = status.email || '';
+  } else {
+    loggedOut.style.display = '';
+    loggedIn.style.display = 'none';
+  }
+}
+
+async function handleAuth(action) {
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  if (!email || !password) { showToast('Enter email and password', 'error'); return; }
+  try {
+    const res = await chrome.runtime.sendMessage({ action, email, password });
+    if (!res || !res.success) throw new Error((res && res.error) || 'Auth failed');
+    if (action === 'authSignUp' && res.needsConfirm) {
+      showToast('Account created — check your email to confirm.', 'success');
+    } else {
+      showToast('Signed in!', 'success');
+    }
+    await refreshAccountUI();
+  } catch (e) {
+    showToast(`❌ ${e.message}`, 'error');
+  }
+}
+
+async function handleSignOut() {
+  await chrome.runtime.sendMessage({ action: 'authSignOut' });
+  showToast('Signed out.', 'success');
+  await refreshAccountUI();
 }
 
 /**
@@ -749,6 +820,22 @@ function setupSettingsEventListeners() {
 
   // Save settings
   document.getElementById('save-settings-btn').onclick = saveSettings;
+
+  // Account / auth
+  const signinBtn  = document.getElementById('auth-signin-btn');
+  const signupBtn  = document.getElementById('auth-signup-btn');
+  const signoutBtn = document.getElementById('auth-signout-btn');
+  if (signinBtn)  signinBtn.onclick  = () => handleAuth('authSignIn');
+  if (signupBtn)  signupBtn.onclick  = () => handleAuth('authSignUp');
+  if (signoutBtn) signoutBtn.onclick = handleSignOut;
+
+  const syncNowBtn = document.getElementById('sync-now-btn');
+  if (syncNowBtn) syncNowBtn.onclick = async () => {
+    const statusEl = document.getElementById('sync-status');
+    if (statusEl) statusEl.textContent = 'Syncing…';
+    await chrome.runtime.sendMessage({ action: 'syncNow' });
+    if (statusEl) statusEl.textContent = 'Synced ✓';
+  };
 }
 
 /**
@@ -1042,12 +1129,13 @@ async function saveSettings() {
     }
   };
 
-  // Save Ollama settings
+  // Save Ollama settings. Local is enabled only when the user actually provides a URL;
+  // otherwise it defaults off with an empty URL (no implicit localhost).
   const ollamaLocalUrl = document.getElementById('ollama-local-url').value.trim();
   const ollamaCloudKey = document.getElementById('ollama-cloud-api-key').value.trim();
   settings.ollama = {
-    localEnabled: true,
-    localBaseUrl: ollamaLocalUrl || 'http://localhost:11434',
+    localEnabled: !!ollamaLocalUrl,
+    localBaseUrl: ollamaLocalUrl,
     cloudEnabled: !!ollamaCloudKey,
     cloudApiKey: ollamaCloudKey,
     modelsLastUpdated: settings.ollama?.modelsLastUpdated || null
@@ -1223,7 +1311,7 @@ function handleAddCategory() {
 async function exportData() {
   const transcriptData = await chrome.storage.local.get('rvTranscripts');
   const transcripts = transcriptData.rvTranscripts || {};
-  const data = { bookmarks, categories, transcripts };
+  const data = { version: 2, exportedAt: new Date().toISOString(), bookmarks, categories, transcripts };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1245,23 +1333,30 @@ async function importData() {
       const text = await file.text();
       const backupData = JSON.parse(text);
       if (!backupData || typeof backupData !== 'object') throw new Error('Invalid backup file format');
-      if (backupData.bookmarks && Array.isArray(backupData.bookmarks)) bookmarks = backupData.bookmarks;
-      if (backupData.categories && Array.isArray(backupData.categories)) {
-        const migratedBackupCategories = migrateCategoriesFormat(backupData.categories);
-        const categoryMap = new Map();
-        categories.forEach(cat => categoryMap.set(cat.name, cat));
-        migratedBackupCategories.forEach(cat => {
-          if (!categoryMap.has(cat.name)) categoryMap.set(cat.name, cat);
-        });
-        categories = Array.from(categoryMap.values());
+      const ver = RvSyncCore.detectBackupVersion(backupData);
+
+      if (Array.isArray(backupData.bookmarks)) {
+        bookmarks = RvSyncCore.mergeBackupBookmarks(bookmarks, backupData.bookmarks, () => crypto.randomUUID());
+      }
+      if (Array.isArray(backupData.categories)) {
+        const migrated = migrateCategoriesFormat(backupData.categories);
+        const map = new Map(categories.map(c => [c.name, c]));
+        migrated.forEach(c => { if (!map.has(c.name)) map.set(c.name, { ...c, _dirty: true, updatedAt: new Date().toISOString() }); });
+        categories = Array.from(map.values());
       }
       if (backupData.transcripts && typeof backupData.transcripts === 'object') {
-        await chrome.storage.local.set({ rvTranscripts: backupData.transcripts });
+        const cur = (await chrome.storage.local.get('rvTranscripts')).rvTranscripts || {};
+        for (const [vid, t] of Object.entries(backupData.transcripts)) {
+          const stamped = { ...t, updatedAt: t.updatedAt || new Date().toISOString(), _dirty: true };
+          const local = cur[vid] || null;
+          cur[vid] = RvSyncCore.mergeRecordLWW(local, stamped);
+        }
+        await chrome.storage.local.set({ rvTranscripts: cur });
       }
-      await saveData();
+      await saveData();                 // stamps + triggers push
       renderCategories();
       renderLinks();
-      showToast('✅ Data restored successfully!', 'success');
+      showToast(`✅ Restored (v${ver}) and syncing…`, 'success');
     } catch (error) {
       console.error('Import failed:', error);
       showToast(`❌ Import failed: ${error.message}`, 'error');
@@ -1299,3 +1394,12 @@ function showToast(msg, type = 'info') {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', init);
+
+// One-time per load: ensure the extension knows the Supabase endpoint.
+(async () => {
+  const SUPABASE_URL = 'https://supabase.generationai.cloud';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzgwNDM0NDM2LCJleHAiOjE5MzgxMTQ0MzZ9.nTULGxKu8CDVjpmS9-6Efc3zoUlKOhfrwOTHurKmDxo';
+  try { await chrome.runtime.sendMessage({ action: 'setSyncConfig', url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY }); } catch (e) {}
+  // Pull any remote changes when the list view opens (no-op when logged out).
+  try { await chrome.runtime.sendMessage({ action: 'syncPush' }); } catch (e) {}
+})();

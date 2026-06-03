@@ -314,3 +314,6 @@ secrets.json
 *.tfstate.backup
 .env.vault
 
+# Local Supabase instance config (never commit real values)
+db/CONFIG.local.md
+!db/*.sql
