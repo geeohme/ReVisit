@@ -839,7 +839,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         
         // Create preliminary bookmark
         const preliminaryBookmark = {
-          id: 'rv-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+          id: crypto.randomUUID(), // UUID from birth — sync layer needs UUIDs; avoids mid-enrichment id rewrite
           url: currentTab.url,
           title: currentTab.title || 'Untitled',
           category: 'Uncategorized',
@@ -1084,7 +1084,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         // Create preliminary bookmark
         const preliminaryBookmark = {
-          id: 'rv-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+          id: crypto.randomUUID(), // UUID from birth — sync layer needs UUIDs; avoids mid-enrichment id rewrite
           url: currentTab.url,
           title: currentTab.title || 'Untitled',
           category: 'Uncategorized',

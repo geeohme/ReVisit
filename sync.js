@@ -249,6 +249,7 @@
     const data = await getRvData();
     // Backfill: convert any legacy rv- ids to UUIDs (mark converted dirty so they push).
     data.bookmarks = (data.bookmarks || []).map(b => {
+      if (b.isPreliminary) return b;  // never rewrite a bookmark's id while it's mid-enrichment
       const conv = Core.ensureUuid(b, () => crypto.randomUUID());
       if (conv !== b) conv._dirty = true;
       return conv;

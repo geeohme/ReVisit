@@ -8,6 +8,7 @@ let statusFilter = 'Active';
 let priorityView = false;
 let currentBookmarkId = null;
 let isDirty = false;
+let _selfWrite = false; // set when this page writes rvData, so its own storage.onChanged is ignored
 
 // Load shared utilities from utils.js
 // Note: sendMessageWithRetry, isYouTubeUrl, extractVideoId are available from utils.js
@@ -82,6 +83,19 @@ async function init() {
 
   // Event Listeners
   setupEventListeners();
+
+  // Live-refresh the list when a background sync pull writes new data to storage.
+  // (The page otherwise only reads rvData once, at init.)
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local' || !changes.rvData || !changes.rvData.newValue) return;
+    if (_selfWrite) { _selfWrite = false; return; } // ignore our own write
+    const nv = changes.rvData.newValue;
+    bookmarks = nv.bookmarks || [];
+    categories = migrateCategoriesFormat(nv.categories || []);
+    settings = nv.settings || {};
+    renderCategories();
+    renderLinks();
+  });
 
   // Check for URL params (e.g. open specific bookmark)
   const urlParams = new URLSearchParams(window.location.search);
@@ -625,6 +639,7 @@ async function saveData() {
   const prev = (await chrome.storage.local.get('rvData')).rvData || {};
   bookmarks = RvSyncCore.stampChangedList(prev.bookmarks || [], bookmarks, 'id', now);
   categories = RvSyncCore.stampChangedList(prev.categories || [], categories, 'name', now);
+  _selfWrite = true; // suppress our own storage.onChanged re-render below
   await chrome.storage.local.set({ rvData: { bookmarks, categories, settings } });
   // Trigger a push if logged in (fire-and-forget via background).
   chrome.runtime.sendMessage({ action: 'syncPush' }).catch(() => {});
