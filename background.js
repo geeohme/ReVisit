@@ -21,7 +21,7 @@ const DEFAULT_DATA = {
         youtubeSummary: {
           provider: 'groq',
           model: 'openai/gpt-oss-120b',  // GROQ requires provider-prefixed model names
-          options: { temperature: 0.7, maxTokens: 10000 }  // maxTokens removed by formatProviderRequest
+          options: { temperature: 0.7, maxTokens: 64000 }  // maxTokens removed by formatProviderRequest
         },
         transcriptFormatting: {
           provider: 'groq',
@@ -31,7 +31,7 @@ const DEFAULT_DATA = {
         pageSummary: {
           provider: 'groq',
           model: 'openai/gpt-oss-120b',  // GROQ requires provider-prefixed model names
-          options: { temperature: 0.7, maxTokens: 2500 }  // maxTokens removed by formatProviderRequest
+          options: { temperature: 0.7, maxTokens: 64000 }  // maxTokens removed by formatProviderRequest
         }
       }
     },
@@ -1486,9 +1486,10 @@ async function processStandardPage(scrapedData, settings, categories) {
 
   console.log(`DEBUG: Processing standard page with LLM Gateway - Provider: ${provider}, Model: ${model}`);
 
-  const prompt = `Summarize the following webpage content in under 200 words using markdown. Categorize it: Use an existing category if fitting (existing: ${categories.join(', ')}), else suggest a new one. Generate up to 10 relevant tags.
+  const prompt = `1. Summarize the following webpage content using markdown with this form: You are preparing a brief for a busy reader who will not see the full article. Summarize the article using the following structure and headings: Overview: 2–3 sentences on what happened and why it matters.  Key Facts: 4–6 bullet points with specific names, numbers, and dates. Context: 2–3 sentences explaining background or how this fits into a larger trend. 
+     Stay neutral and avoid adding outside information or personal opinions. 2. Categorize it: Use an existing category if fitting (existing: ${categories.join(', ')}), else suggest a new one. 3) Generate up to 10 relevant tags.
 
-Content: ${scrapedData.content}
+<content> ${scrapedData.content} </content>
 
 Return ONLY a JSON object with this exact structure:
 {
