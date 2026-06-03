@@ -105,7 +105,9 @@
           // require re-login. Transient failures (5xx / rate-limit) must NOT log the user
           // out; keep the session and let the next cycle retry. (Network errors throw from
           // fetch above and propagate without clearing the session — same intent.)
-          if (res.status === 400 || res.status === 401 || res.status === 403) {
+          // 422 = malformed/unprocessable refresh request (e.g. a structurally bad
+          // token from an older build); treat as definitive so we don't retry it forever.
+          if (res.status === 400 || res.status === 401 || res.status === 403 || res.status === 422) {
             await setSession(null);
             return null;
           }
