@@ -26,7 +26,10 @@ This work was produced across this session plus two `i-am-stepping` fork runs, a
 | — | Preliminary (mid-AI) bookmarks synced half-baked | skip `isPreliminary` in push | `e7a8b22` |
 | — | Stale/malformed session crashed (`s.user.id`) / looped on `{}` refresh | `isValidSession` self-heal + single-flight refresh | `0ba764b` |
 | — | Session longevity / SW-restart key loss | proactive transient-safe refresh + persist enc key locally | `fc964c5` |
-| — | Malformed refresh → 422 retried forever | treat 422 as definitive logout | (this session) |
+| — | Malformed refresh → 422 retried forever | treat 422 as definitive logout | `67535b0` |
+| A | "Bookmark not found" race (backfill rewrote `rv-…`→UUID mid-enrichment) | create bookmarks with `crypto.randomUUID()` at birth; backfill skips `isPreliminary` | `969fe51` |
+| B | List page stale after a background pull (read `rvData` once, no listener) | `chrome.storage.onChanged` live-refresh listener | `969fe51` |
+| B+ | `_selfWrite` flag could strand (no-op save) or be raced → next pull's render silently skipped | content-comparison listener instead of the boolean flag | (this session) |
 
 Live contract tests (against the real instance) validated: signup/signin/refresh, RLS isolation, merge-duplicates upsert (no dup), incremental `gt` watermark, tombstone propagation, and `user_settings` JSONB + `{ct,iv}` secret-blob round-trip.
 
@@ -50,7 +53,9 @@ Live contract tests (against the real instance) validated: signup/signin/refresh
 5. **Stay-logged-in:** confirm the session survives over hours (proactive refresh).
 6. **Ollama defaults:** settings should show Ollama local **off** and the URL **empty** by default.
 
-Cleanup: throwaway auth users (`revisit-test-*`, `revisit-smoke-*`, `rv-contract-*` @example.com) from contract testing can be deleted in Studio → Authentication.
+Cleanup:
+- Throwaway auth users (`revisit-test-*`, `revisit-smoke-*`, `rv-contract-*` @example.com) from contract testing can be deleted in Studio → Authentication.
+- From the earlier "Bookmark not found" failures you may have a few **stuck half-saved bookmarks** (preliminary, empty summary). These are leftover data, not a live bug — just delete them from the list.
 
 ---
 
