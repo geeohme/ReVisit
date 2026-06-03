@@ -129,31 +129,35 @@ needed. If the implementer finds it cleaner, defining
 `RV_SUPABASE = { url, anonKey }` in `utils.js` and consuming it from both pages
 is acceptable and preferred — but both pages must then use it.)
 
-### Component 3 — Account step (new Step 1)
+### Component 3 — Account gate (pre-wizard screen)
 
-A new first step in `onboarding.html`, shown before the Name step:
+To satisfy "ask at the very beginning" **without** renumbering the existing 5
+steps (which the Risks section flags as an off-by-one hazard), the account
+screen is a **gate shown before the numbered wizard**, not a renumbered step 1.
 
+A new `#account-gate` `<div>` in `onboarding.html` is the only screen visible on
+load; the existing `#step-1`…`#step-5` wizard and its 5-dot indicator are hidden
+behind it (the wizard container starts hidden, or the gate sits above it and the
+wizard's first step is only activated when the user chooses "No, I'm new").
+
+The gate contains:
 - Heading + prompt: *"Do you already have a ReVisit account?"*
 - Two buttons: **Yes, sign in** and **No, I'm new**.
-- A hidden login sub-panel (revealed by "Yes, sign in") containing:
+- A hidden login sub-panel (revealed by "Yes, sign in"):
   - email input, password input
   - **Sign In** button
-  - a **Back** link to return to the Yes/No choice
+  - a **Back** link returning to the Yes/No choice
   - a status area (`#account-sync-status`) for staged messages
-- **No, I'm new** advances to the Name step (the former Step 1).
 
-The step indicator gains one dot (6 dots for the new-user path). The account
-step is step 1; existing steps shift to 2–6. The login path never reaches steps
-2–6.
+Behavior:
+- **No, I'm new** → hide the gate, show the wizard at `#step-1`
+  (`currentStep = 1`). The existing 5 steps, their dot indicator, and all
+  `next-btn-N`/`prev-btn-N` handlers are **unchanged** — zero renumbering.
+- **Yes, sign in** → reveal the login sub-panel (gate stays; wizard never shown
+  on the success path because we redirect away).
 
-**Step navigation:** `nextStep()`/`prevStep()` use the numeric `currentStep`.
-The upper bound in `nextStep()` (`onboarding.js:5`, currently `if (currentStep < 5)`)
-must become `< 6`. The former step 1 (Name) becomes step 2 and currently has
-**no Back button** — add one so the user can return from Name (step 2) to the
-Account choice (step 1). All other Back/Next handlers shift by one. To avoid
-off-by-one fragility, derive the max step from the number of `.step` elements
-(or a single `TOTAL_STEPS` constant) rather than hard-coding `6` in multiple
-places.
+This keeps `nextStep()`'s `if (currentStep < 5)` bound and every existing step ID
+exactly as-is.
 
 ### Component 4 — Login + staged sync flow (`onboarding.js`)
 
@@ -248,8 +252,8 @@ Returning user:
 | File | Change |
 |------|--------|
 | `utils.js` | Add `buildOllamaSettings()`; export it. |
-| `onboarding.html` | Add account step (choice + login + status); add Ollama fields to AI-config step; add 6th step dot; add `<script src="utils.js">` before `onboarding.js`. |
-| `onboarding.js` | Account-step wiring (choice, sign-in, staged sync, set `onboardingComplete`, redirect); Supabase config bootstrap; read Ollama fields via `buildOllamaSettings`; renumber `currentStep` bounds (max step 6). |
+| `onboarding.html` | Add account gate (choice + login + status) shown before the wizard; add Ollama fields to AI-config step (`#step-4`); add `<script src="utils.js">` before `onboarding.js`. No step renumbering. |
+| `onboarding.js` | Account-gate wiring (choice, sign-in, staged sync, set `onboardingComplete`, redirect); Supabase config bootstrap; read Ollama fields via `buildOllamaSettings` in `completeOnboarding()`. Existing step logic unchanged. |
 | `list-modal.js` | `saveSettings()` uses `buildOllamaSettings()` instead of the inline object. |
 | `utils.test.js` (new, optional) | Unit tests for `buildOllamaSettings()`. |
 
@@ -273,8 +277,9 @@ Returning user:
 - **Constant drift:** Supabase URL/anon key duplicated across two files; mitigated
   by (preferred) sharing via `utils.js`, or by an explicit note to keep them in
   sync.
-- **Step renumbering bugs:** off-by-one in `currentStep` / dot indicators after
-  inserting step 1. Mitigated by re-deriving max-step from the DOM or a constant.
+- **Step renumbering bugs:** avoided entirely — the account screen is a gate
+  before the wizard (Component 3), so the existing 5 steps, IDs, dot indicator,
+  and handlers are untouched.
 - **Race on redirect:** redirecting before `syncNow` resolves would show an empty
   list; mitigated by awaiting `syncNow` and relying on the storage live-refresh
   listener as a backstop.
