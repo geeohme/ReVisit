@@ -648,7 +648,7 @@ function openSettings() {
   document.getElementById('gateway-api-key').value = settings.llmGateway.apiKey || '';
 
   // Populate Ollama fields
-  document.getElementById('ollama-local-url').value = settings.ollama?.localBaseUrl || 'http://localhost:11434';
+  document.getElementById('ollama-local-url').value = settings.ollama?.localBaseUrl || '';
   document.getElementById('ollama-cloud-api-key').value = settings.ollama?.cloudApiKey || '';
 
   // Render categories
@@ -1109,12 +1109,13 @@ async function saveSettings() {
     }
   };
 
-  // Save Ollama settings
+  // Save Ollama settings. Local is enabled only when the user actually provides a URL;
+  // otherwise it defaults off with an empty URL (no implicit localhost).
   const ollamaLocalUrl = document.getElementById('ollama-local-url').value.trim();
   const ollamaCloudKey = document.getElementById('ollama-cloud-api-key').value.trim();
   settings.ollama = {
-    localEnabled: true,
-    localBaseUrl: ollamaLocalUrl || 'http://localhost:11434',
+    localEnabled: !!ollamaLocalUrl,
+    localBaseUrl: ollamaLocalUrl,
     cloudEnabled: !!ollamaCloudKey,
     cloudApiKey: ollamaCloudKey,
     modelsLastUpdated: settings.ollama?.modelsLastUpdated || null

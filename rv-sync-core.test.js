@@ -60,6 +60,19 @@ test('wrong password fails to decrypt', async () => {
   await assert.rejects(() => core.decryptSecret(enc, k2));
 });
 
+test('isValidSession: complete session is valid', () => {
+  assert.strictEqual(core.isValidSession({ access_token: 'a', refresh_token: 'r', user: { id: 'u' } }), true);
+});
+test('isValidSession: missing refresh_token is invalid (would send {} refresh)', () => {
+  assert.strictEqual(core.isValidSession({ access_token: 'a', user: { id: 'u' } }), false);
+});
+test('isValidSession: missing user is invalid (would crash on s.user.id)', () => {
+  assert.strictEqual(core.isValidSession({ access_token: 'a', refresh_token: 'r' }), false);
+});
+test('isValidSession: null is invalid', () => {
+  assert.strictEqual(core.isValidSession(null), false);
+});
+
 test('detectBackupVersion: no version field => 1 (legacy)', () => {
   assert.strictEqual(core.detectBackupVersion({ bookmarks: [] }), 1);
 });

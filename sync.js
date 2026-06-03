@@ -76,26 +76,53 @@
     await setSession(null);
   }
 
+  // Single-flight refresh: the cycle fires several authedFetch calls (e.g. 3 parallel
+  // fetchSince in pullRemoteChanges) that each call ensureFreshSession. GoTrue rotates
+  // refresh tokens, so concurrent refreshes with the same token make all-but-one fail
+  // with "Refresh token is not valid". Coalesce them onto one in-flight promise.
+  const SKEW_MS = 60 * 1000; // refresh 1 min before expiry
+  let _refreshInFlight = null;
+  function _refreshSession(cfg) {
+    if (_refreshInFlight) return _refreshInFlight;
+    _refreshInFlight = (async () => {
+      try {
+        // Re-read inside the flight: a prior flight may have already refreshed, in which
+        // case we must NOT refresh again with the now-rotated (invalid) token.
+        const s = await getSession();
+        if (!Core.isValidSession(s)) { await setSession(null); return null; }
+        if (Date.now() < (s.expires_at - SKEW_MS)) return s;
+        const res = await fetch(`${cfg.url}/auth/v1/token?grant_type=refresh_token`, {
+          method: 'POST', headers: authHeaders(cfg),
+          body: JSON.stringify({ refresh_token: s.refresh_token })
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          // Refresh token revoked/expired — surface a re-login state, keep local data.
+          await setSession(null);
+          return null;
+        }
+        const fresh = toSession(json);
+        // Carry forward fields the refresh response may omit, so we never store a partial session.
+        if (!fresh.user) fresh.user = s.user;
+        if (!fresh.refresh_token) fresh.refresh_token = s.refresh_token;
+        await setSession(fresh);
+        return fresh;
+      } finally { _refreshInFlight = null; }
+    })();
+    return _refreshInFlight;
+  }
+
   // Refresh the access token if expired/near-expiry. Returns a valid session or null.
   async function ensureFreshSession() {
     const cfg = await getConfig();
     const s = await getSession();
     if (!cfg || !s) return null;
-    const skewMs = 60 * 1000; // refresh 1 min before expiry
-    if (Date.now() < (s.expires_at - skewMs)) return s;
-    const res = await fetch(`${cfg.url}/auth/v1/token?grant_type=refresh_token`, {
-      method: 'POST', headers: authHeaders(cfg),
-      body: JSON.stringify({ refresh_token: s.refresh_token })
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      // Refresh token revoked/expired — surface a re-login state, keep local data.
-      await setSession(null);
-      return null;
-    }
-    const fresh = toSession(json);
-    await setSession(fresh);
-    return fresh;
+    // Self-heal a stale/malformed session (missing refresh_token or user) left by an
+    // older build: clearing it forces a clean re-auth instead of a doomed `{}` refresh
+    // or a `s.user.id` crash downstream.
+    if (!Core.isValidSession(s)) { await setSession(null); return null; }
+    if (Date.now() < (s.expires_at - SKEW_MS)) return s;
+    return _refreshSession(cfg);
   }
 
   async function isLoggedIn() {

@@ -57,6 +57,13 @@
     return Array.from(map.values());
   }
 
+  // A session is only usable if it has the fields needed to authenticate AND refresh.
+  // A blob missing refresh_token or user is stale/malformed → caller should force re-auth
+  // rather than send a doomed `{refresh_token: undefined}` refresh or crash on `s.user.id`.
+  function isValidSession(s) {
+    return !!(s && s.access_token && s.refresh_token && s.user && s.user.id);
+  }
+
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   function ensureUuid(rec, genUuid) {
     if (rec.id && UUID_RE.test(rec.id)) return rec;
@@ -111,6 +118,7 @@
 
   return {
     stampRecord, stampChangedList, mergeRecordLWW, applyRemoteList, ensureUuid,
+    isValidSession,
     deriveEncKey, encryptSecret, decryptSecret,
     detectBackupVersion, mergeBackupBookmarks
   };

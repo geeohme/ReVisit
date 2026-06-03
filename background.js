@@ -41,8 +41,8 @@ const DEFAULT_DATA = {
       }
     },
     ollama: {
-      localEnabled: true,
-      localBaseUrl: 'http://localhost:11434',
+      localEnabled: false,
+      localBaseUrl: '',
       cloudEnabled: false,
       cloudApiKey: '',
       modelsLastUpdated: null
