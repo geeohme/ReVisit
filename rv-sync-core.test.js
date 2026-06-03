@@ -60,6 +60,16 @@ test('wrong password fails to decrypt', async () => {
   await assert.rejects(() => core.decryptSecret(enc, k2));
 });
 
+test('derived key is extractable and survives export/import (persistence across SW restart)', async () => {
+  const key = await core.deriveEncKey('pw', 'salt');
+  const enc = await core.encryptSecret('sk-persist-me', key);
+  // Simulate: export raw, persist, then re-import after a worker restart.
+  const raw = await crypto.subtle.exportKey('raw', key);
+  const reimported = await crypto.subtle.importKey('raw', new Uint8Array(raw), 'AES-GCM', false, ['encrypt', 'decrypt']);
+  const dec = await core.decryptSecret(enc, reimported);
+  assert.strictEqual(dec, 'sk-persist-me');
+});
+
 test('isValidSession: complete session is valid', () => {
   assert.strictEqual(core.isValidSession({ access_token: 'a', refresh_token: 'r', user: { id: 'u' } }), true);
 });

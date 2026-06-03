@@ -74,13 +74,17 @@
 
   async function signOut() {
     await setSession(null);
+    _encKey = null;
+    await chrome.storage.local.remove([SALT_KEY, ENCKEY_KEY]);
   }
 
   // Single-flight refresh: the cycle fires several authedFetch calls (e.g. 3 parallel
   // fetchSince in pullRemoteChanges) that each call ensureFreshSession. GoTrue rotates
   // refresh tokens, so concurrent refreshes with the same token make all-but-one fail
   // with "Refresh token is not valid". Coalesce them onto one in-flight promise.
-  const SKEW_MS = 60 * 1000; // refresh 1 min before expiry
+  // Refresh proactively, well before expiry, so the periodic alarm renews the token long
+  // before any request needs it — the user stays logged in without manual re-auth.
+  const SKEW_MS = 5 * 60 * 1000; // refresh up to 5 min before expiry
   let _refreshInFlight = null;
   function _refreshSession(cfg) {
     if (_refreshInFlight) return _refreshInFlight;
@@ -97,9 +101,15 @@
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) {
-          // Refresh token revoked/expired — surface a re-login state, keep local data.
-          await setSession(null);
-          return null;
+          // Only a definitive auth rejection means the refresh token is truly dead →
+          // require re-login. Transient failures (5xx / rate-limit) must NOT log the user
+          // out; keep the session and let the next cycle retry. (Network errors throw from
+          // fetch above and propagate without clearing the session — same intent.)
+          if (res.status === 400 || res.status === 401 || res.status === 403) {
+            await setSession(null);
+            return null;
+          }
+          throw new Error(`token refresh failed transiently (${res.status})`);
         }
         const fresh = toSession(json);
         // Carry forward fields the refresh response may omit, so we never store a partial session.
@@ -130,8 +140,12 @@
   }
 
   // ── settings-secret encryption key (derived from the login password) ──
-  const SALT_KEY = 'rvEncSalt';
-  let _encKey = null;  // CryptoKey, in-memory only (lost on worker sleep; re-derived at next sign-in)
+  const SALT_KEY   = 'rvEncSalt';
+  const ENCKEY_KEY = 'rvEncKeyRaw';  // base64 raw AES key, persisted so it survives SW restarts
+  let _encKey = null;                // in-memory CryptoKey cache
+
+  function _b64(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+  function _unb64(s) { return Uint8Array.from(atob(s), c => c.charCodeAt(0)); }
 
   async function ensureSaltRow(userId) {
     const res = await authedFetch(`/rest/v1/user_settings?user_id=eq.${userId}&select=enc_salt`, { method: 'GET' });
@@ -145,10 +159,24 @@
   async function deriveKeyForSession(password) {
     const s = await getSession(); if (!s || !s.user) return;
     const salt = await ensureSaltRow(s.user.id);
-    await chrome.storage.local.set({ [SALT_KEY]: salt });
     _encKey = await root.RvSyncCore.deriveEncKey(password, salt);
+    // Persist the raw key so secret sync keeps working across service-worker restarts
+    // without forcing a re-login (Option A: plaintext working copy is already local).
+    const raw = await crypto.subtle.exportKey('raw', _encKey);
+    await chrome.storage.local.set({ [SALT_KEY]: salt, [ENCKEY_KEY]: _b64(raw) });
   }
-  function getEncKey() { return _encKey; }
+
+  // Async: returns the cached key, else lazily re-imports the persisted raw key.
+  async function getEncKey() {
+    if (_encKey) return _encKey;
+    const r = await chrome.storage.local.get(ENCKEY_KEY);
+    if (r[ENCKEY_KEY]) {
+      try {
+        _encKey = await crypto.subtle.importKey('raw', _unb64(r[ENCKEY_KEY]), 'AES-GCM', false, ['encrypt', 'decrypt']);
+      } catch (e) { /* corrupt key blob — ignore, secrets just won't sync until re-login */ }
+    }
+    return _encKey || null;
+  }
 
   // ── PostgREST helpers ──
   async function authedFetch(path, opts = {}) {
@@ -286,7 +314,7 @@
 
   async function pushSettings() {
     const s = await ensureFreshSession(); if (!s) return;
-    const key = getEncKey();
+    const key = await getEncKey();
     const data = await getRvData();
     const settings = JSON.parse(JSON.stringify(data.settings || {}));
     const secrets = {};
@@ -310,7 +338,7 @@
     if (!res.ok) return;
     const rows = await res.json(); if (!rows.length) return;
     const remote = rows[0].data || {};
-    const key = getEncKey();
+    const key = await getEncKey();
     if (key && rows[0].secrets) {
       for (const path of SECRET_PATHS) {
         const enc = rows[0].secrets[path.join('.')];

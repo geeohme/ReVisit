@@ -75,11 +75,14 @@
   function _unb64(s) { return Uint8Array.from(atob(s), c => c.charCodeAt(0)); }
   const _enc = new TextEncoder(); const _dec = new TextDecoder();
 
+  // extractable=true so the caller can persist the derived key locally and re-import it
+  // after a service-worker restart (avoids re-deriving — i.e. re-login — to sync secrets).
+  // Safe under the "plaintext working copy is already local" model.
   async function deriveEncKey(password, salt) {
     const baseKey = await crypto.subtle.importKey('raw', _enc.encode(password), 'PBKDF2', false, ['deriveKey']);
     return crypto.subtle.deriveKey(
       { name: 'PBKDF2', salt: _enc.encode(salt), iterations: 200000, hash: 'SHA-256' },
-      baseKey, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+      baseKey, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
     );
   }
   async function encryptSecret(plaintext, key) {
