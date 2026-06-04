@@ -220,13 +220,20 @@
 
   // bookmark <-> row mapping (camelCase local <-> snake_case Postgres)
   function bookmarkToRow(b, userId) {
+    // Every column MUST be present with a non-undefined value: JSON.stringify drops
+    // undefined-valued keys, and PostgREST's bulk upsert rejects a batch whose rows
+    // have mismatched key sets with 400 PGRST102 ("All object keys must match").
+    // Legacy records (pre-sync, no updatedAt/summary/etc.) would otherwise omit keys.
+    // `updated_at` is NOT NULL in the schema, so it must always be a real timestamp;
+    // fall back to the bookmark's added time, then to now.
     return {
       id: b.id, legacy_id: b.legacyId || null, user_id: userId,
-      url: b.url, title: b.title, category: b.category, summary: b.summary,
+      url: b.url ?? null, title: b.title ?? null, category: b.category ?? null, summary: b.summary ?? null,
       tags: b.tags || [], user_notes: b.userNotes || '', added_timestamp: b.addedTimestamp || null,
-      revisit_by: b.revisitBy || null, status: b.status, history: b.history || [],
+      revisit_by: b.revisitBy || null, status: b.status ?? null, history: b.history || [],
       is_youtube: !!b.isYouTube, metadata: b.metadata || {},
-      updated_at: b.updatedAt, deleted_at: b.deletedAt || null
+      updated_at: b.updatedAt || (b.addedTimestamp ? new Date(b.addedTimestamp).toISOString() : new Date().toISOString()),
+      deleted_at: b.deletedAt || null
     };
   }
   function rowToBookmark(r) {
