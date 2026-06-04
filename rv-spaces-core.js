@@ -76,7 +76,31 @@
     };
   }
 
+  // v≤2 legacy file: stamp the chosen/created target Space onto every imported record.
+  function assignTargetSpace(payload, targetSpaceId) {
+    return {
+      bookmarks: (payload.bookmarks || []).map(b => ({ ...b, spaceId: targetSpaceId })),
+      categories: (payload.categories || []).map(c => ({ ...c, spaceId: targetSpaceId })),
+    };
+  }
+
+  // v3 restore merge. spaces by id (LWW), categories by composite (spaceId,name) LWW,
+  // bookmarks via mergeBackupBookmarks. Returns merged lists + the set of restored
+  // Space ids to auto-enable on this install.
+  function mergeRestoredV3(current, backup, isoNow, genUuid) {
+    const incomingSpaces = (backup.spaces || []).map(s => ({ ...s, _dirty: true, updatedAt: s.updatedAt || isoNow }));
+    const mergedSpaces = core.applyRemoteList(current.spaces || [], incomingSpaces, 'id');
+    const incomingCats = (backup.categories || []).map(c => ({ ...c, _dirty: true, updatedAt: c.updatedAt || isoNow }));
+    const mergedCats = core.applyRemoteList(current.categories || [], incomingCats, catKey);
+    // v3 bookmarks carry stable ids + spaceIds; use id-keyed LWW so ids are preserved.
+    const incomingBks = (backup.bookmarks || []).map(b => ({ ...b, _dirty: true, updatedAt: b.updatedAt || isoNow }));
+    const mergedBookmarks = core.applyRemoteList(current.bookmarks || [], incomingBks, 'id');
+    const enableSpaceIds = (backup.spaces || []).filter(s => !s.deletedAt).map(s => s.id);
+    return { spaces: mergedSpaces, categories: mergedCats, bookmarks: mergedBookmarks, enableSpaceIds };
+  }
+
   return { DEFAULT_SPACE_ID, catKey, defaultRvLocal,
            nextSpacePriority, makeSpace, liveSpaces, tombstoneSpace,
-           migrateToDefaultSpace, setupGateDecision, buildBackupV3 };
+           migrateToDefaultSpace, setupGateDecision, buildBackupV3,
+           assignTargetSpace, mergeRestoredV3 };
 });

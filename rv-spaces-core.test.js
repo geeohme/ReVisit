@@ -115,3 +115,38 @@ test('buildBackupV3: emits version 3 with spaces + spaced bookmarks/categories, 
   assert.deepStrictEqual(out.transcripts, { foo: 'transcript' });
   assert.ok(!('enabledSpaceIds' in out) && !('defaultSpaceId' in out) && !('lastUsedListSpaceId' in out) && !('rvLocal' in out));
 });
+
+const core = require('./rv-sync-core.js'); // for mergeBackupBookmarks parity in assertions
+const genUuid = () => '00000000-0000-4000-8000-000000000000';
+
+test('assignTargetSpace: stamps spaceId onto ALL legacy bookmarks and categories', () => {
+  const out = spaces.assignTargetSpace(
+    { bookmarks: [{ id: 'b1' }, { id: 'b2' }], categories: [{ name: 'Articles', priority: 1 }] },
+    'target-id');
+  assert.ok(out.bookmarks.every(b => b.spaceId === 'target-id'));
+  assert.ok(out.categories.every(c => c.spaceId === 'target-id'));
+});
+
+test('mergeRestoredV3: merges spaces by id, categories by composite key, returns enable ids', () => {
+  const current = {
+    spaces: [{ id: 's1', name: 'S1', priority: 1, updatedAt: '2026-01-01T00:00:00.000Z' }],
+    categories: [{ spaceId: 's1', name: 'Articles', priority: 1, updatedAt: '2026-01-01T00:00:00.000Z' }],
+    bookmarks: [],
+  };
+  const backup = {
+    version: 3,
+    spaces: [
+      { id: 's1', name: 'S1 renamed', priority: 1, updatedAt: '2026-05-05T00:00:00.000Z' }, // newer → wins
+      { id: 's2', name: 'S2', priority: 2, updatedAt: '2026-05-05T00:00:00.000Z' },          // new
+    ],
+    categories: [{ spaceId: 's2', name: 'Articles', priority: 1, updatedAt: '2026-05-05T00:00:00.000Z' }], // distinct identity
+    bookmarks: [{ id: 'b9', spaceId: 's2', url: 'u9', updatedAt: '2026-05-05T00:00:00.000Z' }],
+  };
+  const out = spaces.mergeRestoredV3(current, backup, '2026-09-09T00:00:00.000Z', genUuid);
+  assert.strictEqual(out.spaces.find(s => s.id === 's1').name, 'S1 renamed'); // LWW
+  assert.ok(out.spaces.find(s => s.id === 's2'));
+  // both "Articles" survive because identity is (spaceId, name)
+  assert.strictEqual(out.categories.filter(c => c.name === 'Articles').length, 2);
+  assert.ok(out.bookmarks.find(b => b.id === 'b9'));
+  assert.deepStrictEqual([...out.enableSpaceIds].sort(), ['s1', 's2']); // all restored Space ids
+});
