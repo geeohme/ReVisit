@@ -31,6 +31,23 @@
     return (spacesList || []).map(s => s.id === id ? { ...s, deletedAt: isoNow, updatedAt: isoNow } : s);
   }
 
+  // Assign every space-less bookmark + category to the reserved "default-space"
+  // bucket, and create that Space record IFF one does not already exist. The
+  // bucket id is the hard-coded literal (not a fresh UUID) so two browsers that
+  // migrate independently produce the SAME id and LWW converges instead of forking.
+  // Pure: returns a new shallow-cloned data object; only sets `spaceId` where absent.
+  function migrateToDefaultSpace(data, chosenName, isoNow) {
+    const out = { ...data };
+    out.bookmarks = (data.bookmarks || []).map(b => b.spaceId ? b : { ...b, spaceId: DEFAULT_SPACE_ID });
+    out.categories = (data.categories || []).map(c => c.spaceId ? c : { ...c, spaceId: DEFAULT_SPACE_ID });
+    const existing = (data.spaces || []).find(s => s.id === DEFAULT_SPACE_ID);
+    out.spaces = existing
+      ? (data.spaces || []).slice()
+      : [ ...(data.spaces || []), makeSpace(DEFAULT_SPACE_ID, chosenName, 1, isoNow) ];
+    return out;
+  }
+
   return { DEFAULT_SPACE_ID, catKey, defaultRvLocal,
-           nextSpacePriority, makeSpace, liveSpaces, tombstoneSpace };
+           nextSpacePriority, makeSpace, liveSpaces, tombstoneSpace,
+           migrateToDefaultSpace };
 });

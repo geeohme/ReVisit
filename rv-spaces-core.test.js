@@ -44,3 +44,32 @@ test('tombstoneSpace: marks deletedAt/updatedAt on the matching id only', () => 
   assert.strictEqual(out.find(s => s.id === 'a').deletedAt, '2026-09-09T00:00:00.000Z');
   assert.strictEqual(out.find(s => s.id === 'b').deletedAt, undefined);
 });
+
+test('migrateToDefaultSpace: buckets space-less categories+bookmarks and creates the default Space', () => {
+  const data = {
+    bookmarks: [{ id: 'b1', url: 'u1' }, { id: 'b2', url: 'u2' }],
+    categories: [{ name: 'Articles', priority: 1 }],
+    spaces: [],
+  };
+  const out = spaces.migrateToDefaultSpace(data, 'My Bookmarks', '2026-09-09T00:00:00.000Z');
+  assert.strictEqual(out.spaces.length, 1);
+  assert.deepStrictEqual(out.spaces[0], {
+    id: 'default-space', name: 'My Bookmarks', priority: 1, updatedAt: '2026-09-09T00:00:00.000Z'
+  });
+  assert.ok(out.bookmarks.every(b => b.spaceId === 'default-space'));
+  assert.ok(out.categories.every(c => c.spaceId === 'default-space'));
+});
+
+test('migrateToDefaultSpace: idempotent — only fills missing spaceId, reuses existing default Space', () => {
+  const data = {
+    bookmarks: [{ id: 'b1', url: 'u1', spaceId: 'default-space' }, { id: 'b2', url: 'u2' }],
+    categories: [{ name: 'Articles', priority: 1, spaceId: 'default-space' }],
+    spaces: [{ id: 'default-space', name: 'Existing', priority: 1, updatedAt: '2026-01-01T00:00:00.000Z' }],
+  };
+  const out = spaces.migrateToDefaultSpace(data, 'Ignored', '2026-09-09T00:00:00.000Z');
+  assert.strictEqual(out.spaces.length, 1);
+  assert.strictEqual(out.spaces[0].name, 'Existing');        // not re-created / not renamed
+  assert.strictEqual(out.spaces[0].updatedAt, '2026-01-01T00:00:00.000Z');
+  assert.ok(out.bookmarks.every(b => b.spaceId === 'default-space'));
+  assert.strictEqual(out.bookmarks[0].spaceId, 'default-space'); // already-set is preserved
+});
