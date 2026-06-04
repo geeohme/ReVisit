@@ -341,9 +341,10 @@ function openDetailOverlay(bookmark) {
   document.getElementById('detail-revisit').value = bookmark.revisitBy.split('T')[0];
   document.getElementById('detail-status').value = bookmark.status;
 
-  // Categories Dropdown
+  // Categories Dropdown — scoped to THIS bookmark's Space so a reassign can't pick
+  // a category name from another Space (which would orphan the (spaceId, name) pair).
   const catSelect = document.getElementById('detail-category');
-  catSelect.innerHTML = categories.map(c => `<option value="${c.name}" ${c.name === bookmark.category ? 'selected' : ''}>${c.name}</option>`).join('');
+  catSelect.innerHTML = categories.filter(c => c.spaceId === bookmark.spaceId).map(c => `<option value="${c.name}" ${c.name === bookmark.category ? 'selected' : ''}>${c.name}</option>`).join('');
 
   // Tags
   renderTags(bookmark.tags);
