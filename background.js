@@ -7,6 +7,7 @@ importScripts('sync.js');
 
 // Default data structure
 const DEFAULT_DATA = {
+  spaces: [],
   bookmarks: [],
   categories: [
     { name: "Articles", priority: 1 },
@@ -640,7 +641,8 @@ async function saveStorageData(data, opts = {}) {
     const now = new Date().toISOString();
     const prev = (await chrome.storage.local.get('rvData')).rvData || {};
     data.bookmarks = self.RvSyncCore.stampChangedList(prev.bookmarks || [], data.bookmarks || [], 'id', now);
-    data.categories = self.RvSyncCore.stampChangedList(prev.categories || [], data.categories || [], 'name', now);
+    data.categories = self.RvSyncCore.stampChangedList(prev.categories || [], data.categories || [], (c) => c.spaceId + ' ' + c.name, now);
+    data.spaces = self.RvSyncCore.stampChangedList(prev.spaces || [], data.spaces || [], 'id', now);
   }
   await chrome.storage.local.set({ rvData: data });
   if (!opts.fromRemote && self.RvSync && (await self.RvSync.isLoggedIn())) {
