@@ -1351,8 +1351,8 @@ async function importData() {
       }
       if (Array.isArray(backupData.categories)) {
         const migrated = migrateCategoriesFormat(backupData.categories);
-        const map = new Map(categories.map(c => [c.name, c]));
-        migrated.forEach(c => { if (!map.has(c.name)) map.set(c.name, { ...c, _dirty: true, updatedAt: new Date().toISOString() }); });
+        const map = new Map(categories.map(c => [catKey(c), c]));
+        migrated.forEach(c => { if (!map.has(catKey(c))) map.set(catKey(c), { ...c, _dirty: true, updatedAt: new Date().toISOString() }); });
         categories = Array.from(map.values());
       }
       if (backupData.transcripts && typeof backupData.transcripts === 'object') {
