@@ -25,6 +25,7 @@ create table if not exists public.bookmarks (
 );
 create index if not exists bookmarks_user_updated on public.bookmarks (user_id, updated_at);
 create index if not exists bookmarks_user_legacy  on public.bookmarks (user_id, legacy_id);
+alter table public.bookmarks add column if not exists space_id text;
 
 -- ── categories ──────────────────────────────────────────────
 create table if not exists public.categories (
@@ -33,8 +34,34 @@ create table if not exists public.categories (
   priority    int,
   updated_at  timestamptz not null,
   deleted_at  timestamptz,
+  space_id    text,
   primary key (user_id, name)
 );
+-- Spaces migration (ordering is mandatory: add+backfill+not-null BEFORE the PK swap,
+-- so no existing row violates (user_id, space_id, name) mid-change).
+alter table public.categories add column if not exists space_id text;
+update public.categories set space_id = 'default-space' where space_id is null;
+alter table public.categories alter column space_id set not null;
+do $$
+begin
+  if exists (select 1 from pg_constraint where conname = 'categories_pkey'
+             and conrelid = 'public.categories'::regclass) then
+    alter table public.categories drop constraint categories_pkey;
+  end if;
+end $$;
+alter table public.categories add constraint categories_pkey primary key (user_id, space_id, name);
+
+-- ── spaces ──────────────────────────────────────────────────
+create table if not exists public.spaces (
+  id          text not null,
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  name        text,
+  priority    int,
+  updated_at  timestamptz not null,
+  deleted_at  timestamptz,
+  primary key (user_id, id)
+);
+create index if not exists spaces_user_updated on public.spaces (user_id, updated_at);
 
 -- ── transcripts ─────────────────────────────────────────────
 create table if not exists public.transcripts (
@@ -62,11 +89,12 @@ alter table public.bookmarks     enable row level security;
 alter table public.categories    enable row level security;
 alter table public.transcripts   enable row level security;
 alter table public.user_settings enable row level security;
+alter table public.spaces         enable row level security;
 
 do $$
 declare t text;
 begin
-  foreach t in array array['bookmarks','categories','transcripts','user_settings'] loop
+  foreach t in array array['bookmarks','categories','transcripts','user_settings','spaces'] loop
     execute format('drop policy if exists rls_select on public.%I;', t);
     execute format('drop policy if exists rls_modify on public.%I;', t);
     execute format($f$create policy rls_select on public.%I for select using (user_id = auth.uid());$f$, t);
