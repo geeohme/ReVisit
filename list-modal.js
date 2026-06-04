@@ -1129,17 +1129,13 @@ async function saveSettings() {
     }
   };
 
-  // Save Ollama settings. Local is enabled only when the user actually provides a URL;
-  // otherwise it defaults off with an empty URL (no implicit localhost).
-  const ollamaLocalUrl = document.getElementById('ollama-local-url').value.trim();
-  const ollamaCloudKey = document.getElementById('ollama-cloud-api-key').value.trim();
-  settings.ollama = {
-    localEnabled: !!ollamaLocalUrl,
-    localBaseUrl: ollamaLocalUrl,
-    cloudEnabled: !!ollamaCloudKey,
-    cloudApiKey: ollamaCloudKey,
-    modelsLastUpdated: settings.ollama?.modelsLastUpdated || null
-  };
+  // Save Ollama settings via the shared helper (same logic as onboarding).
+  // Local is enabled only when a URL is provided; cloud only when a key is.
+  settings.ollama = buildOllamaSettings(
+    document.getElementById('ollama-local-url').value,
+    document.getElementById('ollama-cloud-api-key').value,
+    settings.ollama?.modelsLastUpdated
+  );
 
   await saveData();
   showToast('✅ Settings saved successfully!', 'success');

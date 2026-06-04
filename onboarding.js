@@ -1,6 +1,24 @@
 let currentStep = 1;
 let modelsData = null; // Store fetched models data
 
+// Supabase endpoint — MUST stay in sync with list-modal.js.
+const SUPABASE_URL = 'https://supabase.generationai.cloud';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzgwNDM0NDM2LCJleHAiOjE5MzgxMTQ0MzZ9.nTULGxKu8CDVjpmS9-6Efc3zoUlKOhfrwOTHurKmDxo';
+
+async function ensureSyncConfig() {
+  try {
+    await chrome.runtime.sendMessage({ action: 'setSyncConfig', url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY });
+  } catch (e) { /* background may be cold; sign-in will surface a real error */ }
+}
+
+function setAccountStatus(text, kind) {
+  const el = document.getElementById('account-sync-status');
+  if (!el) return;
+  el.textContent = text || '';
+  el.classList.toggle('active', !!text);
+  el.style.color = kind === 'error' ? '#c0392b' : '#4a90e2';
+}
+
 function nextStep() {
   if (currentStep < 5) {
     document.getElementById(`step-${currentStep}`).classList.remove('active');
@@ -159,6 +177,59 @@ function getProviderDisplayName(provider) {
   return names[provider] || provider.charAt(0).toUpperCase() + provider.slice(1);
 }
 
+function showWizardFromGate() {
+  document.getElementById('account-gate').style.display = 'none';
+  document.getElementById('wizard').style.display = '';
+}
+
+function showLoginPanel() {
+  document.getElementById('account-choice').style.display = 'none';
+  document.getElementById('account-login').style.display = '';
+}
+
+function showAccountChoice() {
+  document.getElementById('account-login').style.display = 'none';
+  document.getElementById('account-choice').style.display = '';
+  setAccountStatus('', null);
+}
+
+async function handleGateSignIn() {
+  const email = document.getElementById('account-email').value.trim();
+  const password = document.getElementById('account-password').value;
+  if (!email || !password) { setAccountStatus('Enter email and password.', 'error'); return; }
+
+  const signinBtn = document.getElementById('account-signin-btn');
+  signinBtn.disabled = true;
+  try {
+    setAccountStatus('Signing in…', 'info');
+    await ensureSyncConfig();
+    const res = await chrome.runtime.sendMessage({ action: 'authSignIn', email, password });
+    if (!res || !res.success) throw new Error((res && res.error) || 'Sign-in failed');
+
+    setAccountStatus('Downloading your data…', 'info');
+    // NOTE: syncCycle() swallows its own internal errors, so syncNow returns
+    // { success: true } even if a pull failed — this check only catches a
+    // dropped message or a future throwing handler. Eventual consistency comes
+    // from the background refresh alarm + the list page storage live-refresh.
+    const syncRes = await chrome.runtime.sendMessage({ action: 'syncNow' });
+    if (!syncRes || !syncRes.success) throw new Error((syncRes && syncRes.error) || 'Sync failed');
+
+    // Persist onboardingComplete AFTER the sync round-trip so a pulled settings
+    // record can't clobber it (pullSettings merges remote over local).
+    const stored = await chrome.storage.local.get('rvData');
+    const rvData = stored.rvData || { bookmarks: [], categories: [], settings: {} };
+    rvData.settings = rvData.settings || {};
+    rvData.settings.onboardingComplete = true;
+    await chrome.storage.local.set({ rvData });
+
+    setAccountStatus('Done ✓', 'info');
+    window.location.href = 'list-modal.html';
+  } catch (e) {
+    setAccountStatus(`❌ ${e.message}`, 'error');
+    signinBtn.disabled = false;
+  }
+}
+
 async function completeOnboarding() {
   const userName = document.getElementById('user-name').value.trim();
   const categoryNames = Array.from(new Set(
@@ -225,7 +296,11 @@ async function completeOnboarding() {
             options: { temperature: 0.7, maxTokens: 2500 }
           }
         }
-      }
+      },
+      ollama: buildOllamaSettings(
+        document.getElementById('ollama-local-url').value,
+        document.getElementById('ollama-cloud-api-key').value
+      )
     }
   };
 
@@ -235,6 +310,16 @@ async function completeOnboarding() {
 
 // Add event listeners when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
+  // Account gate
+  const haveAccountBtn = document.getElementById('gate-have-account-btn');
+  const newUserBtn     = document.getElementById('gate-new-user-btn');
+  const accountBackBtn = document.getElementById('account-back-btn');
+  const accountSigninBtn = document.getElementById('account-signin-btn');
+  if (haveAccountBtn) haveAccountBtn.addEventListener('click', showLoginPanel);
+  if (newUserBtn)     newUserBtn.addEventListener('click', showWizardFromGate);
+  if (accountBackBtn) accountBackBtn.addEventListener('click', showAccountChoice);
+  if (accountSigninBtn) accountSigninBtn.addEventListener('click', handleGateSignIn);
+
   // Step 1 buttons
   const nextBtn1 = document.getElementById('next-btn-1');
   if (nextBtn1) {

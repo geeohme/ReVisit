@@ -76,6 +76,10 @@
     await setSession(null);
     _encKey = null;
     await chrome.storage.local.remove([SALT_KEY, ENCKEY_KEY]);
+    // Force the next login to pull-before-push again (re-hydrate from the server)
+    // so a different/returning account can't be clobbered by stale local state.
+    const st = await getSyncState();
+    await setSyncState({ ...st, hydrated: false });
   }
 
   // Single-flight refresh: the cycle fires several authedFetch calls (e.g. 3 parallel
@@ -331,7 +335,11 @@
       for (const path of SECRET_PATHS) setPath(settings, path, '');
     }
     const row = { user_id: s.user.id, data: settings, updated_at: new Date().toISOString() };
-    if (key) row.secrets = secrets;
+    // Only write `secrets` when we actually have encrypted values. Uploading an
+    // empty {} would overwrite (wipe) the server's stored secrets via the
+    // merge-duplicates upsert — e.g. a fresh device whose local secrets are still
+    // empty must NOT clobber the user's encrypted keys.
+    if (key && Object.keys(secrets).length > 0) row.secrets = secrets;
     await upsertRows('user_settings', [row]);
   }
 
@@ -368,6 +376,15 @@
   let _rerun = false;
   async function _runCycle() {
     try {
+      // Bootstrap: on this device's FIRST sync, pull BEFORE push. Local settings
+      // and secrets start empty on a fresh install; pushing them first would
+      // upsert an empty `secrets`/default `data` over the server's, wiping the
+      // user's encrypted API keys before pullSettings could restore them.
+      const st = await getSyncState();
+      if (!st.hydrated) {
+        await pullRemoteChanges(); await pullSettings();
+        await setSyncState({ ...(await getSyncState()), hydrated: true });
+      }
       await pushLocalChanges(); await pushSettings();
       await pullRemoteChanges(); await pullSettings();
     } catch (e) { console.warn('syncCycle failed (will retry):', e.message); }

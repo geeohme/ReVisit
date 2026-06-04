@@ -106,6 +106,36 @@
 <body>
   <div class="onboarding-container">
     <h1>Welcome to ReVisit</h1>
+
+    <div id="account-gate">
+      <div id="account-choice">
+        <h2>Do you already have a ReVisit account?</h2>
+        <p>Sign in to restore your bookmarks, categories, and settings from the cloud.</p>
+        <div class="button-group" style="justify-content:flex-start;">
+          <button class="btn-primary" id="gate-have-account-btn">Yes, sign in</button>
+          <button class="btn-secondary" id="gate-new-user-btn">No, I'm new</button>
+        </div>
+      </div>
+
+      <div id="account-login" style="display:none;">
+        <h2>Sign in</h2>
+        <div class="settings-field">
+          <label for="account-email">Email</label>
+          <input type="email" id="account-email" placeholder="you@example.com">
+        </div>
+        <div class="settings-field">
+          <label for="account-password">Password</label>
+          <input type="password" id="account-password" placeholder="Password">
+        </div>
+        <div class="loading-message" id="account-sync-status"></div>
+        <div class="button-group">
+          <button class="btn-secondary" id="account-back-btn">Back</button>
+          <button class="btn-primary" id="account-signin-btn">Sign In</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="wizard" style="display:none;">
     <div class="step-indicator">
       <span class="step-dot active" data-step="1"></span>
       <span class="step-dot" data-step="2"></span>
@@ -177,6 +207,21 @@
             <li>Paste it above</li>
           </ol>
           <p style="font-size: 12px; margin-bottom: 0;"><strong>Note:</strong> Save your key immediately - it cannot be retrieved later!</p>
+        </div>
+      </div>
+
+      <div class="api-key-section" style="margin-bottom: 25px;">
+        <h3 style="margin-bottom: 10px;">🦙 Ollama (Optional)</h3>
+        <p style="margin-bottom: 10px;">Use a local Ollama instance and/or Ollama Cloud. Leave blank to skip — you can add these later in Settings.</p>
+        <div class="settings-field">
+          <label for="ollama-local-url">Local Ollama URL</label>
+          <input type="text" id="ollama-local-url" placeholder="http://localhost:11434">
+          <div class="alert" style="background:#f8f9fa;border-color:#ddd;font-size:12px;">Leave blank to disable local Ollama.</div>
+        </div>
+        <div class="settings-field">
+          <label for="ollama-cloud-api-key">Ollama Cloud API Key</label>
+          <input type="password" id="ollama-cloud-api-key" placeholder="Ollama Cloud API key">
+          <div class="alert" style="background:#f8f9fa;border-color:#ddd;font-size:12px;">API key for Ollama Cloud (ollama.com). Leave blank to disable.</div>
         </div>
       </div>
 
@@ -256,8 +301,10 @@
         <button class="btn-primary" id="complete-btn">Complete Setup</button>
       </div>
     </div>
+    </div>
   </div>
 
+  <script src="utils.js"></script>
   <script src="onboarding.js"></script>
 </body>
 </html>

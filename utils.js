@@ -54,7 +54,29 @@ function extractVideoId(url) {
   }
 }
 
+/**
+ * Build the canonical `settings.ollama` object from raw field values.
+ * Local Ollama is enabled only when a URL is provided; cloud only when a key
+ * is provided. `prevModelsLastUpdated` preserves any existing timestamp.
+ * Pure function — no DOM or storage access.
+ * @param {string} localUrl - Local Ollama base URL (may be empty/null)
+ * @param {string} cloudKey - Ollama Cloud API key (may be empty/null)
+ * @param {string|null} prevModelsLastUpdated - Existing modelsLastUpdated to preserve
+ * @returns {{localEnabled:boolean, localBaseUrl:string, cloudEnabled:boolean, cloudApiKey:string, modelsLastUpdated:(string|null)}}
+ */
+function buildOllamaSettings(localUrl, cloudKey, prevModelsLastUpdated = null) {
+  const url = (localUrl || '').trim();
+  const key = (cloudKey || '').trim();
+  return {
+    localEnabled: !!url,
+    localBaseUrl: url,
+    cloudEnabled: !!key,
+    cloudApiKey: key,
+    modelsLastUpdated: prevModelsLastUpdated || null
+  };
+}
+
 // Export for use in other scripts
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { sendMessageWithRetry, isYouTubeUrl, extractVideoId };
+  module.exports = { sendMessageWithRetry, isYouTubeUrl, extractVideoId, buildOllamaSettings };
 }
