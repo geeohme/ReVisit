@@ -387,6 +387,18 @@
       }
       await pushLocalChanges(); await pushSettings();
       await pullRemoteChanges(); await pullSettings();
+      // Local now mirrors cloud (cloud ∪ local). Collapse exact-URL duplicates:
+      // survivors gap-filled, losers tombstoned. The follow-up push propagates the
+      // survivor updates + tombstones to the cloud and (via pull) to other devices,
+      // so a duplicate created on another device is cleaned within one cycle.
+      const ddData = await getRvData();
+      const { list: ddList, changed: ddChanged } =
+        Core.dedupeBookmarksByUrl(ddData.bookmarks || [], new Date().toISOString());
+      if (ddChanged) {
+        ddData.bookmarks = ddList;
+        await setRvData(ddData);
+        await pushLocalChanges();
+      }
     } catch (e) { console.warn('syncCycle failed (will retry):', e.message); }
   }
   async function syncCycle() {
