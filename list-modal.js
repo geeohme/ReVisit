@@ -2,6 +2,9 @@
 let bookmarks = [];
 let categories = [];
 let settings = {};
+let spaces = [];
+let rvLocal = { enabledSpaceIds: [], defaultSpaceId: '', lastUsedListSpaceId: '' };
+let activeSpaceId = '';
 let selectedCategory = 'All';
 let searchQuery = '';
 let statusFilter = 'Active';
@@ -63,6 +66,8 @@ function getDefaultSettings() {
   };
 }
 
+function catKey(c) { return c.spaceId + ' ' + c.name; }
+
 async function init() {
   // Theme Initialization
   const savedTheme = localStorage.getItem('theme') || 'light';
@@ -70,11 +75,15 @@ async function init() {
   document.getElementById('checkbox').checked = savedTheme === 'dark';
 
   // Load data
-  const data = await chrome.storage.local.get('rvData');
-  const rvData = data.rvData || { bookmarks: [], categories: [], settings: {} };
+  const data = await chrome.storage.local.get(['rvData', 'rvLocal']);
+  const rvData = data.rvData || { bookmarks: [], categories: [], settings: {}, spaces: [] };
   bookmarks = rvData.bookmarks || [];
   categories = migrateCategoriesFormat(rvData.categories || []);
   settings = rvData.settings || {};
+  spaces = rvData.spaces || [];
+  rvLocal = data.rvLocal || { enabledSpaceIds: [], defaultSpaceId: '', lastUsedListSpaceId: '' };
+  const liveSpaces = spaces.filter(s => !s.deletedAt).sort((a, b) => (a.priority || 0) - (b.priority || 0));
+  activeSpaceId = rvLocal.lastUsedListSpaceId || rvLocal.defaultSpaceId || (liveSpaces[0] && liveSpaces[0].id) || '';
 
   // Initial Render
   renderCategories();
@@ -94,11 +103,13 @@ async function init() {
     // strand the flag, and a background pull landing mid-save can't be suppressed.
     // (Errs toward an extra harmless render, never a missed update.)
     const same = JSON.stringify(nv.bookmarks || []) === JSON.stringify(bookmarks)
-              && JSON.stringify(nv.categories || []) === JSON.stringify(categories);
+              && JSON.stringify(nv.categories || []) === JSON.stringify(categories)
+              && JSON.stringify(nv.spaces || []) === JSON.stringify(spaces);
     if (same) return;
     bookmarks = nv.bookmarks || [];
     categories = migrateCategoriesFormat(nv.categories || []);
     settings = nv.settings || {};
+    spaces = nv.spaces || [];
     renderCategories();
     renderLinks();
   });
@@ -231,15 +242,16 @@ function renderCategories() {
   // "All" Category
   const allItem = document.createElement('div');
   allItem.className = `category-item ${selectedCategory === 'All' ? 'active' : ''}`;
-  allItem.innerHTML = `<span class="category-name">All</span><span class="category-count">(${bookmarks.length})</span>`;
+  allItem.innerHTML = `<span class="category-name">All</span><span class="category-count">(${bookmarks.filter(b => b.spaceId === activeSpaceId && !b.deletedAt).length})</span>`;
   allItem.addEventListener('click', () => selectCategory('All'));
   container.appendChild(allItem);
 
-  // Dynamic Categories
-  const sortedCategories = [...categories].sort((a, b) => a.priority - b.priority);
+  // Dynamic Categories — scoped to the active Space.
+  const scoped = categories.filter(c => c.spaceId === activeSpaceId);
+  const sortedCategories = [...scoped].sort((a, b) => a.priority - b.priority);
   sortedCategories.forEach(cat => {
     const catName = cat.name;
-    const count = bookmarks.filter(b => b.category === catName).length;
+    const count = bookmarks.filter(b => b.spaceId === activeSpaceId && b.category === catName).length;
     const item = document.createElement('div');
     item.className = `category-item ${selectedCategory === catName ? 'active' : ''}`;
     item.innerHTML = `<span class="category-name">${catName}</span><span class="category-count">(${count})</span>`;
@@ -260,6 +272,7 @@ function renderLinks() {
 
   let filtered = bookmarks.filter(b => {
     if (b.deletedAt) return false; // hide soft-deleted (tombstoned) bookmarks
+    if (b.spaceId !== activeSpaceId) return false; // show only the active Space
     if (selectedCategory !== 'All' && b.category !== selectedCategory) return false;
     if (statusFilter !== 'All' && b.status !== statusFilter) return false;
     if (searchQuery) {
@@ -644,8 +657,9 @@ async function saveData() {
   const now = new Date().toISOString();
   const prev = (await chrome.storage.local.get('rvData')).rvData || {};
   bookmarks = RvSyncCore.stampChangedList(prev.bookmarks || [], bookmarks, 'id', now);
-  categories = RvSyncCore.stampChangedList(prev.categories || [], categories, 'name', now);
-  await chrome.storage.local.set({ rvData: { bookmarks, categories, settings } });
+  categories = RvSyncCore.stampChangedList(prev.categories || [], categories, catKey, now);
+  spaces = RvSyncCore.stampChangedList(prev.spaces || [], spaces, 'id', now);
+  await chrome.storage.local.set({ rvData: { bookmarks, categories, settings, spaces } });
   // Trigger a push if logged in (fire-and-forget via background).
   chrome.runtime.sendMessage({ action: 'syncPush' }).catch(() => {});
 }
@@ -1149,17 +1163,20 @@ function renderCategoriesSettings() {
   const container = document.getElementById('categories-settings-list');
   container.innerHTML = '';
 
-  // Sort categories by priority
-  const sortedCategories = [...categories].sort((a, b) => a.priority - b.priority);
+  // Sort categories by priority — scoped to the active Space.
+  const sortedCategories = [...categories]
+    .filter(c => c.spaceId === activeSpaceId)
+    .sort((a, b) => a.priority - b.priority);
 
   sortedCategories.forEach((cat, index) => {
     const catName = typeof cat === 'string' ? cat : cat.name;
-    const count = bookmarks.filter(b => b.category === catName).length;
+    const count = bookmarks.filter(b => b.spaceId === activeSpaceId && b.category === catName).length;
 
     const item = document.createElement('div');
     item.className = 'category-settings-item';
     item.draggable = true;
     item.dataset.categoryName = catName;
+    item.dataset.spaceId = cat.spaceId;
     item.dataset.categoryIndex = index;
 
     item.innerHTML = `
@@ -1223,21 +1240,19 @@ function handleDrop(e) {
   if (draggedElement !== this) {
     const draggedCatName = draggedElement.dataset.categoryName;
     const targetCatName = this.dataset.categoryName;
+    const sid = this.dataset.spaceId;
 
-    const draggedCategory = categories.find(cat => (typeof cat === 'string' ? cat : cat.name) === draggedCatName);
-    const targetCategory = categories.find(cat => (typeof cat === 'string' ? cat : cat.name) === targetCatName);
+    const inSpace = categories.filter(c => c.spaceId === sid);
+    const draggedCategory = inSpace.find(c => c.name === draggedCatName);
+    const targetCategory  = inSpace.find(c => c.name === targetCatName);
 
     if (draggedCategory && targetCategory) {
-      const draggedIndex = categories.findIndex(cat => (typeof cat === 'string' ? cat : cat.name) === draggedCatName);
-      categories.splice(draggedIndex, 1);
-
-      const targetIndex = categories.findIndex(cat => (typeof cat === 'string' ? cat : cat.name) === targetCatName);
-      categories.splice(targetIndex, 0, draggedCategory);
-
-      categories.forEach((cat, index) => {
-        cat.priority = index + 1;
-      });
-
+      const reordered = inSpace.slice();
+      const di = reordered.findIndex(c => c.name === draggedCatName);
+      reordered.splice(di, 1);
+      const ti = reordered.findIndex(c => c.name === targetCatName);
+      reordered.splice(ti, 0, draggedCategory);
+      reordered.forEach((c, i) => { c.priority = i + 1; });
       saveData();
       renderCategoriesSettings();
       renderCategories();
@@ -1254,7 +1269,7 @@ function handleCategoryPriorityInput(e) {
 
   if (isNaN(newPriority) || newPriority < 1 || newPriority > 100) return;
 
-  const category = categories.find(cat => (typeof cat === 'string' ? cat : cat.name) === categoryName);
+  const category = categories.find(c => c.spaceId === activeSpaceId && c.name === categoryName);
   if (category) {
     category.priority = newPriority;
     renderCategoriesSettings();
@@ -1289,13 +1304,13 @@ function handleAddCategory() {
     return;
   }
 
-  const exists = categories.some(cat => (typeof cat === 'string' ? cat : cat.name) === name);
+  const exists = categories.some(c => c.spaceId === activeSpaceId && c.name === name);
   if (exists) {
-    showToast('Category already exists', 'error');
+    showToast('Category already exists in this Space', 'error');
     return;
   }
 
-  categories.push({ name, priority });
+  categories.push({ spaceId: activeSpaceId, name, priority });
   saveData();
   nameInput.value = '';
   priorityInput.value = '1';
