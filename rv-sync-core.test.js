@@ -307,3 +307,26 @@ test('stampChangedList: string key still behaves as before (id)', () => {
   const out = core.stampChangedList([], [{ id: 'b', title: 't' }], 'id', '2026-09-09T00:00:00.000Z');
   assert.strictEqual(out[0]._dirty, true);
 });
+
+test('applyRemoteList: function key merges per composite identity, not name alone', () => {
+  const key = (r) => r.spaceId + ' ' + r.name;
+  const local = [
+    { spaceId: 's1', name: 'Articles', priority: 1, updatedAt: '2026-01-01T00:00:00.000Z' },
+    { spaceId: 's2', name: 'Articles', priority: 1, updatedAt: '2026-01-01T00:00:00.000Z' },
+  ];
+  const remote = [
+    { spaceId: 's2', name: 'Articles', priority: 9, updatedAt: '2026-05-05T00:00:00.000Z' }, // newer → wins, ONLY for s2
+  ];
+  const out = core.applyRemoteList(local, remote, key);
+  const s1 = out.find(r => r.spaceId === 's1');
+  const s2 = out.find(r => r.spaceId === 's2');
+  assert.strictEqual(s1.priority, 1, 's1 Articles untouched');
+  assert.strictEqual(s2.priority, 9, 's2 Articles updated by remote');
+  assert.strictEqual(out.length, 2, 'no collapse across Spaces');
+});
+test('applyRemoteList: string key tombstone still removes by id', () => {
+  const out = core.applyRemoteList(
+    [{ id: 'a', updatedAt: '2026-01-01T00:00:00.000Z' }],
+    [{ id: 'a', updatedAt: '2026-02-01T00:00:00.000Z', deletedAt: '2026-02-01T00:00:00.000Z' }], 'id');
+  assert.strictEqual(out.find(r => r.id === 'a'), undefined);
+});

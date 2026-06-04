@@ -49,15 +49,16 @@
   // Apply a list of remote rows onto a local list keyed by `key`.
   // Honors deletedAt tombstones (removes locally when remote wins).
   function applyRemoteList(localList, remoteList, key) {
-    const map = new Map(localList.map(r => [r[key], r]));
+    const map = new Map(localList.map(r => [_keyOf(key, r), r]));
     for (const remote of remoteList) {
-      const local = map.get(remote[key]);
+      const k = _keyOf(key, remote);
+      const local = map.get(k);
       const winner = mergeRecordLWW(local, remote);
       if (winner === remote && remote.deletedAt) {
-        map.delete(remote[key]);                 // tombstone wins → drop locally
+        map.delete(k);                          // tombstone wins → drop locally
       } else if (winner === remote) {
         const clean = { ...remote }; delete clean._dirty;
-        map.set(remote[key], clean);
+        map.set(k, clean);
       } // else local wins → keep as-is
     }
     return Array.from(map.values());
