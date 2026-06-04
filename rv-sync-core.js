@@ -120,42 +120,67 @@
   }
 
   // ── URL de-duplication ──
-  // Collapse bookmarks that share an EXACT `url` into one survivor. Survivor =
-  // newest updatedAt, tie-broken by lowest id (lexicographic) so EVERY device
-  // picks the same survivor and they converge instead of tombstoning each other.
-  // Empty survivor fields are gap-filled from the newest loser that has a value,
-  // so notes/summary/tags/history added on an older copy aren't lost. Losers
+  // Collapse bookmarks that share an EXACT `url` into one survivor. Among the
+  // ENRICHED (non-preliminary) copies the survivor is the newest updatedAt,
+  // tie-broken by lowest id (lexicographic) so EVERY device picks the same
+  // survivor and they converge instead of tombstoning each other. Empty survivor
+  // fields are gap-filled from the newest loser that has a value, so
+  // notes/summary/tags/history added on an older copy aren't lost. Enriched losers
   // become tombstones; the normal push/pull path removes them everywhere.
-  // Pure: no I/O, no Date.now() — `isoNow` is injected by the caller. Tombstoned,
-  // preliminary, and url-less records pass through untouched (original reference).
+  //
+  // Preliminary (mid-enrichment) records: a brand-new save is enriched in place,
+  // so a preliminary with NO enriched twin is left strictly alone (we never disturb
+  // an in-progress enrichment, nor a preliminary-only group). But a STALE
+  // preliminary (older than STALE_PRELIMINARY_MS) that DOES have an enriched
+  // same-url twin is an abandoned placeholder — the enriched copy is the real one,
+  // so the preliminary is DROPPED locally (not tombstoned: preliminaries are never
+  // pushed, so there's no server row to tombstone). Fresh preliminaries with a twin
+  // are kept, since an active enrichment completes in seconds.
+  //
+  // Pure: no I/O, no Date.now() — `isoNow` is injected by the caller.
   const GAP_FILL_FIELDS = ['summary', 'userNotes', 'tags', 'history'];
+  const STALE_PRELIMINARY_MS = 5 * 60 * 1000;
   function _isEmptyField(v) {
     if (Array.isArray(v)) return v.length === 0;
     return v === undefined || v === null || v === '';
   }
   function dedupeBookmarksByUrl(list, isoNow) {
-    const groups = new Map();   // url -> eligible records
-    const out = [];             // start with the pass-through (untouched) records
+    const now = Date.parse(isoNow) || 0;
+    const groups = new Map();   // url -> records sharing that url
+    const out = [];             // pass-through (untouched) records: tombstones, url-less
     for (const b of (list || [])) {
-      if (b.deletedAt || b.isPreliminary || !b.url) { out.push(b); continue; }
+      if (b.deletedAt || !b.url) { out.push(b); continue; }
       const g = groups.get(b.url); if (g) g.push(b); else groups.set(b.url, [b]);
     }
     let changed = 0;
     for (const group of groups.values()) {
-      if (group.length === 1) { out.push(group[0]); continue; }
-      // newest-first; tie-break on lowest id for cross-device determinism
-      const sorted = [...group].sort((a, b) => {
+      const enriched = group.filter(b => !b.isPreliminary);
+      // No enriched copy anchors this url → leave every member untouched
+      // (a lone enriched record, an active enrichment, or a preliminary-only group).
+      if (enriched.length === 0) { for (const b of group) out.push(b); continue; }
+
+      const prelim = group.filter(b => b.isPreliminary);
+      const stalePrelim = prelim.filter(b => (now - (b.addedTimestamp || 0)) > STALE_PRELIMINARY_MS);
+      const freshPrelim = prelim.filter(b => (now - (b.addedTimestamp || 0)) <= STALE_PRELIMINARY_MS);
+      for (const b of freshPrelim) out.push(b);   // active enrichment → keep, untouched
+
+      // Nothing to collapse: a single enriched copy and no stale placeholders.
+      if (enriched.length === 1 && stalePrelim.length === 0) { out.push(enriched[0]); continue; }
+
+      // newest-first among enriched; tie-break on lowest id for cross-device determinism
+      const sorted = [...enriched].sort((a, b) => {
         const ta = Date.parse(a.updatedAt) || 0, tb = Date.parse(b.updatedAt) || 0;
         if (tb !== ta) return tb - ta;
         return String(a.id) < String(b.id) ? -1 : 1;
       });
-      const losers = sorted.slice(1);   // already newest-first
+      const losers = sorted.slice(1);            // enriched losers → tombstone
+      const donors = [...losers, ...stalePrelim]; // gap-fill sources (enriched losers first)
       let survivor = sorted[0];
       const merged = { ...survivor };
       let filled = false;
       for (const field of GAP_FILL_FIELDS) {
         if (!_isEmptyField(merged[field])) continue;
-        const donor = losers.find(l => !_isEmptyField(l[field]));
+        const donor = donors.find(l => !_isEmptyField(l[field]));
         if (donor) {
           merged[field] = Array.isArray(donor[field]) ? [...donor[field]] : donor[field];
           filled = true;
@@ -167,6 +192,7 @@
         out.push({ ...l, deletedAt: isoNow, updatedAt: isoNow, _dirty: true });
         changed++;
       }
+      changed += stalePrelim.length;  // stale preliminaries are dropped (omitted from out)
     }
     return { list: out, changed };
   }
