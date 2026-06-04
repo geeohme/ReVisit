@@ -19,6 +19,7 @@
                     </label>
                 </div>
                 <button id="settings-btn">Settings</button>
+                <select id="space-selector" title="Active Space"></select>
                 <button id="priority-btn">Priority View</button>
                 <button class="btn-close" id="close-btn">Close</button>
             </div>
@@ -280,36 +281,19 @@
                 <!-- Backup & Restore Section -->
                 <div class="settings-section">
                     <h3>💾 Backup & Restore</h3>
-                    <p class="settings-help-text">Backup your bookmarks, categories, and transcripts to a JSON file. Restore from a previous backup. Note: Settings are not backed up.</p>
+                    <p class="settings-help-text">Backup your Spaces, bookmarks, categories, and transcripts to a JSON file. Restore from a previous backup. Note: app settings and per-installation Space selection (which Spaces are enabled/default here) are NOT backed up.</p>
                     <div class="settings-button-group">
                         <button class="settings-btn settings-btn-secondary" id="export-data-btn">📥 Backup Data</button>
                         <button class="settings-btn settings-btn-info" id="import-data-btn">📤 Restore Data</button>
                     </div>
                 </div>
 
-                <!-- Categories Section -->
+                <!-- Spaces Section -->
                 <div class="settings-section">
-                    <h3>📁 Categories</h3>
-                    <p class="settings-help-text">Manage your bookmark categories. Priority determines the display order (1 ranks highest).</p>
-
-                    <div id="categories-manager">
-                        <div class="categories-list-header">
-                            <span class="cat-name-header">Category Name</span>
-                            <span class="cat-count-header">Bookmarks</span>
-                            <span class="cat-priority-header">Priority</span>
-                        </div>
-                        <div id="categories-settings-list" class="categories-settings-list">
-                            <!-- Categories will be dynamically populated here -->
-                        </div>
-                    </div>
-
-                    <div class="add-category-form">
-                        <h4>Add New Category</h4>
-                        <div class="add-category-inputs">
-                            <input type="text" id="new-category-name" placeholder="Category name">
-                            <input type="number" id="new-category-priority" placeholder="Priority (1-100)" min="1" max="100" value="1">
-                            <button class="settings-btn settings-btn-primary" id="add-category-btn">➕ Add Category</button>
-                        </div>
+                    <h3>🗂️ Spaces</h3>
+                    <p class="settings-help-text">A Space is a top-level container. Each Space owns its own categories and bookmarks. Manage your Spaces, their categories, and which are available on this installation.</p>
+                    <div class="settings-button-group">
+                        <button class="settings-btn settings-btn-primary" id="manage-spaces-btn">🗂️ Manage Spaces</button>
                     </div>
                 </div>
 
@@ -321,11 +305,96 @@
         </div>
     </div>
 
+    <!-- Spaces Manager slide-in panel -->
+    <div class="spaces-panel" id="spaces-panel">
+        <div class="spaces-panel-header">
+            <h2>Manage Spaces</h2>
+            <button id="spaces-panel-close">Done</button>
+        </div>
+        <div class="spaces-panel-body">
+            <!-- Zone A: synced definitions -->
+            <section class="spaces-zone">
+                <h3>Your Spaces</h3>
+                <p class="settings-help-text">These definitions sync to all your devices.</p>
+                <div id="spaces-list"><!-- rows injected --></div>
+                <div class="add-space-form">
+                    <input type="text" id="new-space-name" placeholder="New Space name">
+                    <button class="settings-btn settings-btn-primary" id="add-space-btn">➕ Add Space</button>
+                </div>
+            </section>
+
+            <!-- Per-Space category editor (relocated from global settings) -->
+            <section class="spaces-zone" id="space-categories-zone">
+                <h3>Categories in <span id="space-cats-space-name">—</span></h3>
+                <p class="settings-help-text">Select a Space above to edit its categories. Priority sets display order (1 ranks highest).</p>
+                <div id="categories-manager">
+                    <div class="categories-list-header">
+                        <span class="cat-name-header">Category Name</span>
+                        <span class="cat-count-header">Bookmarks</span>
+                        <span class="cat-priority-header">Priority</span>
+                    </div>
+                    <div id="categories-settings-list" class="categories-settings-list"></div>
+                </div>
+                <div class="add-category-form">
+                    <h4>Add New Category</h4>
+                    <div class="add-category-inputs">
+                        <input type="text" id="new-category-name" placeholder="Category name">
+                        <input type="number" id="new-category-priority" placeholder="Priority (1-100)" min="1" max="100" value="1">
+                        <button class="settings-btn settings-btn-primary" id="add-category-btn">➕ Add Category</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Zone B: this installation (writes rvLocal ONLY) -->
+            <section class="spaces-zone">
+                <h3>This Installation</h3>
+                <p class="settings-help-text">Choose which Spaces are available on this browser and which is the default. These choices do NOT sync.</p>
+                <div id="spaces-install-list"><!-- checkbox + radio rows injected --></div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Legacy (v≤2) restore target-Space prompt -->
+    <div class="overlay" id="legacy-restore-overlay">
+        <div class="overlay-content" style="max-width: 480px;">
+            <h2>Restore into a Space</h2>
+            <p>This backup has no Space information. Choose where to put its bookmarks and categories.</p>
+            <label>Existing Space</label>
+            <select id="legacy-restore-space-select"></select>
+            <label>…or create a new Space</label>
+            <input type="text" id="legacy-restore-new-space" placeholder="New Space name">
+            <div class="settings-button-group">
+                <button class="settings-btn settings-btn-primary" id="legacy-restore-confirm">Restore</button>
+                <button class="settings-btn settings-btn-secondary" id="legacy-restore-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Setup gate (migration / pick) modal -->
+    <div class="overlay" id="setup-gate-overlay">
+        <div class="overlay-content" style="max-width: 480px;">
+            <h2 id="setup-gate-title">Set up Spaces</h2>
+            <p id="setup-gate-desc"></p>
+            <div id="setup-gate-migrate" style="display:none;">
+                <label>Name your Space</label>
+                <input type="text" id="setup-gate-space-name" value="My Bookmarks">
+            </div>
+            <div id="setup-gate-pick" style="display:none;">
+                <p>Choose which Spaces are available here and which is the default.</p>
+                <div id="setup-gate-pick-list"></div>
+            </div>
+            <div class="settings-button-group">
+                <button class="settings-btn settings-btn-primary" id="setup-gate-confirm">Continue</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification -->
     <div id="toast" class="toast-message"></div>
 
     <script src="utils.js"></script>
     <script src="rv-sync-core.js"></script>
+    <script src="rv-spaces-core.js"></script>
     <script src="sync.js"></script>
     <script src="list-modal.js"></script>
 </body>
