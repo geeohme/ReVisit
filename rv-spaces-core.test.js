@@ -73,3 +73,30 @@ test('migrateToDefaultSpace: idempotent — only fills missing spaceId, reuses e
   assert.ok(out.bookmarks.every(b => b.spaceId === 'default-space'));
   assert.strictEqual(out.bookmarks[0].spaceId, 'default-space'); // already-set is preserved
 });
+
+test('setupGateDecision: valid rvLocal with live enabled default → none', () => {
+  const rvData = { spaces: [{ id: 's1', name: 'S1', priority: 1 }] };
+  const rvLocal = { enabledSpaceIds: ['s1'], defaultSpaceId: 's1', lastUsedListSpaceId: 's1' };
+  assert.strictEqual(spaces.setupGateDecision(rvData, rvLocal), 'none');
+});
+test('setupGateDecision: no rvLocal default + empty spaces → migrate', () => {
+  assert.strictEqual(spaces.setupGateDecision({ spaces: [] }, spaces.defaultRvLocal()), 'migrate');
+});
+test('setupGateDecision: no rvLocal default + non-empty spaces → pick', () => {
+  const rvData = { spaces: [{ id: 's1', name: 'S1', priority: 1 }] };
+  assert.strictEqual(spaces.setupGateDecision(rvData, spaces.defaultRvLocal()), 'pick');
+});
+test('setupGateDecision: default points at a tombstoned Space → pick (spaces non-empty)', () => {
+  const rvData = { spaces: [{ id: 's1', name: 'S1', priority: 1, deletedAt: '2026-01-01T00:00:00.000Z' }] };
+  const rvLocal = { enabledSpaceIds: ['s1'], defaultSpaceId: 's1', lastUsedListSpaceId: 's1' };
+  // s1 is tombstoned, no live Space remains and spaces[] still has a (dead) row → pick
+  assert.strictEqual(spaces.setupGateDecision(rvData, rvLocal), 'pick');
+});
+test('setupGateDecision: default not in enabledSpaceIds → pick', () => {
+  const rvData = { spaces: [{ id: 's1', name: 'S1', priority: 1 }] };
+  const rvLocal = { enabledSpaceIds: [], defaultSpaceId: 's1', lastUsedListSpaceId: '' };
+  assert.strictEqual(spaces.setupGateDecision(rvData, rvLocal), 'pick');
+});
+test('setupGateDecision: null rvLocal + empty spaces → migrate', () => {
+  assert.strictEqual(spaces.setupGateDecision({ spaces: [] }, null), 'migrate');
+});

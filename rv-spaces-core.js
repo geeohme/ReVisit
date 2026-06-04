@@ -47,7 +47,23 @@
     return out;
   }
 
+  // Decide which setup flavor to run on list-page load.
+  //   'none'    — rvLocal.defaultSpaceId is set, in enabledSpaceIds, and points at a LIVE Space.
+  //   'migrate' — setup needed AND rvData.spaces has no live Space (pre-Spaces upgrade → Flavor A).
+  //   'pick'    — setup needed AND live Spaces already exist (second-browser → Flavor B).
+  function setupGateDecision(rvData, rvLocal) {
+    const allSpaces = (rvData && rvData.spaces) || [];
+    const live = liveSpaces(allSpaces);
+    const liveIds = new Set(live.map(s => s.id));
+    const rl = rvLocal || {};
+    const def = rl.defaultSpaceId;
+    const enabled = rl.enabledSpaceIds || [];
+    const ok = !!def && liveIds.has(def) && enabled.includes(def);
+    if (ok) return 'none';
+    return allSpaces.length === 0 ? 'migrate' : 'pick';
+  }
+
   return { DEFAULT_SPACE_ID, catKey, defaultRvLocal,
            nextSpacePriority, makeSpace, liveSpaces, tombstoneSpace,
-           migrateToDefaultSpace };
+           migrateToDefaultSpace, setupGateDecision };
 });
