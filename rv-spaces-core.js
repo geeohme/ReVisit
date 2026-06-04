@@ -18,5 +18,19 @@
     return { enabledSpaceIds: [], defaultSpaceId: '', lastUsedListSpaceId: '' };
   }
 
-  return { DEFAULT_SPACE_ID, catKey, defaultRvLocal };
+  function nextSpacePriority(spacesList) {
+    return (spacesList || []).reduce((m, s) => Math.max(m, s.priority || 0), 0) + 1;
+  }
+  function makeSpace(id, name, priority, isoNow) {
+    return { id, name, priority, updatedAt: isoNow };
+  }
+  function liveSpaces(spacesList) {
+    return (spacesList || []).filter(s => !s.deletedAt).sort((a, b) => (a.priority || 0) - (b.priority || 0));
+  }
+  function tombstoneSpace(spacesList, id, isoNow) {
+    return (spacesList || []).map(s => s.id === id ? { ...s, deletedAt: isoNow, updatedAt: isoNow } : s);
+  }
+
+  return { DEFAULT_SPACE_ID, catKey, defaultRvLocal,
+           nextSpacePriority, makeSpace, liveSpaces, tombstoneSpace };
 });
