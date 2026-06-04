@@ -208,20 +208,9 @@ function setupEventListeners() {
     }
   });
 
-  // Settings - Add Category
-  document.getElementById('add-category-btn').addEventListener('click', () => {
-    const nameInput = document.getElementById('new-category-name');
-    const priorityInput = document.getElementById('new-category-priority');
-    const name = nameInput.value.trim();
-    const priority = parseInt(priorityInput.value) || 1;
-    
-    if (name) {
-      categories.push({ name, priority });
-      nameInput.value = '';
-      renderCategoriesSettings();
-      renderCategories(); // Update main list immediately
-    }
-  });
+  // Settings - Add Category is bound via add-category-btn.onclick = handleAddCategory
+  // (Space-scoped). The old inline listener here pushed a spaceId-less category and
+  // is removed so a single click can't create a duplicate, broken category row.
 
   // Tag Input in Overlay
   document.getElementById('new-tag-input').addEventListener('keydown', (e) => {
