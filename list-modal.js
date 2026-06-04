@@ -1520,7 +1520,7 @@ function handleAddCategory() {
 async function exportData() {
   const transcriptData = await chrome.storage.local.get('rvTranscripts');
   const transcripts = transcriptData.rvTranscripts || {};
-  const data = { version: 2, exportedAt: new Date().toISOString(), bookmarks, categories, transcripts };
+  const data = RvSpacesCore.buildBackupV3({ spaces, bookmarks, categories }, transcripts, new Date().toISOString());
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
