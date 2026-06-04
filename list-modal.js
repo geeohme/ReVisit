@@ -1531,6 +1531,37 @@ async function exportData() {
   showToast('✅ Backup created successfully!', 'success');
 }
 
+// Resolve the target Space for a v≤2 (Space-less) backup: pick existing or create new.
+function promptLegacyTargetSpace() {
+  return new Promise((resolve) => {
+    const overlay = document.getElementById('legacy-restore-overlay');
+    const sel = document.getElementById('legacy-restore-space-select');
+    const newName = document.getElementById('legacy-restore-new-space');
+    const live = RvSpacesCore.liveSpaces(spaces);
+    sel.innerHTML = live.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    newName.value = '';
+    overlay.classList.add('active');
+    const cleanup = () => { overlay.classList.remove('active'); };
+    document.getElementById('legacy-restore-confirm').onclick = async () => {
+      const typed = newName.value.trim();
+      if (typed) {
+        const now = new Date().toISOString();
+        const id = crypto.randomUUID();
+        spaces.push(RvSpacesCore.makeSpace(id, typed, RvSpacesCore.nextSpacePriority(spaces), now));
+        if (!rvLocal.enabledSpaceIds.includes(id)) rvLocal.enabledSpaceIds.push(id);
+        if (!rvLocal.defaultSpaceId) rvLocal.defaultSpaceId = id;
+        await chrome.storage.local.set({ rvLocal });
+        cleanup(); resolve(id);
+      } else if (sel.value) {
+        cleanup(); resolve(sel.value);
+      } else {
+        showToast('Pick a Space or enter a new name.', 'error');
+      }
+    };
+    document.getElementById('legacy-restore-cancel').onclick = () => { cleanup(); resolve(null); };
+  });
+}
+
 async function importData() {
   const input = document.createElement('input');
   input.type = 'file';
@@ -1543,26 +1574,45 @@ async function importData() {
       const backupData = JSON.parse(text);
       if (!backupData || typeof backupData !== 'object') throw new Error('Invalid backup file format');
       const ver = RvSyncCore.detectBackupVersion(backupData);
+      const now = new Date().toISOString();
+      const genUuid = () => crypto.randomUUID();
 
-      if (Array.isArray(backupData.bookmarks)) {
-        bookmarks = RvSyncCore.mergeBackupBookmarks(bookmarks, backupData.bookmarks, () => crypto.randomUUID());
-      }
-      if (Array.isArray(backupData.categories)) {
-        const migrated = migrateCategoriesFormat(backupData.categories);
+      if (ver >= 3) {
+        const merged = RvSpacesCore.mergeRestoredV3({ spaces, categories, bookmarks }, backupData, now, genUuid);
+        spaces = merged.spaces; categories = merged.categories; bookmarks = merged.bookmarks;
+        // Auto-enable restored Spaces; set a default if none yet.
+        merged.enableSpaceIds.forEach(id => { if (!rvLocal.enabledSpaceIds.includes(id)) rvLocal.enabledSpaceIds.push(id); });
+        if (!rvLocal.defaultSpaceId && merged.enableSpaceIds[0]) rvLocal.defaultSpaceId = merged.enableSpaceIds[0];
+        if (!rvLocal.lastUsedListSpaceId) rvLocal.lastUsedListSpaceId = rvLocal.defaultSpaceId;
+        await chrome.storage.local.set({ rvLocal });
+        if (!activeSpaceId) activeSpaceId = rvLocal.defaultSpaceId;
+      } else {
+        // v≤2: prompt for a target Space, assign it to ALL imported records, then merge.
+        const targetId = await promptLegacyTargetSpace();
+        if (!targetId) { showToast('Restore cancelled.', 'info'); return; }
+        const assigned = RvSpacesCore.assignTargetSpace(
+          { bookmarks: backupData.bookmarks || [], categories: migrateCategoriesFormat(backupData.categories || []) },
+          targetId);
+        bookmarks = RvSyncCore.mergeBackupBookmarks(bookmarks, assigned.bookmarks, genUuid);
         const map = new Map(categories.map(c => [catKey(c), c]));
-        migrated.forEach(c => { if (!map.has(catKey(c))) map.set(catKey(c), { ...c, _dirty: true, updatedAt: new Date().toISOString() }); });
+        assigned.categories.forEach(c => { if (!map.has(catKey(c))) map.set(catKey(c), { ...c, _dirty: true, updatedAt: now }); });
         categories = Array.from(map.values());
+        if (!activeSpaceId) activeSpaceId = targetId;
       }
+
+      // Transcripts (version-independent).
       if (backupData.transcripts && typeof backupData.transcripts === 'object') {
         const cur = (await chrome.storage.local.get('rvTranscripts')).rvTranscripts || {};
         for (const [vid, t] of Object.entries(backupData.transcripts)) {
-          const stamped = { ...t, updatedAt: t.updatedAt || new Date().toISOString(), _dirty: true };
+          const stamped = { ...t, updatedAt: t.updatedAt || now, _dirty: true };
           const local = cur[vid] || null;
           cur[vid] = RvSyncCore.mergeRecordLWW(local, stamped);
         }
         await chrome.storage.local.set({ rvTranscripts: cur });
       }
+
       await saveData();                 // stamps + triggers push
+      renderSpaceSelector();
       renderCategories();
       renderLinks();
       showToast(`✅ Restored (v${ver}) and syncing…`, 'success');
