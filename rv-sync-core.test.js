@@ -195,18 +195,60 @@ test('dedupeBookmarksByUrl: no duplicates → changed 0 and original references 
   assert.strictEqual(out.find(b => b.id === 'b'), r2);
 });
 
-test('dedupeBookmarksByUrl: tombstones, preliminaries, and url-less records pass through untouched', () => {
+test('dedupeBookmarksByUrl: tombstones and url-less records pass through untouched', () => {
   const tomb  = { id: 't', url: 'https://x.com/p', deletedAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' };
   const live  = { id: 'p', url: 'https://x.com/p', updatedAt: '2026-02-01T00:00:00.000Z' };
-  const prelim = { id: 'pre', url: 'https://x.com/p', isPreliminary: true, updatedAt: '2026-02-01T00:00:00.000Z' };
   const nourl = { id: 'n', updatedAt: '2026-02-01T00:00:00.000Z' };
-  const { list: out, changed } = core.dedupeBookmarksByUrl([tomb, live, prelim, nourl], '2026-09-09T00:00:00.000Z');
-  // The lone live record is not collapsed against a tombstone/preliminary → nothing changes.
+  const { list: out, changed } = core.dedupeBookmarksByUrl([tomb, live, nourl], '2026-09-09T00:00:00.000Z');
+  // The lone live record has no live twin to collapse against → nothing changes.
   assert.strictEqual(changed, 0);
   assert.strictEqual(out.find(b => b.id === 't'), tomb);
-  assert.strictEqual(out.find(b => b.id === 'pre'), prelim);
   assert.strictEqual(out.find(b => b.id === 'n'), nourl);
   assert.strictEqual(out.find(b => b.id === 'p'), live);
+});
+
+test('dedupeBookmarksByUrl: a preliminary with NO enriched twin passes through untouched', () => {
+  const prelim = { id: 'pre', url: 'https://x.com/solo', isPreliminary: true, addedTimestamp: 100, updatedAt: '2026-02-01T00:00:00.000Z' };
+  const { list: out, changed } = core.dedupeBookmarksByUrl([prelim], '2026-09-09T00:00:00.000Z');
+  assert.strictEqual(changed, 0);
+  assert.strictEqual(out.find(b => b.id === 'pre'), prelim); // stale, but no enriched copy to defer to → keep
+});
+
+test('dedupeBookmarksByUrl: an all-preliminary group (no enriched twin) is left untouched', () => {
+  const p1 = { id: 'p1', url: 'https://x.com/q', isPreliminary: true, addedTimestamp: 100, updatedAt: '2026-01-01T00:00:00.000Z' };
+  const p2 = { id: 'p2', url: 'https://x.com/q', isPreliminary: true, addedTimestamp: 100, updatedAt: '2026-02-01T00:00:00.000Z' };
+  const { list: out, changed } = core.dedupeBookmarksByUrl([p1, p2], '2026-09-09T00:00:00.000Z');
+  assert.strictEqual(changed, 0);
+  assert.strictEqual(out.length, 2);
+});
+
+test('dedupeBookmarksByUrl: a STALE preliminary with an enriched twin is dropped (not tombstoned)', () => {
+  const enriched    = { id: 'uuid-1', url: 'https://x.com/p', summary: 's', updatedAt: '2026-03-01T00:00:00.000Z' };
+  const stalePrelim = { id: 'rv-1', url: 'https://x.com/p', isPreliminary: true, addedTimestamp: 100, updatedAt: '2026-01-01T00:00:00.000Z' };
+  const { list: out, changed } = core.dedupeBookmarksByUrl([enriched, stalePrelim], '2026-09-09T00:00:00.000Z');
+  assert.strictEqual(out.length, 1, 'stale preliminary removed entirely');
+  assert.strictEqual(out[0].id, 'uuid-1', 'enriched copy survives');
+  assert.ok(!out.some(b => b.deletedAt), 'dropped, NOT tombstoned (a preliminary was never synced)');
+  assert.strictEqual(changed, 1);
+});
+
+test('dedupeBookmarksByUrl: enriched survivor gap-fills from a dropped stale preliminary', () => {
+  const enriched    = { id: 'uuid-1', url: 'https://x.com/p', userNotes: '', updatedAt: '2026-03-01T00:00:00.000Z' };
+  const stalePrelim = { id: 'rv-1', url: 'https://x.com/p', isPreliminary: true, addedTimestamp: 100, userNotes: 'note from prelim', updatedAt: '2026-01-01T00:00:00.000Z' };
+  const { list: out } = core.dedupeBookmarksByUrl([enriched, stalePrelim], '2026-09-09T00:00:00.000Z');
+  const surv = out.find(b => b.id === 'uuid-1');
+  assert.strictEqual(surv.userNotes, 'note from prelim');
+  assert.strictEqual(surv._dirty, true);
+});
+
+test('dedupeBookmarksByUrl: a FRESH preliminary with an enriched twin is preserved (active enrichment untouched)', () => {
+  const now = '2026-09-09T00:00:00.000Z';
+  const enriched   = { id: 'uuid-1', url: 'https://x.com/p', updatedAt: '2026-03-01T00:00:00.000Z' };
+  const freshPrelim = { id: 'rv-1', url: 'https://x.com/p', isPreliminary: true, addedTimestamp: Date.parse(now) - 1000, updatedAt: now };
+  const { list: out, changed } = core.dedupeBookmarksByUrl([enriched, freshPrelim], now);
+  assert.strictEqual(changed, 0, 'fresh preliminary (<5 min old) is left alone');
+  assert.strictEqual(out.find(b => b.id === 'rv-1'), freshPrelim); // preserved, original reference
+  assert.strictEqual(out.find(b => b.id === 'uuid-1'), enriched);
 });
 
 test('dedupeBookmarksByUrl: equal updatedAt → deterministic survivor (lowest id)', () => {
