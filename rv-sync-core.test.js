@@ -220,3 +220,27 @@ test('dedupeBookmarksByUrl: equal updatedAt → deterministic survivor (lowest i
   assert.strictEqual(out1.find(b => !b.deletedAt).id, 'aaa');  // lowest id wins
   assert.strictEqual(out2.find(b => !b.deletedAt).id, 'aaa');  // order-independent → converges
 });
+
+test('dedupeBookmarksByUrl: gap-fill picks the NEWEST loser that has a value', () => {
+  const list = [
+    { id: 's', url: 'https://x.com/p', userNotes: '', updatedAt: '2026-04-01T00:00:00.000Z' }, // survivor, empty notes
+    { id: 'm', url: 'https://x.com/p', userNotes: 'newer note', updatedAt: '2026-03-01T00:00:00.000Z' }, // newest loser w/ value
+    { id: 'o', url: 'https://x.com/p', userNotes: 'older note', updatedAt: '2026-01-01T00:00:00.000Z' }, // older loser w/ value
+  ];
+  const { list: out } = core.dedupeBookmarksByUrl(list, '2026-09-09T00:00:00.000Z');
+  const survivor = out.find(b => !b.deletedAt);
+  assert.strictEqual(survivor.id, 's');
+  assert.strictEqual(survivor.userNotes, 'newer note'); // newest loser with a value wins
+});
+
+test('dedupeBookmarksByUrl: gap-filled array field is a copy, not the donor reference', () => {
+  const donorTags = ['x', 'y'];
+  const list = [
+    { id: 'b1', url: 'https://x.com/p', tags: [], updatedAt: '2026-02-01T00:00:00.000Z' },
+    { id: 'a1', url: 'https://x.com/p', tags: donorTags, updatedAt: '2026-01-01T00:00:00.000Z' },
+  ];
+  const { list: out } = core.dedupeBookmarksByUrl(list, '2026-09-09T00:00:00.000Z');
+  const survivor = out.find(b => b.id === 'b1');
+  assert.deepStrictEqual(survivor.tags, ['x', 'y']);
+  assert.notStrictEqual(survivor.tags, donorTags); // must be a copy, not aliased
+});

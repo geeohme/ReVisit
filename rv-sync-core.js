@@ -156,7 +156,10 @@
       for (const field of GAP_FILL_FIELDS) {
         if (!_isEmptyField(merged[field])) continue;
         const donor = losers.find(l => !_isEmptyField(l[field]));
-        if (donor) { merged[field] = donor[field]; filled = true; }
+        if (donor) {
+          merged[field] = Array.isArray(donor[field]) ? [...donor[field]] : donor[field];
+          filled = true;
+        }
       }
       if (filled) { merged.updatedAt = isoNow; merged._dirty = true; survivor = merged; changed++; }
       out.push(survivor);
