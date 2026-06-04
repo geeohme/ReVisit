@@ -92,9 +92,9 @@
     const mergedSpaces = core.applyRemoteList(current.spaces || [], incomingSpaces, 'id');
     const incomingCats = (backup.categories || []).map(c => ({ ...c, _dirty: true, updatedAt: c.updatedAt || isoNow }));
     const mergedCats = core.applyRemoteList(current.categories || [], incomingCats, catKey);
-    // v3 bookmarks carry stable ids + spaceIds; use id-keyed LWW so ids are preserved.
-    const incomingBks = (backup.bookmarks || []).map(b => ({ ...b, _dirty: true, updatedAt: b.updatedAt || isoNow }));
-    const mergedBookmarks = core.applyRemoteList(current.bookmarks || [], incomingBks, 'id');
+    // Bookmarks: mergeBackupBookmarks dedupes by id|legacyId|url (LWW), so restoring a
+    // backup can't create URL-duplicates of bookmarks the install already has.
+    const mergedBookmarks = core.mergeBackupBookmarks(current.bookmarks || [], backup.bookmarks || [], genUuid);
     const enableSpaceIds = (backup.spaces || []).filter(s => !s.deletedAt).map(s => s.id);
     return { spaces: mergedSpaces, categories: mergedCats, bookmarks: mergedBookmarks, enableSpaceIds };
   }

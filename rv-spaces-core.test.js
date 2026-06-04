@@ -140,13 +140,14 @@ test('mergeRestoredV3: merges spaces by id, categories by composite key, returns
       { id: 's2', name: 'S2', priority: 2, updatedAt: '2026-05-05T00:00:00.000Z' },          // new
     ],
     categories: [{ spaceId: 's2', name: 'Articles', priority: 1, updatedAt: '2026-05-05T00:00:00.000Z' }], // distinct identity
-    bookmarks: [{ id: 'b9', spaceId: 's2', url: 'u9', updatedAt: '2026-05-05T00:00:00.000Z' }],
+    bookmarks: [{ id: 'b9b9b9b9-0000-4000-8000-000000000000', spaceId: 's2', url: 'u9', updatedAt: '2026-05-05T00:00:00.000Z' }],
   };
   const out = spaces.mergeRestoredV3(current, backup, '2026-09-09T00:00:00.000Z', genUuid);
   assert.strictEqual(out.spaces.find(s => s.id === 's1').name, 'S1 renamed'); // LWW
   assert.ok(out.spaces.find(s => s.id === 's2'));
   // both "Articles" survive because identity is (spaceId, name)
   assert.strictEqual(out.categories.filter(c => c.name === 'Articles').length, 2);
-  assert.ok(out.bookmarks.find(b => b.id === 'b9'));
+  // valid-UUID id is preserved verbatim by mergeBackupBookmarks (no rename)
+  assert.ok(out.bookmarks.find(b => b.id === 'b9b9b9b9-0000-4000-8000-000000000000'));
   assert.deepStrictEqual([...out.enableSpaceIds].sort(), ['s1', 's2']); // all restored Space ids
 });
