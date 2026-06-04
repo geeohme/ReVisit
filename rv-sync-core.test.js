@@ -286,3 +286,24 @@ test('dedupeBookmarksByUrl: gap-filled array field is a copy, not the donor refe
   assert.deepStrictEqual(survivor.tags, ['x', 'y']);
   assert.notStrictEqual(survivor.tags, donorTags); // must be a copy, not aliased
 });
+
+// ── function-key contract (Spaces: composite category identity) ──
+test('stampChangedList: function key groups records by composite identity', () => {
+  const key = (r) => r.spaceId + ' ' + r.name;
+  const prev = [{ spaceId: 's1', name: 'Articles', priority: 1, updatedAt: '2026-01-01T00:00:00.000Z' }];
+  const next = [
+    { spaceId: 's1', name: 'Articles', priority: 1, updatedAt: '2026-01-01T00:00:00.000Z' }, // unchanged
+    { spaceId: 's2', name: 'Articles', priority: 1 },                                          // new (other Space)
+  ];
+  const out = core.stampChangedList(prev, next, key, '2026-09-09T00:00:00.000Z');
+  const s1 = out.find(r => r.spaceId === 's1');
+  const s2 = out.find(r => r.spaceId === 's2');
+  assert.strictEqual(s1.updatedAt, '2026-01-01T00:00:00.000Z'); // same composite identity → untouched
+  assert.strictEqual(s1._dirty, undefined);
+  assert.strictEqual(s2._dirty, true);                          // distinct composite identity → new → stamped
+  assert.strictEqual(s2.updatedAt, '2026-09-09T00:00:00.000Z');
+});
+test('stampChangedList: string key still behaves as before (id)', () => {
+  const out = core.stampChangedList([], [{ id: 'b', title: 't' }], 'id', '2026-09-09T00:00:00.000Z');
+  assert.strictEqual(out[0]._dirty, true);
+});
