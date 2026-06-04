@@ -138,3 +138,85 @@ test('stampChangedList: meta-only difference (stamp) does NOT count as change', 
   // content identical → returned as-is (whatever next already had), not re-stamped to isoNow
   assert.strictEqual(out[0].updatedAt, '2026-05-05T00:00:00.000Z');
 });
+
+// ── dedupeBookmarksByUrl ──
+test('dedupeBookmarksByUrl: two same-url records collapse to survivor + tombstone', () => {
+  const list = [
+    { id: 'b1', url: 'https://x.com/p', title: 'newer', summary: 's', userNotes: 'n', tags: ['t'], history: ['h'], updatedAt: '2026-02-01T00:00:00.000Z' },
+    { id: 'a1', url: 'https://x.com/p', title: 'older', summary: 's', userNotes: 'n', tags: ['t'], history: ['h'], updatedAt: '2026-01-01T00:00:00.000Z' },
+  ];
+  const { list: out, changed } = core.dedupeBookmarksByUrl(list, '2026-09-09T00:00:00.000Z');
+  const live = out.filter(b => !b.deletedAt);
+  const dead = out.filter(b => b.deletedAt);
+  assert.strictEqual(live.length, 1);
+  assert.strictEqual(live[0].id, 'b1');                 // newest updatedAt survives
+  assert.strictEqual(live[0]._dirty, undefined);        // survivor needed no gap-fill → untouched
+  assert.strictEqual(dead.length, 1);
+  assert.strictEqual(dead[0].id, 'a1');
+  assert.strictEqual(dead[0]._dirty, true);
+  assert.strictEqual(dead[0].deletedAt, '2026-09-09T00:00:00.000Z');
+  assert.strictEqual(changed, 1);                       // only the tombstone counts
+});
+
+test('dedupeBookmarksByUrl: gap-fills empty survivor fields from older loser', () => {
+  const list = [
+    { id: 'b1', url: 'https://x.com/p', userNotes: '', summary: '', tags: [], history: [], updatedAt: '2026-02-01T00:00:00.000Z' },
+    { id: 'a1', url: 'https://x.com/p', userNotes: 'keep me', summary: 'old summary', tags: ['x'], history: ['h1'], updatedAt: '2026-01-01T00:00:00.000Z' },
+  ];
+  const { list: out, changed } = core.dedupeBookmarksByUrl(list, '2026-09-09T00:00:00.000Z');
+  const survivor = out.find(b => b.id === 'b1');
+  assert.strictEqual(survivor.userNotes, 'keep me');
+  assert.strictEqual(survivor.summary, 'old summary');
+  assert.deepStrictEqual(survivor.tags, ['x']);
+  assert.deepStrictEqual(survivor.history, ['h1']);
+  assert.strictEqual(survivor.updatedAt, '2026-09-09T00:00:00.000Z'); // re-stamped
+  assert.strictEqual(survivor._dirty, true);
+  assert.strictEqual(changed, 2);  // survivor gap-filled + loser tombstoned
+});
+
+test('dedupeBookmarksByUrl: three same-url records collapse to one survivor + two tombstones', () => {
+  const list = [
+    { id: 'c', url: 'https://x.com/p', updatedAt: '2026-03-01T00:00:00.000Z' },
+    { id: 'a', url: 'https://x.com/p', updatedAt: '2026-01-01T00:00:00.000Z' },
+    { id: 'b', url: 'https://x.com/p', updatedAt: '2026-02-01T00:00:00.000Z' },
+  ];
+  const { list: out } = core.dedupeBookmarksByUrl(list, '2026-09-09T00:00:00.000Z');
+  assert.strictEqual(out.filter(b => !b.deletedAt).length, 1);
+  assert.strictEqual(out.find(b => !b.deletedAt).id, 'c');           // newest survives
+  assert.strictEqual(out.filter(b => b.deletedAt).length, 2);
+});
+
+test('dedupeBookmarksByUrl: no duplicates → changed 0 and original references kept', () => {
+  const r1 = { id: 'a', url: 'https://x.com/1', updatedAt: '2026-01-01T00:00:00.000Z' };
+  const r2 = { id: 'b', url: 'https://x.com/2', updatedAt: '2026-01-01T00:00:00.000Z' };
+  const { list: out, changed } = core.dedupeBookmarksByUrl([r1, r2], '2026-09-09T00:00:00.000Z');
+  assert.strictEqual(changed, 0);
+  assert.strictEqual(out.find(b => b.id === 'a'), r1);  // same reference, untouched
+  assert.strictEqual(out.find(b => b.id === 'b'), r2);
+});
+
+test('dedupeBookmarksByUrl: tombstones, preliminaries, and url-less records pass through untouched', () => {
+  const tomb  = { id: 't', url: 'https://x.com/p', deletedAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' };
+  const live  = { id: 'p', url: 'https://x.com/p', updatedAt: '2026-02-01T00:00:00.000Z' };
+  const prelim = { id: 'pre', url: 'https://x.com/p', isPreliminary: true, updatedAt: '2026-02-01T00:00:00.000Z' };
+  const nourl = { id: 'n', updatedAt: '2026-02-01T00:00:00.000Z' };
+  const { list: out, changed } = core.dedupeBookmarksByUrl([tomb, live, prelim, nourl], '2026-09-09T00:00:00.000Z');
+  // The lone live record is not collapsed against a tombstone/preliminary → nothing changes.
+  assert.strictEqual(changed, 0);
+  assert.strictEqual(out.find(b => b.id === 't'), tomb);
+  assert.strictEqual(out.find(b => b.id === 'pre'), prelim);
+  assert.strictEqual(out.find(b => b.id === 'n'), nourl);
+  assert.strictEqual(out.find(b => b.id === 'p'), live);
+});
+
+test('dedupeBookmarksByUrl: equal updatedAt → deterministic survivor (lowest id)', () => {
+  const same = '2026-02-01T00:00:00.000Z';
+  const mk = () => [
+    { id: 'zzz', url: 'https://x.com/p', updatedAt: same },
+    { id: 'aaa', url: 'https://x.com/p', updatedAt: same },
+  ];
+  const out1 = core.dedupeBookmarksByUrl(mk(), '2026-09-09T00:00:00.000Z').list;
+  const out2 = core.dedupeBookmarksByUrl(mk().reverse(), '2026-09-09T00:00:00.000Z').list;
+  assert.strictEqual(out1.find(b => !b.deletedAt).id, 'aaa');  // lowest id wins
+  assert.strictEqual(out2.find(b => !b.deletedAt).id, 'aaa');  // order-independent → converges
+});

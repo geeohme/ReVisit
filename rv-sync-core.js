@@ -119,10 +119,60 @@
     return Array.from(byId.values());
   }
 
+  // ── URL de-duplication ──
+  // Collapse bookmarks that share an EXACT `url` into one survivor. Survivor =
+  // newest updatedAt, tie-broken by lowest id (lexicographic) so EVERY device
+  // picks the same survivor and they converge instead of tombstoning each other.
+  // Empty survivor fields are gap-filled from the newest loser that has a value,
+  // so notes/summary/tags/history added on an older copy aren't lost. Losers
+  // become tombstones; the normal push/pull path removes them everywhere.
+  // Pure: no I/O, no Date.now() — `isoNow` is injected by the caller. Tombstoned,
+  // preliminary, and url-less records pass through untouched (original reference).
+  const GAP_FILL_FIELDS = ['summary', 'userNotes', 'tags', 'history'];
+  function _isEmptyField(v) {
+    if (Array.isArray(v)) return v.length === 0;
+    return v === undefined || v === null || v === '';
+  }
+  function dedupeBookmarksByUrl(list, isoNow) {
+    const groups = new Map();   // url -> eligible records
+    const out = [];             // start with the pass-through (untouched) records
+    for (const b of (list || [])) {
+      if (b.deletedAt || b.isPreliminary || !b.url) { out.push(b); continue; }
+      const g = groups.get(b.url); if (g) g.push(b); else groups.set(b.url, [b]);
+    }
+    let changed = 0;
+    for (const group of groups.values()) {
+      if (group.length === 1) { out.push(group[0]); continue; }
+      // newest-first; tie-break on lowest id for cross-device determinism
+      const sorted = [...group].sort((a, b) => {
+        const ta = Date.parse(a.updatedAt) || 0, tb = Date.parse(b.updatedAt) || 0;
+        if (tb !== ta) return tb - ta;
+        return String(a.id) < String(b.id) ? -1 : 1;
+      });
+      const losers = sorted.slice(1);   // already newest-first
+      let survivor = sorted[0];
+      const merged = { ...survivor };
+      let filled = false;
+      for (const field of GAP_FILL_FIELDS) {
+        if (!_isEmptyField(merged[field])) continue;
+        const donor = losers.find(l => !_isEmptyField(l[field]));
+        if (donor) { merged[field] = donor[field]; filled = true; }
+      }
+      if (filled) { merged.updatedAt = isoNow; merged._dirty = true; survivor = merged; changed++; }
+      out.push(survivor);
+      for (const l of losers) {
+        out.push({ ...l, deletedAt: isoNow, updatedAt: isoNow, _dirty: true });
+        changed++;
+      }
+    }
+    return { list: out, changed };
+  }
+
   return {
     stampRecord, stampChangedList, mergeRecordLWW, applyRemoteList, ensureUuid,
     isValidSession,
     deriveEncKey, encryptSecret, decryptSecret,
-    detectBackupVersion, mergeBackupBookmarks
+    detectBackupVersion, mergeBackupBookmarks,
+    dedupeBookmarksByUrl
   };
 });
