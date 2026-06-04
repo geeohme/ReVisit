@@ -86,6 +86,8 @@ async function init() {
   const liveSpaces = spaces.filter(s => !s.deletedAt).sort((a, b) => (a.priority || 0) - (b.priority || 0));
   activeSpaceId = rvLocal.lastUsedListSpaceId || rvLocal.defaultSpaceId || (liveSpaces[0] && liveSpaces[0].id) || '';
 
+  await runSetupGateIfNeeded();
+
   // Initial Render
   renderCategories();
   renderLinks();
@@ -1597,6 +1599,64 @@ function showToast(msg, type = 'info') {
   setTimeout(() => {
     toast.classList.remove('active');
   }, 3000);
+}
+
+async function runSetupGateIfNeeded() {
+  const decision = RvSpacesCore.setupGateDecision({ spaces }, rvLocal);
+  if (decision === 'none') return true;
+
+  const overlay = document.getElementById('setup-gate-overlay');
+  const migrateBox = document.getElementById('setup-gate-migrate');
+  const pickBox = document.getElementById('setup-gate-pick');
+  const title = document.getElementById('setup-gate-title');
+  const desc = document.getElementById('setup-gate-desc');
+  migrateBox.style.display = decision === 'migrate' ? 'block' : 'none';
+  pickBox.style.display = decision === 'pick' ? 'block' : 'none';
+
+  if (decision === 'pick') {
+    title.textContent = 'Set up Spaces on this browser';
+    desc.textContent = 'Choose which Spaces are available here and pick a default.';
+    const live = RvSpacesCore.liveSpaces(spaces);
+    pickBox.querySelector('#setup-gate-pick-list').innerHTML = live.map((s, i) => `
+      <div>
+        <label><input type="checkbox" class="gate-enabled" data-id="${s.id}" ${i === 0 ? 'checked' : ''}> ${s.name}</label>
+        <label><input type="radio" name="gate-default" class="gate-default" data-id="${s.id}" ${i === 0 ? 'checked' : ''}> default</label>
+      </div>`).join('');
+  } else {
+    title.textContent = 'Welcome to Spaces';
+    desc.textContent = 'Your existing bookmarks and categories will be placed into one Space. Name it:';
+  }
+
+  overlay.classList.add('active');
+
+  await new Promise((resolve) => {
+    document.getElementById('setup-gate-confirm').onclick = async () => {
+      const now = new Date().toISOString();
+      if (decision === 'migrate') {
+        const name = document.getElementById('setup-gate-space-name').value.trim() || 'My Bookmarks';
+        const migrated = RvSpacesCore.migrateToDefaultSpace({ bookmarks, categories, spaces }, name, now);
+        bookmarks = migrated.bookmarks; categories = migrated.categories; spaces = migrated.spaces;
+        await saveData();
+        rvLocal = {
+          enabledSpaceIds: [RvSpacesCore.DEFAULT_SPACE_ID],
+          defaultSpaceId: RvSpacesCore.DEFAULT_SPACE_ID,
+          lastUsedListSpaceId: RvSpacesCore.DEFAULT_SPACE_ID,
+        };
+        activeSpaceId = RvSpacesCore.DEFAULT_SPACE_ID;
+      } else {
+        const enabled = Array.from(document.querySelectorAll('.gate-enabled')).filter(c => c.checked).map(c => c.dataset.id);
+        let def = (document.querySelector('.gate-default:checked') || {}).dataset?.id || enabled[0];
+        if (def && !enabled.includes(def)) enabled.push(def);
+        if (!def || enabled.length === 0) { showToast('Enable at least one Space and pick a default.', 'error'); return; }
+        rvLocal = { enabledSpaceIds: enabled, defaultSpaceId: def, lastUsedListSpaceId: def };
+        activeSpaceId = def;
+      }
+      await chrome.storage.local.set({ rvLocal });
+      overlay.classList.remove('active');
+      resolve();
+    };
+  });
+  return true;
 }
 
 // Initialize
