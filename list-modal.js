@@ -5,6 +5,7 @@ let settings = {};
 let spaces = [];
 let rvLocal = { enabledSpaceIds: [], defaultSpaceId: '', lastUsedListSpaceId: '' };
 let activeSpaceId = '';
+let settingsSpaceId = '';
 let selectedCategory = 'All';
 let searchQuery = '';
 let statusFilter = 'Active';
@@ -88,6 +89,7 @@ async function init() {
   // Initial Render
   renderCategories();
   renderLinks();
+  renderSpaceSelector();
 
   // Event Listeners
   setupEventListeners();
@@ -132,6 +134,12 @@ function setupEventListeners() {
     document.documentElement.setAttribute('data-theme', newTheme);
     localStorage.setItem('theme', newTheme);
   });
+
+  // Spaces — header selector + manager panel
+  document.getElementById('space-selector').addEventListener('change', onSpaceSelectorChange);
+  document.getElementById('manage-spaces-btn').addEventListener('click', openSpacesPanel);
+  document.getElementById('spaces-panel-close').addEventListener('click', closeSpacesPanel);
+  document.getElementById('add-space-btn').addEventListener('click', onAddSpace);
 
   // Search & Filter
   document.getElementById('search-input').addEventListener('input', (e) => {
@@ -1160,18 +1168,213 @@ async function saveSettings() {
 /**
  * Render categories in settings panel
  */
+// --- Spaces: header selector ---
+
+function renderSpaceSelector() {
+  const sel = document.getElementById('space-selector');
+  if (!sel) return;
+  const enabled = new Set(rvLocal.enabledSpaceIds || []);
+  const live = RvSpacesCore.liveSpaces(spaces).filter(s => enabled.has(s.id));
+  sel.innerHTML = live.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+  if (live.find(s => s.id === activeSpaceId)) sel.value = activeSpaceId;
+  else if (live[0]) { activeSpaceId = live[0].id; sel.value = activeSpaceId; }
+}
+
+async function onSpaceSelectorChange(e) {
+  activeSpaceId = e.target.value;
+  selectedCategory = 'All';                 // reset view state for the new Space
+  rvLocal.lastUsedListSpaceId = activeSpaceId;
+  await chrome.storage.local.set({ rvLocal }); // rvLocal ONLY — never rvData
+  renderCategories();
+  renderLinks();
+}
+
+// --- Spaces: manager panel open/close ---
+
+function openSpacesPanel() {
+  // Default the category editor to the active Space (or first live Space).
+  const live = RvSpacesCore.liveSpaces(spaces);
+  settingsSpaceId = (live.find(s => s.id === activeSpaceId) && activeSpaceId) || (live[0] && live[0].id) || '';
+  document.getElementById('spaces-panel').classList.add('active');
+  renderSpacesList();
+  renderSpacesInstallList();
+  renderSpaceCategoryEditor();
+}
+function closeSpacesPanel() {
+  document.getElementById('spaces-panel').classList.remove('active');
+}
+
+// --- Spaces: Zone A — definitions list (rename / priority / delete + counts) ---
+
+function renderSpacesList() {
+  const container = document.getElementById('spaces-list');
+  container.innerHTML = '';
+  const live = RvSpacesCore.liveSpaces(spaces);
+  live.forEach(s => {
+    const count = bookmarks.filter(b => b.spaceId === s.id && !b.deletedAt).length;
+    const row = document.createElement('div');
+    row.className = 'space-row';
+    row.innerHTML = `
+      <input type="text" class="space-name-input" data-id="${s.id}" value="${s.name}">
+      <span class="space-count">${count}</span>
+      <input type="number" class="space-priority-input" data-id="${s.id}" value="${s.priority}" min="1" max="100">
+      <button class="space-edit-cats" data-id="${s.id}">Categories</button>
+      <button class="space-delete" data-id="${s.id}">🗑</button>
+    `;
+    row.querySelector('.space-name-input').addEventListener('change', onRenameSpace);
+    row.querySelector('.space-priority-input').addEventListener('change', onSpacePriorityChange);
+    row.querySelector('.space-edit-cats').addEventListener('click', () => {
+      settingsSpaceId = s.id; renderSpaceCategoryEditor();
+    });
+    row.querySelector('.space-delete').addEventListener('click', () => onDeleteSpace(s.id));
+    container.appendChild(row);
+  });
+}
+
+async function onAddSpace() {
+  const input = document.getElementById('new-space-name');
+  const name = input.value.trim();
+  if (!name) { showToast('Enter a Space name', 'error'); return; }
+  const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  spaces.push(RvSpacesCore.makeSpace(id, name, RvSpacesCore.nextSpacePriority(spaces), now));
+  await saveData();
+  input.value = '';
+  // A brand-new Space is auto-available here (so it can be selected/used immediately).
+  if (!rvLocal.enabledSpaceIds.includes(id)) rvLocal.enabledSpaceIds.push(id);
+  if (!rvLocal.defaultSpaceId) rvLocal.defaultSpaceId = id;
+  await chrome.storage.local.set({ rvLocal });
+  renderSpacesList(); renderSpacesInstallList(); renderSpaceSelector();
+  showToast('Space added', 'success');
+}
+
+async function onRenameSpace(e) {
+  const id = e.target.dataset.id;
+  const name = e.target.value.trim();
+  if (!name) { renderSpacesList(); return; }
+  spaces = spaces.map(s => s.id === id ? { ...s, name } : s);
+  await saveData();
+  renderSpaceSelector(); renderSpacesInstallList();
+  showToast('Space renamed', 'success');
+}
+
+async function onSpacePriorityChange(e) {
+  const id = e.target.dataset.id;
+  const p = parseInt(e.target.value);
+  if (isNaN(p) || p < 1 || p > 100) { showToast('Priority 1–100', 'error'); renderSpacesList(); return; }
+  spaces = spaces.map(s => s.id === id ? { ...s, priority: p } : s);
+  await saveData();
+  renderSpacesList(); renderSpaceSelector();
+}
+
+async function onDeleteSpace(id) {
+  const live = RvSpacesCore.liveSpaces(spaces);
+  const others = live.filter(s => s.id !== id);
+  const target = others[0];
+  const choice = window.prompt(
+    `Deleting this Space. Type "reassign" to move its bookmarks to "${target ? target.name : '(none available)'}", ` +
+    `or "delete" to soft-delete them. Cancel to abort.`);
+  if (choice === null) return;
+  const now = new Date().toISOString();
+  if (choice.trim().toLowerCase() === 'reassign') {
+    if (!target) { showToast('No other Space to reassign to; create one first.', 'error'); return; }
+    // Reassign bookmarks; ensure their categories exist under the target Space.
+    const targetCatNames = new Set(categories.filter(c => c.spaceId === target.id).map(c => c.name));
+    bookmarks = bookmarks.map(b => {
+      if (b.spaceId !== id) return b;
+      if (b.category && !targetCatNames.has(b.category)) {
+        const maxP = categories.filter(c => c.spaceId === target.id).reduce((m, c) => Math.max(m, c.priority || 0), 0);
+        categories.push({ spaceId: target.id, name: b.category, priority: maxP + 1 });
+        targetCatNames.add(b.category);
+      }
+      return { ...b, spaceId: target.id };
+    });
+  } else if (choice.trim().toLowerCase() === 'delete') {
+    bookmarks = bookmarks.map(b => b.spaceId === id ? { ...b, deletedAt: now, updatedAt: now, _dirty: true, status: 'Deleted' } : b);
+  } else { showToast('Type reassign or delete.', 'error'); return; }
+  // Tombstone the Space and its categories.
+  spaces = RvSpacesCore.tombstoneSpace(spaces, id, now);
+  categories = categories.map(c => c.spaceId === id ? { ...c, deletedAt: now, updatedAt: now, _dirty: true } : c);
+  await saveData();
+  // Prune from rvLocal; force re-setup if no valid default remains.
+  rvLocal.enabledSpaceIds = rvLocal.enabledSpaceIds.filter(x => x !== id);
+  if (rvLocal.defaultSpaceId === id) rvLocal.defaultSpaceId = rvLocal.enabledSpaceIds[0] || '';
+  if (rvLocal.lastUsedListSpaceId === id) rvLocal.lastUsedListSpaceId = rvLocal.defaultSpaceId;
+  await chrome.storage.local.set({ rvLocal });
+  if (settingsSpaceId === id) settingsSpaceId = RvSpacesCore.liveSpaces(spaces)[0]?.id || '';
+  if (activeSpaceId === id) activeSpaceId = rvLocal.defaultSpaceId;
+  renderSpacesList(); renderSpacesInstallList(); renderSpaceSelector();
+  renderSpaceCategoryEditor(); renderCategories(); renderLinks();
+  showToast('Space deleted', 'success');
+}
+
+// --- Spaces: per-Space category editor (operates on settingsSpaceId) ---
+
+function renderSpaceCategoryEditor() {
+  const live = RvSpacesCore.liveSpaces(spaces);
+  const cur = live.find(s => s.id === settingsSpaceId);
+  document.getElementById('space-cats-space-name').textContent = cur ? cur.name : '—';
+  renderCategoriesSettings(); // reads settingsSpaceId
+}
+
+// --- Spaces: Zone B — install list (writes rvLocal ONLY) ---
+
+function renderSpacesInstallList() {
+  const container = document.getElementById('spaces-install-list');
+  container.innerHTML = '';
+  const live = RvSpacesCore.liveSpaces(spaces);
+  live.forEach(s => {
+    const enabled = rvLocal.enabledSpaceIds.includes(s.id);
+    const isDefault = rvLocal.defaultSpaceId === s.id;
+    const row = document.createElement('div');
+    row.className = 'space-install-row';
+    row.innerHTML = `
+      <label><input type="checkbox" class="space-enabled" data-id="${s.id}" ${enabled ? 'checked' : ''}> ${s.name}</label>
+      <label><input type="radio" name="space-default" class="space-default" data-id="${s.id}" ${isDefault ? 'checked' : ''}> default</label>
+    `;
+    row.querySelector('.space-enabled').addEventListener('change', onToggleEnabled);
+    row.querySelector('.space-default').addEventListener('change', onSetDefault);
+    container.appendChild(row);
+  });
+}
+
+async function onToggleEnabled(e) {
+  const id = e.target.dataset.id;
+  if (e.target.checked) {
+    if (!rvLocal.enabledSpaceIds.includes(id)) rvLocal.enabledSpaceIds.push(id);
+  } else {
+    // Cannot disable the current default without choosing another first.
+    if (rvLocal.defaultSpaceId === id) {
+      showToast('Pick a different default before disabling this Space.', 'error');
+      e.target.checked = true; return;
+    }
+    rvLocal.enabledSpaceIds = rvLocal.enabledSpaceIds.filter(x => x !== id);
+  }
+  await chrome.storage.local.set({ rvLocal });
+  renderSpaceSelector();
+}
+
+async function onSetDefault(e) {
+  const id = e.target.dataset.id;
+  // Invariant: defaultSpaceId MUST be enabled.
+  if (!rvLocal.enabledSpaceIds.includes(id)) rvLocal.enabledSpaceIds.push(id);
+  rvLocal.defaultSpaceId = id;
+  await chrome.storage.local.set({ rvLocal });
+  renderSpacesInstallList(); renderSpaceSelector();
+}
+
 function renderCategoriesSettings() {
   const container = document.getElementById('categories-settings-list');
   container.innerHTML = '';
 
-  // Sort categories by priority — scoped to the active Space.
+  // Sort categories by priority — scoped to the panel's selected Space.
   const sortedCategories = [...categories]
-    .filter(c => c.spaceId === activeSpaceId)
+    .filter(c => c.spaceId === settingsSpaceId)
     .sort((a, b) => a.priority - b.priority);
 
   sortedCategories.forEach((cat, index) => {
     const catName = typeof cat === 'string' ? cat : cat.name;
-    const count = bookmarks.filter(b => b.spaceId === activeSpaceId && b.category === catName).length;
+    const count = bookmarks.filter(b => b.spaceId === settingsSpaceId && b.category === catName).length;
 
     const item = document.createElement('div');
     item.className = 'category-settings-item';
@@ -1257,6 +1460,7 @@ function handleDrop(e) {
       saveData();
       renderCategoriesSettings();
       renderCategories();
+      renderSpacesList();
       showToast('Categories reordered', 'success');
     }
   }
@@ -1270,11 +1474,12 @@ function handleCategoryPriorityInput(e) {
 
   if (isNaN(newPriority) || newPriority < 1 || newPriority > 100) return;
 
-  const category = categories.find(c => c.spaceId === activeSpaceId && c.name === categoryName);
+  const category = categories.find(c => c.spaceId === settingsSpaceId && c.name === categoryName);
   if (category) {
     category.priority = newPriority;
     renderCategoriesSettings();
     renderCategories();
+    renderSpacesList();
   }
 }
 
@@ -1305,18 +1510,19 @@ function handleAddCategory() {
     return;
   }
 
-  const exists = categories.some(c => c.spaceId === activeSpaceId && c.name === name);
+  const exists = categories.some(c => c.spaceId === settingsSpaceId && c.name === name);
   if (exists) {
     showToast('Category already exists in this Space', 'error');
     return;
   }
 
-  categories.push({ spaceId: activeSpaceId, name, priority });
+  categories.push({ spaceId: settingsSpaceId, name, priority });
   saveData();
   nameInput.value = '';
   priorityInput.value = '1';
   renderCategoriesSettings();
   renderCategories();
+  renderSpacesList();
   showToast('Category added successfully', 'success');
 }
 
