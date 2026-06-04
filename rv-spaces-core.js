@@ -63,7 +63,20 @@
     return allSpaces.length === 0 ? 'migrate' : 'pick';
   }
 
+  // Build a version-3 backup payload. DELIBERATELY excludes rvLocal — per-install
+  // selection (enabled/default/last-used) must never travel between installs.
+  function buildBackupV3(rvData, transcripts, isoNow) {
+    return {
+      version: 3,
+      exportedAt: isoNow,
+      spaces: rvData.spaces || [],
+      bookmarks: rvData.bookmarks || [],
+      categories: rvData.categories || [],
+      transcripts: transcripts || {},
+    };
+  }
+
   return { DEFAULT_SPACE_ID, catKey, defaultRvLocal,
            nextSpacePriority, makeSpace, liveSpaces, tombstoneSpace,
-           migrateToDefaultSpace, setupGateDecision };
+           migrateToDefaultSpace, setupGateDecision, buildBackupV3 };
 });

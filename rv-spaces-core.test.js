@@ -100,3 +100,18 @@ test('setupGateDecision: default not in enabledSpaceIds → pick', () => {
 test('setupGateDecision: null rvLocal + empty spaces → migrate', () => {
   assert.strictEqual(spaces.setupGateDecision({ spaces: [] }, null), 'migrate');
 });
+
+test('buildBackupV3: emits version 3 with spaces + spaced bookmarks/categories, NO rvLocal', () => {
+  const out = spaces.buildBackupV3({
+    spaces: [{ id: 's1', name: 'S1', priority: 1, updatedAt: 'x' }],
+    bookmarks: [{ id: 'b1', spaceId: 's1' }],
+    categories: [{ spaceId: 's1', name: 'Articles', priority: 1 }],
+  }, { foo: 'transcript' }, '2026-09-09T00:00:00.000Z');
+  assert.strictEqual(out.version, 3);
+  assert.strictEqual(out.exportedAt, '2026-09-09T00:00:00.000Z');
+  assert.deepStrictEqual(out.spaces, [{ id: 's1', name: 'S1', priority: 1, updatedAt: 'x' }]);
+  assert.strictEqual(out.bookmarks[0].spaceId, 's1');
+  assert.strictEqual(out.categories[0].spaceId, 's1');
+  assert.deepStrictEqual(out.transcripts, { foo: 'transcript' });
+  assert.ok(!('enabledSpaceIds' in out) && !('defaultSpaceId' in out) && !('lastUsedListSpaceId' in out) && !('rvLocal' in out));
+});
