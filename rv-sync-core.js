@@ -22,10 +22,16 @@
   // any prior _dirty/updatedAt (so a not-yet-pushed edit stays pending, and a
   // freshly-pulled record is NOT re-stamped → no echo, and per-record LWW is
   // preserved across devices). Returns a new array; changed records are new objects.
+  // `key` may be a string property name (e.g. 'id') OR a function (record)=>string
+  // for composite identity (e.g. category (spaceId,name)). String behaves exactly
+  // as before; function is called as key(rec). This keeps bookmark/space callers
+  // unchanged while enabling per-Space category identity.
+  function _keyOf(key, rec) { return typeof key === 'function' ? key(rec) : rec[key]; }
+
   function stampChangedList(prevList, nextList, key, isoNow) {
-    const prevMap = new Map((prevList || []).map(r => [r[key], r]));
+    const prevMap = new Map((prevList || []).map(r => [_keyOf(key, r), r]));
     return (nextList || []).map(rec => {
-      const prev = prevMap.get(rec[key]);
+      const prev = prevMap.get(_keyOf(key, rec));
       if (!prev || _contentKey(prev) !== _contentKey(rec)) {
         return { ...rec, updatedAt: isoNow, _dirty: true };
       }
@@ -43,15 +49,16 @@
   // Apply a list of remote rows onto a local list keyed by `key`.
   // Honors deletedAt tombstones (removes locally when remote wins).
   function applyRemoteList(localList, remoteList, key) {
-    const map = new Map(localList.map(r => [r[key], r]));
+    const map = new Map(localList.map(r => [_keyOf(key, r), r]));
     for (const remote of remoteList) {
-      const local = map.get(remote[key]);
+      const k = _keyOf(key, remote);
+      const local = map.get(k);
       const winner = mergeRecordLWW(local, remote);
       if (winner === remote && remote.deletedAt) {
-        map.delete(remote[key]);                 // tombstone wins → drop locally
+        map.delete(k);                          // tombstone wins → drop locally
       } else if (winner === remote) {
         const clean = { ...remote }; delete clean._dirty;
-        map.set(remote[key], clean);
+        map.set(k, clean);
       } // else local wins → keep as-is
     }
     return Array.from(map.values());

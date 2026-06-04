@@ -19,20 +19,27 @@ function setAccountStatus(text, kind) {
   el.style.color = kind === 'error' ? '#c0392b' : '#4a90e2';
 }
 
+// The Spaces step is the 6th wizard step. It uses id="step-spaces" rather than
+// "step-6" so the numeric step-${n} convention below stays intact; stepElementId()
+// maps the current index to the right element id.
+function stepElementId(n) {
+  return n === 6 ? 'step-spaces' : `step-${n}`;
+}
+
 function nextStep() {
-  if (currentStep < 5) {
-    document.getElementById(`step-${currentStep}`).classList.remove('active');
+  if (currentStep < 6) {
+    document.getElementById(stepElementId(currentStep)).classList.remove('active');
     currentStep++;
-    document.getElementById(`step-${currentStep}`).classList.add('active');
+    document.getElementById(stepElementId(currentStep)).classList.add('active');
     updateStepIndicator();
   }
 }
 
 function prevStep() {
   if (currentStep > 1) {
-    document.getElementById(`step-${currentStep}`).classList.remove('active');
+    document.getElementById(stepElementId(currentStep)).classList.remove('active');
     currentStep--;
-    document.getElementById(`step-${currentStep}`).classList.add('active');
+    document.getElementById(stepElementId(currentStep)).classList.add('active');
     updateStepIndicator();
   }
 }
@@ -214,10 +221,14 @@ async function handleGateSignIn() {
     const syncRes = await chrome.runtime.sendMessage({ action: 'syncNow' });
     if (!syncRes || !syncRes.success) throw new Error((syncRes && syncRes.error) || 'Sync failed');
 
-    // Persist onboardingComplete AFTER the sync round-trip so a pulled settings
-    // record can't clobber it (pullSettings merges remote over local).
+    // Run the per-install Spaces step AFTER the sync round-trip so any synced-down
+    // Spaces are visible. This always writes rvLocal regardless of the synced
+    // onboardingComplete flag (it doubles as the per-install setup gate).
     const stored = await chrome.storage.local.get('rvData');
-    const rvData = stored.rvData || { bookmarks: [], categories: [], settings: {} };
+    const rvData = stored.rvData || { bookmarks: [], categories: [], settings: {}, spaces: [] };
+    rvData.spaces = rvData.spaces || [];
+    await runGateSpacesStep(rvData); // resolves only once >=1 enabled Space + a default are set
+
     rvData.settings = rvData.settings || {};
     rvData.settings.onboardingComplete = true;
     await chrome.storage.local.set({ rvData });
@@ -230,6 +241,50 @@ async function handleGateSignIn() {
   }
 }
 
+async function runGateSpacesStep(rvData) {
+  const step = document.getElementById('gate-spaces-step');
+  const existing = document.getElementById('gate-spaces-existing');
+  step.style.display = 'block';
+
+  const liveSpaces = () => (rvData.spaces || []).filter(s => !s.deletedAt)
+    .sort((a, b) => (a.priority || 0) - (b.priority || 0));
+
+  function render() {
+    const live = liveSpaces();
+    existing.innerHTML = live.map((s, i) => `
+      <div>
+        <label><input type="checkbox" class="gate-sp-enabled" data-id="${s.id}" ${i === 0 ? 'checked' : ''}> ${s.name}</label>
+        <label><input type="radio" name="gate-sp-default" class="gate-sp-default" data-id="${s.id}" ${i === 0 ? 'checked' : ''}> default</label>
+      </div>`).join('') || '<p>No Spaces yet — create one below.</p>';
+  }
+  render();
+
+  document.getElementById('gate-add-space-btn').onclick = async () => {
+    const inp = document.getElementById('gate-new-space-name');
+    const name = inp.value.trim(); if (!name) return;
+    const now = new Date().toISOString();
+    const maxP = (rvData.spaces || []).reduce((m, s) => Math.max(m, s.priority || 0), 0);
+    rvData.spaces.push({ id: crypto.randomUUID(), name, priority: maxP + 1, updatedAt: now, _dirty: true });
+    await chrome.storage.local.set({ rvData });
+    inp.value = '';
+    render();
+  };
+
+  await new Promise((resolve) => {
+    document.getElementById('gate-spaces-continue').onclick = async () => {
+      const enabled = Array.from(document.querySelectorAll('.gate-sp-enabled')).filter(c => c.checked).map(c => c.dataset.id);
+      let def = (document.querySelector('.gate-sp-default:checked') || {}).dataset?.id || enabled[0];
+      if (def && !enabled.includes(def)) enabled.push(def);
+      if (enabled.length === 0 || !def) { alert('Enable at least one Space and pick a default.'); return; }
+      await chrome.storage.local.set({
+        rvLocal: { enabledSpaceIds: enabled, defaultSpaceId: def, lastUsedListSpaceId: def }
+      });
+      step.style.display = 'none';
+      resolve();
+    };
+  });
+}
+
 async function completeOnboarding() {
   const userName = document.getElementById('user-name').value.trim();
   const categoryNames = Array.from(new Set(
@@ -239,8 +294,13 @@ async function completeOnboarding() {
       .filter(c => c.length > 0)
   ));
 
-  // Convert category names to new format with priorities
+  const firstSpaceName = (document.getElementById('first-space-name')?.value || '').trim() || 'My Bookmarks';
+  const firstSpaceId = crypto.randomUUID();
+  const now = new Date().toISOString();
+
+  // initial-categories become the FIRST Space's categories.
   const categories = categoryNames.map((name, index) => ({
+    spaceId: firstSpaceId,
     name: name,
     priority: index + 1
   }));
@@ -268,6 +328,7 @@ async function completeOnboarding() {
   }
 
   const data = {
+    spaces: [{ id: firstSpaceId, name: firstSpaceName, priority: 1, updatedAt: now }],
     bookmarks: [],
     categories: categories,
     settings: {
@@ -305,6 +366,9 @@ async function completeOnboarding() {
   };
 
   await chrome.storage.local.set({ rvData: data });
+  await chrome.storage.local.set({
+    rvLocal: { enabledSpaceIds: [firstSpaceId], defaultSpaceId: firstSpaceId, lastUsedListSpaceId: firstSpaceId }
+  });
   window.location.href = 'list-modal.html';
 }
 
@@ -354,8 +418,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Step 5 buttons
   const prevBtn5 = document.getElementById('prev-btn-5');
-  const completeBtn = document.getElementById('complete-btn');
+  const nextBtn5 = document.getElementById('next-btn-5');
   if (prevBtn5) prevBtn5.addEventListener('click', prevStep);
+  if (nextBtn5) nextBtn5.addEventListener('click', nextStep);
+
+  // Step 6 (Spaces) buttons
+  const prevBtn6 = document.getElementById('prev-btn-6');
+  const completeBtn = document.getElementById('complete-btn');
+  if (prevBtn6) prevBtn6.addEventListener('click', prevStep);
   if (completeBtn) completeBtn.addEventListener('click', completeOnboarding);
 
   // Provider change listeners for Step 5

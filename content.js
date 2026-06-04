@@ -896,13 +896,24 @@ async function injectBookmarkOverlay(bookmarkId, bookmarkData) {
   const existingHost = document.getElementById('rv-overlay-host');
   if (existingHost) existingHost.remove();
 
-  // Fetch existing categories from storage so the user can pick one
-  const stored = await chrome.storage.local.get('rvData');
-  const existingCategories = ((stored.rvData && stored.rvData.categories) || [])
-    .map(c => (typeof c === 'string' ? c : c && c.name))
+  // Fetch existing categories and spaces from storage so the user can pick one
+  const stored = await chrome.storage.local.get(['rvData', 'rvLocal']);
+  const allCategories = (stored.rvData && stored.rvData.categories) || [];
+  const allSpaces = ((stored.rvData && stored.rvData.spaces) || []).filter(s => !s.deletedAt);
+  const rvLocal = stored.rvLocal || { enabledSpaceIds: [], defaultSpaceId: '', lastUsedListSpaceId: '' };
+  const enabledSpaces = allSpaces
+    .filter(s => rvLocal.enabledSpaceIds.includes(s.id))
+    .sort((a, b) => (a.priority || 0) - (b.priority || 0));
+  // Create always starts from the install default (ignores last-used list Space).
+  let selectedSpaceId = rvLocal.defaultSpaceId || (enabledSpaces[0] && enabledSpaces[0].id) || '';
+
+  const catsForSpace = (sid) => allCategories
+    .filter(c => c && c.spaceId === sid)
+    .map(c => (typeof c === 'string' ? c : c.name))
     .filter(Boolean);
+
   const suggested = bookmarkData.category || '';
-  const categoryOptions = [...existingCategories];
+  let categoryOptions = [...catsForSpace(selectedSpaceId)];
   if (suggested && !categoryOptions.includes(suggested)) categoryOptions.unshift(suggested);
 
   const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({
@@ -927,6 +938,13 @@ async function injectBookmarkOverlay(bookmarkId, bookmarkData) {
         <div class="form-group">
           <label>Title</label>
           <input type="text" id="rv-title" value="${escapeHtml(bookmarkData.title || '')}">
+        </div>
+
+        <div class="form-group">
+          <label>Space</label>
+          <select id="rv-space">${enabledSpaces.map(s =>
+            `<option value="${escapeHtml(s.id)}" ${s.id === selectedSpaceId ? 'selected' : ''}>${escapeHtml(s.name)}</option>`
+          ).join('')}</select>
         </div>
 
         <div class="form-group" style="position: relative;">
@@ -1027,6 +1045,17 @@ async function injectBookmarkOverlay(bookmarkId, bookmarkData) {
   const categoryList = shadow.getElementById('rv-category-list');
   let activeIndex = -1;
 
+  const spaceSelect = shadow.getElementById('rv-space');
+  if (spaceSelect) {
+    spaceSelect.addEventListener('change', () => {
+      selectedSpaceId = spaceSelect.value;
+      categoryOptions = catsForSpace(selectedSpaceId);
+      categoryInput.value = '';           // a category from the old Space may not exist here
+      activeIndex = -1;
+      renderList();
+    });
+  }
+
   const renderList = () => {
     const query = categoryInput.value.trim().toLowerCase();
     const matches = query
@@ -1084,6 +1113,7 @@ async function injectBookmarkOverlay(bookmarkId, bookmarkData) {
     const updatedData = {
       title: shadow.getElementById('rv-title').value,
       category: categoryInput.value.trim(),
+      spaceId: spaceSelect ? spaceSelect.value : selectedSpaceId,
       summary: summaryEl.dataset.raw || '',
       tags: shadow.getElementById('rv-tags').value.split(',').map(t => t.trim()).filter(t => t),
       userNotes: shadow.getElementById('rv-notes').value,

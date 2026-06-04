@@ -7,6 +7,7 @@ importScripts('sync.js');
 
 // Default data structure
 const DEFAULT_DATA = {
+  spaces: [],
   bookmarks: [],
   categories: [
     { name: "Articles", priority: 1 },
@@ -631,6 +632,12 @@ async function getStorageData() {
   return data;
 }
 
+// Per-installation Space config (NEVER synced — lives in its own storage key).
+async function getRvLocal() {
+  const r = await chrome.storage.local.get('rvLocal');
+  return r.rvLocal || { enabledSpaceIds: [], defaultSpaceId: '', lastUsedListSpaceId: '' };
+}
+
 // Helper to save storage data
 async function saveStorageData(data, opts = {}) {
   // Stamp ONLY records whose content changed vs what's stored (per-record LWW).
@@ -640,7 +647,8 @@ async function saveStorageData(data, opts = {}) {
     const now = new Date().toISOString();
     const prev = (await chrome.storage.local.get('rvData')).rvData || {};
     data.bookmarks = self.RvSyncCore.stampChangedList(prev.bookmarks || [], data.bookmarks || [], 'id', now);
-    data.categories = self.RvSyncCore.stampChangedList(prev.categories || [], data.categories || [], 'name', now);
+    data.categories = self.RvSyncCore.stampChangedList(prev.categories || [], data.categories || [], (c) => c.spaceId + ' ' + c.name, now);
+    data.spaces = self.RvSyncCore.stampChangedList(prev.spaces || [], data.spaces || [], 'id', now);
   }
   await chrome.storage.local.set({ rvData: data });
   if (!opts.fromRemote && self.RvSync && (await self.RvSync.isLoggedIn())) {
@@ -838,6 +846,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.log('DEBUG: 215 Categories in addBookmark:', categories);
         
         // Create preliminary bookmark
+        const rvLocal = await getRvLocal();
         const preliminaryBookmark = {
           id: crypto.randomUUID(), // UUID from birth — sync layer needs UUIDs; avoids mid-enrichment id rewrite
           url: currentTab.url,
@@ -851,7 +860,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           status: 'Active',
           history: [],
           isPreliminary: true, // Mark as preliminary
-          isYouTube: isYouTube // Mark if YouTube video
+          isYouTube: isYouTube, // Mark if YouTube video
+          spaceId: rvLocal.defaultSpaceId
         };
 
         console.log('DEBUG: 216 Preliminary bookmark created:', preliminaryBookmark);
@@ -978,24 +988,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (bookmarkIndex !== -1) {
           // Check if category has been updated by user and is new
           const updatedCategory = request.updatedData.category;
+          const submittedSpaceId = request.updatedData.spaceId
+            || data.bookmarks[bookmarkIndex].spaceId;
           const existingCategories = data.categories || [];
 
-          // Check if category exists (handle both old string format and new object format)
+          // Category identity is (spaceId, name): a category exists only if a row
+          // with the SAME spaceId AND name is present.
           const categoryExists = existingCategories.some(cat =>
-            typeof cat === 'string' ? cat === updatedCategory : cat.name === updatedCategory
+            typeof cat === 'object' && cat.name === updatedCategory && cat.spaceId === submittedSpaceId
           );
 
           if (updatedCategory && !categoryExists) {
-            console.log('DEBUG: 236 New category detected, adding to categories list:', updatedCategory);
-            // Add new category to the categories array
-            // Find the highest priority and add 1
-            const maxPriority = existingCategories.reduce((max, cat) => {
-              const priority = typeof cat === 'object' ? cat.priority : 0;
-              return Math.max(max, priority);
-            }, 0);
-
-            existingCategories.push({ name: updatedCategory, priority: maxPriority + 1 });
-            existingCategories.sort((a, b) => a.priority - b.priority);
+            console.log('DEBUG: 236 New category detected, adding under space:', submittedSpaceId, updatedCategory);
+            const maxPriority = existingCategories
+              .filter(c => typeof c === 'object' && c.spaceId === submittedSpaceId)
+              .reduce((max, cat) => Math.max(max, cat.priority || 0), 0);
+            existingCategories.push({ spaceId: submittedSpaceId, name: updatedCategory, priority: maxPriority + 1 });
             data.categories = existingCategories;
           }
           
@@ -1083,6 +1091,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const categories = getCategoryNames(categoriesData);
 
         // Create preliminary bookmark
+        const rvLocal = await getRvLocal();
         const preliminaryBookmark = {
           id: crypto.randomUUID(), // UUID from birth — sync layer needs UUIDs; avoids mid-enrichment id rewrite
           url: currentTab.url,
@@ -1096,7 +1105,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           status: 'Active',
           history: [],
           isPreliminary: true,
-          isYouTube: isYouTube
+          isYouTube: isYouTube,
+          spaceId: rvLocal.defaultSpaceId
         };
 
         // Save preliminary bookmark

@@ -133,6 +133,17 @@
           <button class="btn-primary" id="account-signin-btn">Sign In</button>
         </div>
       </div>
+
+      <div id="gate-spaces-step" style="display:none;">
+        <h2>Choose your Spaces</h2>
+        <p>Pick which Spaces are available on this browser and set a default. You can create more.</p>
+        <div id="gate-spaces-existing"></div>
+        <div>
+          <input type="text" id="gate-new-space-name" placeholder="New Space name">
+          <button id="gate-add-space-btn">Add Space</button>
+        </div>
+        <button class="btn-primary" id="gate-spaces-continue">Continue</button>
+      </div>
     </div>
 
     <div id="wizard" style="display:none;">
@@ -142,6 +153,7 @@
       <span class="step-dot" data-step="3"></span>
       <span class="step-dot" data-step="4"></span>
       <span class="step-dot" data-step="5"></span>
+      <span class="step-dot" data-step="6"></span>
     </div>
     
     <div id="step-1" class="step active">
@@ -298,6 +310,16 @@
 
       <div class="button-group" style="margin-top: 25px;">
         <button class="btn-secondary" id="prev-btn-5">Back</button>
+        <button class="btn-primary" id="next-btn-5">Next</button>
+      </div>
+    </div>
+
+    <div id="step-spaces" class="step">
+      <h2>Name your first Space</h2>
+      <p>Your categories above will live inside this Space. You can add more Spaces later.</p>
+      <input type="text" id="first-space-name" value="My Bookmarks" placeholder="e.g., Work">
+      <div class="button-group" style="margin-top: 25px;">
+        <button class="btn-secondary" id="prev-btn-6">Back</button>
         <button class="btn-primary" id="complete-btn">Complete Setup</button>
       </div>
     </div>
@@ -305,6 +327,8 @@
   </div>
 
   <script src="utils.js"></script>
+  <script src="rv-sync-core.js"></script>
+  <script src="rv-spaces-core.js"></script>
   <script src="onboarding.js"></script>
 </body>
 </html>
