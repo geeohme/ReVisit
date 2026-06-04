@@ -233,7 +233,8 @@
       revisit_by: b.revisitBy || null, status: b.status ?? null, history: b.history || [],
       is_youtube: !!b.isYouTube, metadata: b.metadata || {},
       updated_at: b.updatedAt || (b.addedTimestamp ? new Date(b.addedTimestamp).toISOString() : new Date().toISOString()),
-      deleted_at: b.deletedAt || null
+      deleted_at: b.deletedAt || null,
+      space_id: b.spaceId ?? null
     };
   }
   function rowToBookmark(r) {
@@ -241,15 +242,25 @@
       id: r.id, legacyId: r.legacy_id || undefined, url: r.url, title: r.title, category: r.category,
       summary: r.summary, tags: r.tags || [], userNotes: r.user_notes || '', addedTimestamp: r.added_timestamp,
       revisitBy: r.revisit_by, status: r.status, history: r.history || [], isYouTube: !!r.is_youtube,
-      metadata: r.metadata || {}, updatedAt: r.updated_at, deletedAt: r.deleted_at || undefined
+      metadata: r.metadata || {}, updatedAt: r.updated_at, deletedAt: r.deleted_at || undefined,
+      spaceId: r.space_id ?? undefined
     };
   }
   function catToRow(c, userId) {
-    return { user_id: userId, name: c.name, priority: c.priority, updated_at: c.updatedAt || new Date().toISOString(), deleted_at: c.deletedAt || null };
+    return { user_id: userId, space_id: c.spaceId, name: c.name, priority: c.priority, updated_at: c.updatedAt || new Date().toISOString(), deleted_at: c.deletedAt || null };
   }
-  function rowToCat(r) { return { name: r.name, priority: r.priority, updatedAt: r.updated_at, deletedAt: r.deleted_at || undefined }; }
+  function rowToCat(r) { return { spaceId: r.space_id, name: r.name, priority: r.priority, updatedAt: r.updated_at, deletedAt: r.deleted_at || undefined }; }
+  function spaceToRow(s, userId) {
+    return { id: s.id, user_id: userId, name: s.name, priority: s.priority,
+             updated_at: s.updatedAt || new Date().toISOString(), deleted_at: s.deletedAt || null };
+  }
+  function rowToSpace(r) {
+    return { id: r.id, name: r.name, priority: r.priority,
+             updatedAt: r.updated_at, deletedAt: r.deleted_at || undefined };
+  }
+  function catKey(c) { return c.spaceId + ' ' + c.name; }
 
-  async function getRvData() { const r = await chrome.storage.local.get('rvData'); return r.rvData || { bookmarks: [], categories: [], settings: {} }; }
+  async function getRvData() { const r = await chrome.storage.local.get('rvData'); return r.rvData || { bookmarks: [], categories: [], settings: {}, spaces: [] }; }
   async function setRvData(d) { await chrome.storage.local.set({ rvData: d }); }
   async function getSyncState() { const r = await chrome.storage.local.get('rvSyncState'); return r.rvSyncState || { lastPulledAt: null }; }
   async function setSyncState(s) { await chrome.storage.local.set({ rvSyncState: s }); }
@@ -269,8 +280,10 @@
     // placeholders. When enrichment completes, the content change re-stamps them.
     const dirtyBookmarks = data.bookmarks.filter(b => b._dirty && !b.isPreliminary);
     const dirtyCats = (data.categories || []).filter(c => c._dirty);
+    const dirtySpaces = (data.spaces || []).filter(s => s._dirty);
     if (dirtyBookmarks.length) await upsertRows('bookmarks', dirtyBookmarks.map(b => bookmarkToRow(b, userId)));
     if (dirtyCats.length)      await upsertRows('categories', dirtyCats.map(c => catToRow(c, userId)));
+    if (dirtySpaces.length) await upsertRows('spaces', dirtySpaces.map(s => spaceToRow(s, userId)));
     // transcripts
     const tr = (await chrome.storage.local.get('rvTranscripts')).rvTranscripts || {};
     const dirtyTr = Object.entries(tr).filter(([, v]) => v && v._dirty)
@@ -283,6 +296,7 @@
     // clear dirty flags + physically drop locally-confirmed tombstones
     data.bookmarks = data.bookmarks.map(b => { const c = { ...b }; delete c._dirty; return c; });
     data.categories = (data.categories || []).map(c => { const x = { ...c }; delete x._dirty; return x; });
+    data.spaces = (data.spaces || []).map(s => { const x = { ...s }; delete x._dirty; return x; });
     data.bookmarks = data.bookmarks.filter(b => !b.deletedAt);
     await setRvData(data);
   }
@@ -291,12 +305,13 @@
     const s = await ensureFreshSession(); if (!s) return;
     const st = await getSyncState();
     const since = st.lastPulledAt;
-    const [bRows, cRows, trRows] = await Promise.all([
-      fetchSince('bookmarks', since), fetchSince('categories', since), fetchSince('transcripts', since)
+    const [bRows, cRows, trRows, sRows] = await Promise.all([
+      fetchSince('bookmarks', since), fetchSince('categories', since), fetchSince('transcripts', since), fetchSince('spaces', since)
     ]);
     const data = await getRvData();
     data.bookmarks  = Core.applyRemoteList(data.bookmarks || [], bRows.map(rowToBookmark), 'id');
-    data.categories = Core.applyRemoteList(data.categories || [], cRows.map(rowToCat), 'name');
+    data.categories = Core.applyRemoteList(data.categories || [], cRows.map(rowToCat), catKey);
+    data.spaces     = Core.applyRemoteList(data.spaces || [], sRows.map(rowToSpace), 'id');
     await setRvData(data);
     if (trRows.length) {
       const tr = (await chrome.storage.local.get('rvTranscripts')).rvTranscripts || {};
@@ -309,7 +324,7 @@
       }
       await chrome.storage.local.set({ rvTranscripts: tr });
     }
-    const newest = [...bRows, ...cRows, ...trRows].map(r => r.updated_at).filter(Boolean).sort().pop();
+    const newest = [...bRows, ...cRows, ...trRows, ...sRows].map(r => r.updated_at).filter(Boolean).sort().pop();
     if (newest) {
       // updated_at is the PUSHING client's clock. Rewind the watermark by a skew
       // buffer so a row written by a device whose clock is slightly behind isn't
@@ -425,6 +440,6 @@
     authedFetch, upsertRows, fetchSince,
     pushLocalChanges, pullRemoteChanges, syncCycle,
     pushSettings, pullSettings, deriveKeyForSession, getEncKey,
-    bookmarkToRow, rowToBookmark
+    bookmarkToRow, rowToBookmark, spaceToRow, rowToSpace
   };
 })(typeof self !== 'undefined' ? self : globalThis);
