@@ -595,9 +595,10 @@ function pushHistory(b, action) {
 
 // --- Detail Overlay Logic ---
 
-function openDetailOverlay(bookmark) {
+async function openDetailOverlay(bookmark) {
   if (isDirty) {
-    if (!confirm('You have unsaved changes. Discard them?')) return;
+    const ok = await rvConfirm('Discard unsaved changes?', 'You have unsaved changes. Discard them?', { confirmText: 'Discard', danger: true });
+    if (!ok) return;
   }
 
   currentBookmarkId = bookmark.id;
@@ -628,9 +629,10 @@ function openDetailOverlay(bookmark) {
   document.getElementById('detail-overlay').classList.add('active');
 }
 
-function closeDetailOverlay() {
+async function closeDetailOverlay() {
   if (isDirty) {
-    if (!confirm('You have unsaved changes. Discard them?')) return;
+    const ok = await rvConfirm('Discard unsaved changes?', 'You have unsaved changes. Discard them?', { confirmText: 'Discard', danger: true });
+    if (!ok) return;
   }
   document.getElementById('detail-overlay').classList.remove('active');
   currentBookmarkId = null;
@@ -912,8 +914,9 @@ async function saveCurrentBookmark() {
 }
 
 async function deleteCurrentBookmark() {
-  if (!confirm('Are you sure you want to delete this bookmark?')) return;
-  
+  const ok = await rvConfirm('Delete this bookmark?', 'This bookmark will be removed.', { confirmText: 'Delete', danger: true });
+  if (!ok) return;
+
   const now = new Date().toISOString();
   bookmarks = bookmarks.map(b =>
     b.id === currentBookmarkId ? { ...b, deletedAt: now, updatedAt: now, _dirty: true, status: 'Deleted' } : b
@@ -1537,12 +1540,31 @@ async function onDeleteSpace(id) {
   const live = RvSpacesCore.liveSpaces(spaces);
   const others = live.filter(s => s.id !== id);
   const target = others[0];
-  const choice = window.prompt(
-    `Deleting this Space. Type "reassign" to move its bookmarks to "${target ? target.name : '(none available)'}", ` +
-    `or "delete" to soft-delete them. Cancel to abort.`);
-  if (choice === null) return;
+
+  // In-app dialog with a radio choice (replaces the old type-"reassign"/"delete" prompt).
+  const body = document.createElement('div');
+  body.className = 'rv-radio-group';
+  body.innerHTML = `
+    <label class="rv-radio">
+      <input type="radio" name="rv-sp-del" value="reassign" ${target ? 'checked' : 'disabled'}>
+      <span>Move its bookmarks to <strong>${target ? escapeHtml(target.name) : '(no other Space)'}</strong></span>
+    </label>
+    <label class="rv-radio">
+      <input type="radio" name="rv-sp-del" value="delete" ${target ? '' : 'checked'}>
+      <span>Delete its bookmarks too</span>
+    </label>`;
+  const ok = await rvDialog({
+    title: 'Delete this Space?',
+    message: body,
+    buttons: [
+      { label: 'Cancel', value: false, variant: 'secondary' },
+      { label: 'Delete Space', value: true, variant: 'danger' },
+    ],
+  });
+  if (!ok) return;
+  const choice = body.querySelector('input[name="rv-sp-del"]:checked').value;
   const now = new Date().toISOString();
-  if (choice.trim().toLowerCase() === 'reassign') {
+  if (choice === 'reassign') {
     if (!target) { showToast('No other Space to reassign to; create one first.', 'error'); return; }
     // Reassign bookmarks; ensure their categories exist under the target Space.
     const targetCatNames = new Set(categories.filter(c => c.spaceId === target.id).map(c => c.name));
@@ -1555,9 +1577,9 @@ async function onDeleteSpace(id) {
       }
       return { ...b, spaceId: target.id };
     });
-  } else if (choice.trim().toLowerCase() === 'delete') {
+  } else { // 'delete'
     bookmarks = bookmarks.map(b => b.spaceId === id ? { ...b, deletedAt: now, updatedAt: now, _dirty: true, status: 'Deleted' } : b);
-  } else { showToast('Type reassign or delete.', 'error'); return; }
+  }
   // Tombstone the Space and its categories.
   spaces = RvSpacesCore.tombstoneSpace(spaces, id, now);
   categories = categories.map(c => c.spaceId === id ? { ...c, deletedAt: now, updatedAt: now, _dirty: true } : c);
@@ -1924,6 +1946,53 @@ function showToast(msg, type = 'info') {
   setTimeout(() => {
     toast.classList.remove('active');
   }, 3000);
+}
+
+// --- In-app dialogs (themed; replace native confirm/prompt) ---
+
+// Generic promise-based dialog. `message` may be a string or a DOM node.
+// `buttons`: [{ label, value, variant: 'primary'|'secondary'|'danger' }].
+function rvDialog({ title, message, buttons }) {
+  return new Promise(resolve => {
+    const scrim = document.createElement('div');
+    scrim.className = 'rv-dialog-scrim';
+    scrim.innerHTML = `
+      <div class="rv-dialog" role="dialog" aria-modal="true" aria-label="${title}">
+        <h3 class="rv-dialog-title"></h3>
+        <div class="rv-dialog-msg"></div>
+        <div class="rv-dialog-actions"></div>
+      </div>`;
+    scrim.querySelector('.rv-dialog-title').textContent = title;
+    const msgEl = scrim.querySelector('.rv-dialog-msg');
+    if (message instanceof Node) msgEl.appendChild(message);
+    else msgEl.textContent = message || '';
+    const actions = scrim.querySelector('.rv-dialog-actions');
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); cleanup(null); } };
+    const cleanup = (val) => { document.removeEventListener('keydown', onKey, true); scrim.remove(); resolve(val); };
+    (buttons || []).forEach(b => {
+      const btn = document.createElement('button');
+      btn.className = `rv-dialog-btn ${b.variant || 'secondary'}`;
+      btn.textContent = b.label;
+      btn.addEventListener('click', () => cleanup(b.value));
+      actions.appendChild(btn);
+    });
+    scrim.addEventListener('mousedown', (e) => { if (e.target === scrim) cleanup(null); });
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(scrim);
+    requestAnimationFrame(() => scrim.classList.add('active'));
+    const focusBtn = actions.querySelector('.primary, .danger') || actions.querySelector('button');
+    if (focusBtn) focusBtn.focus();
+  });
+}
+
+function rvConfirm(title, message, { confirmText = 'Confirm', danger = false } = {}) {
+  return rvDialog({
+    title, message,
+    buttons: [
+      { label: 'Cancel', value: false, variant: 'secondary' },
+      { label: confirmText, value: true, variant: danger ? 'danger' : 'primary' },
+    ],
+  });
 }
 
 async function runSetupGateIfNeeded() {
