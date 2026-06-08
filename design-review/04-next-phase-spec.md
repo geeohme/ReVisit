@@ -48,7 +48,14 @@ interaction logic.
 
 ---
 
-## Phase 2 — Make the name true (the core fixes)
+## Phase 2 — Make the name true (the core fixes) — ✅ SHIPPED (commit `2e9c79d`)
+
+> Done: wired action model (Revisited/Snooze/Done/Delete via `saveData()`'s LWW+push
+> path — no background message needed), due chips + Overdue/Today/This week/Later/
+> Someday buckets, 2-line summary preview + favicon + category chip on rows, sort
+> control (Due/Added/Updated/Title/Category) and a sidebar tag filter. Verified across
+> all 3 schemes. **Start the next session at Phase 3.** Original spec retained below.
+
 
 ### 2.1 Wired ReVisit action model **[WIRE]** 🔴
 **Why:** the row "ReVisit ↗" button only `window.open`s; the date-driven engine in
