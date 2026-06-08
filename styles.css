@@ -1457,6 +1457,11 @@ input:checked + .slider:before {
 .bk-card.week::before    { background: var(--color-primary); }
 .bk-card.later::before   { background: var(--color-success); }
 .bk-card.someday::before { background: var(--color-light-text); }
+/* When this row's action menu is open, raise the whole row into its own
+   stacking context so the menu paints above all sibling rows (incl. ones the
+   pointer hovers, which would otherwise get a transform stacking context). */
+.bk-card.menu-open { z-index: 200; }
+.bk-card.menu-open:hover { transform: none; }
 
 .bk-main { display: flex; align-items: flex-start; gap: 12px; }
 .bk-fav {
@@ -1470,12 +1475,17 @@ input:checked + .slider:before {
 }
 .bk-body { flex: 1; min-width: 0; }
 .bk-title {
+  display: inline-block;
   font-family: var(--font-display);
   font-size: 1rem; font-weight: 600; line-height: 1.25;
   margin: 0 0 3px;
   color: var(--color-dark-text);
+  text-decoration: none;
+  cursor: pointer;
 }
+.bk-title:hover { color: var(--color-primary); text-decoration: underline; text-underline-offset: 2px; }
 .bk-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.78rem; color: var(--color-light-text); }
+.bk-added { color: var(--color-light-text); }
 .chip {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 0.72rem; padding: 2px 8px; border-radius: 20px; font-weight: 500;

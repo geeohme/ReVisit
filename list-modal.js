@@ -447,6 +447,9 @@ function renderTagFilter() {
 
 function closeRowMenus() {
   document.querySelectorAll('.bk-menu.open').forEach(m => m.classList.remove('open'));
+  // Drop the elevated stacking context so a closed row can't sit above its neighbours.
+  document.querySelectorAll('.bk-card.menu-open').forEach(c => c.classList.remove('menu-open'));
+  document.querySelectorAll('.bk-kebab-btn[aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
 }
 
 function buildBookmarkRow(bookmark) {
@@ -457,20 +460,23 @@ function buildBookmarkRow(bookmark) {
     ? `<span class="chip chip-cat">${escapeHtml(bookmark.category)}</span>` : '';
   const preview = stripMarkdown(bookmark.summary);
   const summary = preview ? `<p class="bk-summary">${escapeHtml(preview)}</p>` : '';
+  const added = bookmark.addedTimestamp
+    ? `<span class="bk-added">added ${new Date(bookmark.addedTimestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>` : '';
   item.innerHTML = `
     <div class="bk-main">
       <div class="bk-fav" aria-hidden="true">${escapeHtml(faviconLetter(bookmark))}</div>
       <div class="bk-body">
-        <h3 class="bk-title">${escapeHtml(bookmark.title || 'Untitled')}</h3>
+        <a class="bk-title" href="${escapeHtml(bookmark.url)}" target="_blank" rel="noopener">${escapeHtml(bookmark.title || 'Untitled')}</a>
         <div class="bk-meta">
           <span class="bk-host">${escapeHtml(hostOf(bookmark))}</span>
           ${cat}
           <span class="chip chip-due ${due.cls}">${escapeHtml(due.label)}</span>
+          ${added}
         </div>
         ${summary}
       </div>
       <div class="bk-actions">
-        <button class="bk-open">Open</button>
+        <button class="bk-open" title="Open the page (marks it done)">Open</button>
         <div class="bk-kebab">
           <button class="bk-kebab-btn" aria-haspopup="true" aria-expanded="false" aria-label="More actions">⋯</button>
           <div class="bk-menu" role="menu">
@@ -487,21 +493,28 @@ function buildBookmarkRow(bookmark) {
       </div>
     </div>`;
 
+  // Clicking the card body (not the title link or the action cluster) opens the editor.
   item.addEventListener('click', (e) => {
-    if (e.target.closest('.bk-actions')) return;
+    if (e.target.closest('.bk-actions') || e.target.closest('.bk-title')) return;
     openDetailOverlay(bookmark);
   });
-  item.querySelector('.bk-open').addEventListener('click', (e) => {
-    e.stopPropagation();
-    window.open(bookmark.url, '_blank');
-  });
+  // Title link AND Open button open the page — and mark it done (ReVisit's model:
+  // once you actually go read it, the reminder is fulfilled).
+  const openIt = (e) => { e.preventDefault(); e.stopPropagation(); handleRowAction(bookmark.id, 'open'); };
+  item.querySelector('.bk-title').addEventListener('click', openIt);
+  item.querySelector('.bk-open').addEventListener('click', openIt);
+
   const kebab = item.querySelector('.bk-kebab-btn');
   const menu = item.querySelector('.bk-menu');
   kebab.addEventListener('click', (e) => {
     e.stopPropagation();
     const wasOpen = menu.classList.contains('open');
     closeRowMenus();
-    if (!wasOpen) { menu.classList.add('open'); kebab.setAttribute('aria-expanded', 'true'); }
+    if (!wasOpen) {
+      menu.classList.add('open');
+      item.classList.add('menu-open'); // raise this row above its neighbours
+      kebab.setAttribute('aria-expanded', 'true');
+    }
   });
   menu.querySelectorAll('button[data-act]').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -519,7 +532,14 @@ async function handleRowAction(id, act, days) {
   const b = bookmarks.find(x => x.id === id);
   if (!b) return;
   const now = new Date();
-  if (act === 'revisit') {
+  if (act === 'open') {
+    // Fire the window.open synchronously (within the click gesture) before any await.
+    window.open(b.url, '_blank', 'noopener');
+    b.status = 'Complete';
+    pushHistory(b, 'Opened from list — marked Done');
+    await saveData();
+    showToast('Opened — marked done', 'success');
+  } else if (act === 'revisit') {
     const iv = (settings && settings.defaultIntervalDays) || 7;
     b.revisitBy = addDaysISO(now, iv);
     b.status = 'Active';
