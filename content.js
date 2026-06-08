@@ -217,6 +217,30 @@ textarea {
   background: var(--color-primary-hover);
 }
 
+/* Quick-date chips */
+.rv-date-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.rv-chip {
+  padding: 7px 13px;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.rv-chip:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.rv-chip.on {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
 /* Notification Toast */
 .toast {
   position: fixed;
@@ -978,11 +1002,17 @@ async function injectBookmarkOverlay(bookmarkId, bookmarkData) {
         </div>
         
         <div class="form-group">
-          <label>Revisit By</label>
+          <label>When should we remind you?</label>
+          <div class="rv-date-chips" id="rv-date-chips">
+            <button type="button" class="rv-chip" data-days="1">Tomorrow</button>
+            <button type="button" class="rv-chip" data-days="7">Next week</button>
+            <button type="button" class="rv-chip" data-days="30">Next month</button>
+            <button type="button" class="rv-chip" data-clear="1">No reminder</button>
+          </div>
           <input type="date" id="rv-revisit" value="${bookmarkData.revisitBy ? bookmarkData.revisitBy.split('T')[0] : ''}">
         </div>
       </div>
-      
+
       <div class="card-footer">
         <button class="btn btn-secondary" id="rv-cancel">Cancel</button>
         <button class="btn btn-primary" id="rv-save">Save Bookmark</button>
@@ -1109,7 +1139,36 @@ async function injectBookmarkOverlay(bookmarkId, bookmarkData) {
     setTimeout(() => { categoryList.style.display = 'none'; }, 120);
   });
 
+  // Quick-date chips: fill (or clear) the date input. An empty date means
+  // "No reminder" — the bookmark is saved to Someday instead of being unsaveable.
+  const revisitInput = shadow.getElementById('rv-revisit');
+  const dateChips = shadow.getElementById('rv-date-chips');
+  const syncChipState = () => {
+    dateChips.querySelectorAll('.rv-chip').forEach(c => c.classList.remove('on'));
+    if (!revisitInput.value) {
+      const noRem = dateChips.querySelector('[data-clear]');
+      if (noRem) noRem.classList.add('on');
+    }
+  };
+  dateChips.addEventListener('click', (e) => {
+    const chip = e.target.closest('.rv-chip');
+    if (!chip) return;
+    if (chip.dataset.clear) {
+      revisitInput.value = '';
+    } else {
+      const d = new Date();
+      d.setDate(d.getDate() + parseInt(chip.dataset.days, 10));
+      revisitInput.value = d.toISOString().split('T')[0];
+    }
+    syncChipState();
+    dateChips.querySelectorAll('.rv-chip').forEach(c => c.classList.remove('on'));
+    chip.classList.add('on');
+  });
+  revisitInput.addEventListener('input', syncChipState);
+  syncChipState();
+
   shadow.getElementById('rv-save').addEventListener('click', () => {
+    const dv = revisitInput.value;
     const updatedData = {
       title: shadow.getElementById('rv-title').value,
       category: categoryInput.value.trim(),
@@ -1117,7 +1176,7 @@ async function injectBookmarkOverlay(bookmarkId, bookmarkData) {
       summary: summaryEl.dataset.raw || '',
       tags: shadow.getElementById('rv-tags').value.split(',').map(t => t.trim()).filter(t => t),
       userNotes: shadow.getElementById('rv-notes').value,
-      revisitBy: new Date(shadow.getElementById('rv-revisit').value).toISOString()
+      revisitBy: dv ? new Date(dv).toISOString() : null
     };
     handleOverlayAction({ action: 'save', bookmarkId, updatedData });
     host.remove();

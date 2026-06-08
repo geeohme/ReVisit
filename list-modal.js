@@ -262,6 +262,24 @@ function setupEventListeners() {
   document.getElementById('detail-category').addEventListener('change', trackDirty);
   document.getElementById('detail-revisit').addEventListener('change', trackDirty);
   document.getElementById('detail-status').addEventListener('change', trackDirty);
+
+  // Detail overlay: quick reschedule chips set (or clear) the Revisit By date.
+  const reschedule = document.getElementById('detail-reschedule');
+  if (reschedule) {
+    reschedule.addEventListener('click', (e) => {
+      const chip = e.target.closest('.rs-chip');
+      if (!chip) return;
+      const input = document.getElementById('detail-revisit');
+      if (chip.dataset.clear) {
+        input.value = '';
+      } else {
+        const d = new Date();
+        d.setDate(d.getDate() + parseInt(chip.dataset.days, 10));
+        input.value = d.toISOString().split('T')[0];
+      }
+      isDirty = true;
+    });
+  }
   // Markdown editors track dirty on blur/input
 }
 
@@ -587,8 +605,12 @@ function openDetailOverlay(bookmark) {
 
   // Populate Fields
   document.getElementById('detail-title').value = bookmark.title;
-  document.getElementById('detail-revisit').value = bookmark.revisitBy.split('T')[0];
+  // revisitBy can be null ("Someday") — guard the split.
+  document.getElementById('detail-revisit').value = bookmark.revisitBy ? bookmark.revisitBy.split('T')[0] : '';
   document.getElementById('detail-status').value = bookmark.status;
+  // Point the "open page" link at this bookmark's URL.
+  const openLink = document.getElementById('detail-open-link');
+  if (openLink) openLink.href = bookmark.url;
 
   // Categories Dropdown — scoped to THIS bookmark's Space so a reassign can't pick
   // a category name from another Space (which would orphan the (spaceId, name) pair).
@@ -866,7 +888,9 @@ async function saveCurrentBookmark() {
   // Update fields
   bookmark.title = document.getElementById('detail-title').value;
   bookmark.category = document.getElementById('detail-category').value;
-  bookmark.revisitBy = new Date(document.getElementById('detail-revisit').value).toISOString();
+  // Empty date is allowed — store null (Someday) rather than throwing on Invalid Date.
+  const dv = document.getElementById('detail-revisit').value;
+  bookmark.revisitBy = dv ? new Date(dv).toISOString() : null;
   bookmark.status = document.getElementById('detail-status').value;
   
   // Update Markdown fields from dataset.raw (ensure we get the latest edits)

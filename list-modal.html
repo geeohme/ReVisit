@@ -90,6 +90,10 @@
             
             <div class="detail-header-group">
                 <input type="text" id="detail-title" class="detail-title-input editable-title" placeholder="Bookmark Title">
+                <a id="detail-open-link" class="detail-open-link" target="_blank" rel="noopener" href="#">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" width="14" height="14"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Open page
+                </a>
                 <div class="tags-container">
                     <div id="detail-tags" class="tags" style="display: contents;">
                         <!-- Tags injected here -->
@@ -115,6 +119,14 @@
                     <label>Revisit By</label>
                     <input type="date" id="detail-revisit">
                 </div>
+            </div>
+
+            <div class="reschedule-row" id="detail-reschedule">
+                <span class="reschedule-label">Reschedule</span>
+                <button type="button" class="rs-chip" data-days="1">Tomorrow</button>
+                <button type="button" class="rs-chip" data-days="7">Next week</button>
+                <button type="button" class="rs-chip" data-days="30">Next month</button>
+                <button type="button" class="rs-chip" data-clear="1">No date · Someday</button>
             </div>
 
             <h3 class="section-heading">Summary</h3>
