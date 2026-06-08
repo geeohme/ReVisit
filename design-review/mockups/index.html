@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ReVisit — Design Review Gallery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#FBF7EF;--surface:#FFFDF8;--surface-2:#F3ECDD;--border:#E4D8C2;--ink:#2A2622;--ink-soft:#6F6657;--ink-faint:#A89B85;--accent:#D6492B;--shadow:0 1px 2px rgba(60,40,20,.06),0 14px 36px -16px rgba(60,40,20,.3)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Newsreader",Georgia,serif;background:var(--bg);color:var(--ink);min-height:100vh;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.4;background-image:radial-gradient(circle at 1px 1px,rgba(120,90,40,.05) 1px,transparent 0);background-size:14px 14px}
+.serif{font-family:"Fraunces",Georgia,serif}
+.wrap{position:relative;z-index:1;max-width:1040px;margin:0 auto;padding:54px 28px 80px}
+.brand{display:inline-flex;align-items:center;gap:12px;margin-bottom:26px}
+.mark{width:38px;height:42px;border-radius:6px 6px 6px 0;background:linear-gradient(160deg,#F4E7CC,#E8D3A8);border:1px solid #EFE6D4;position:relative;box-shadow:var(--shadow)}
+.mark .g{position:absolute;top:6px;left:50%;transform:translateX(-50%);width:9px;height:9px;border-radius:50%;border:1.5px solid #9a8a64}
+.mark .c{position:absolute;left:8px;bottom:7px;color:var(--accent);font-weight:700;font-size:20px}
+h1.serif{font-size:42px;font-weight:600;line-height:1.1;letter-spacing:-.5px;margin-bottom:14px}
+h1 b{color:var(--accent);font-weight:600}
+.lede{font-size:18px;color:var(--ink-soft);max-width:680px;margin-bottom:8px}
+.meta{color:var(--ink-faint);font-size:14px;margin-bottom:36px}
+.section-h{font-family:"Fraunces";font-size:13px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);margin:40px 0 16px;display:flex;align-items:center;gap:12px}
+.section-h::after{content:"";flex:1;height:1px;background:var(--border)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+@media(max-width:820px){.grid{grid-template-columns:1fr}}
+.tile{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:var(--shadow);text-decoration:none;color:inherit;transition:transform .14s,box-shadow .14s}
+.tile:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(60,40,20,.08),0 22px 44px -18px rgba(60,40,20,.4)}
+.swatch{height:118px;display:flex;align-items:flex-end;padding:12px;gap:6px}
+.swatch i{width:30px;height:30px;border-radius:8px;border:1px solid rgba(0,0,0,.08)}
+.tile .b{padding:16px 18px 20px}
+.tag{display:inline-block;font-family:ui-sans-serif,system-ui;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:3px 9px;border-radius:20px;margin-bottom:9px}
+.tag.rec{background:var(--accent);color:#fff}
+.tag.alt{background:var(--surface-2);color:var(--ink-soft)}
+.tile h3{font-family:"Fraunces";font-size:20px;font-weight:600;margin-bottom:5px}
+.tile p{font-size:14.5px;color:var(--ink-soft);line-height:1.5}
+.tile .open{margin-top:13px;color:var(--accent);font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:6px}
+.docs{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+@media(max-width:820px){.docs{grid-template-columns:1fr}}
+.doc{display:flex;gap:13px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:16px 18px;text-decoration:none;color:inherit;transition:.14s}
+.doc:hover{border-color:var(--accent)}
+.doc .n{font-family:"Fraunces";font-size:15.5px;font-weight:600;margin-bottom:3px}
+.doc .d{font-size:13.5px;color:var(--ink-soft);line-height:1.45}
+.doc .ix{font-family:"Fraunces";font-weight:600;color:var(--accent);font-size:15px;flex:none;width:24px}
+.howto{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px 26px;margin-top:14px}
+.howto li{margin:0 0 9px 20px;color:var(--ink-soft);font-size:15px}
+.howto b{color:var(--ink)}
+.pill{display:inline-block;font-family:ui-sans-serif,system-ui;font-size:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;padding:2px 7px;color:var(--ink-soft)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><span class="mark"><span class="g"></span><span class="c">✓</span></span><span class="serif" style="font-size:26px;font-weight:600">Re<b style="color:var(--accent)">Visit</b></span></div>
+  <h1 class="serif">A UI/UX overhaul, <b>three ways</b>.</h1>
+  <p class="lede">A full design review of the ReVisit extension — the problems walked through end‑to‑end, and three cohesive directions for the fix. Start with the recommended one, toggle dark mode, and click <span class="pill">Toggle annotations</span> in any mockup to see which issue each change solves.</p>
+  <p class="meta">Prepared overnight · diagnosis + recommendations + interactive mockups · no production code was changed.</p>
+
+  <div class="section-h">Interactive mockups — the ReVisit List, capture card, edit &amp; settings</div>
+  <div class="grid">
+    <a class="tile" href="direction-a-paper-ink.html">
+      <div class="swatch" style="background:#FBF7EF"><i style="background:#D6492B"></i><i style="background:#2A2622"></i><i style="background:#3E7C5A"></i><i style="background:#FCE9A8"></i><i style="background:#FFFDF8"></i></div>
+      <div class="b"><span class="tag rec">★ Recommended</span><h3>A · Paper &amp; Ink</h3><p>Warm editorial. Reconciles the UI with the brand’s paper‑tag logo. Index‑card rows, a single red‑orange accent, Fraunces + Newsreader. The most memorable.</p><span class="open">Open mockup →</span></div>
+    </a>
+    <a class="tile" href="direction-b-quiet-focus.html">
+      <div class="swatch" style="background:#0E1116"><i style="background:#5B8DEF"></i><i style="background:#E6EAF0"></i><i style="background:#4CB782"></i><i style="background:#E0A23C"></i><i style="background:#151A21"></i></div>
+      <div class="b"><span class="tag alt">Alternative</span><h3>B · Quiet Focus</h3><p>Dark‑first, dense, refined — Linear/Things energy. A persistent left “due rail” turns the list into a timeline. Schibsted Grotesk + mono. For power users.</p><span class="open">Open mockup →</span></div>
+    </a>
+    <a class="tile" href="direction-c-confident-system.html">
+      <div class="swatch" style="background:#F7F6F3"><i style="background:#2E5BD8"></i><i style="background:#1B1D22"></i><i style="background:#1F9D57"></i><i style="background:#C07C12"></i><i style="background:#FFFFFF"></i></div>
+      <div class="b"><span class="tag alt">Safe step</span><h3>C · Confident System</h3><p>Keeps a blue identity (smallest leap from today) but disciplined: one blue, warm neutrals, fixed contrast, Bricolage Grotesque. A real design system.</p><span class="open">Open mockup →</span></div>
+    </a>
+  </div>
+
+  <div class="section-h">Onboarding — the simplified flow (Direction A)</div>
+  <div class="grid">
+    <a class="tile" href="onboarding-a-paper-ink.html" style="grid-column:span 1">
+      <div class="swatch" style="background:#FBF7EF;align-items:center;justify-content:center"><span class="serif" style="font-size:15px;color:var(--ink-soft)">3 screens · no terminal · skippable AI</span></div>
+      <div class="b"><span class="tag alt">Flow</span><h3>Onboarding on rails</h3><p>One path instead of two. Starter‑Space templates replace the comma‑string. The <b>curl</b> wall and the triple‑provider step are gone from the critical path.</p><span class="open">Open mockup →</span></div>
+    </a>
+  </div>
+
+  <div class="section-h">Read the analysis</div>
+  <div class="docs">
+    <a class="doc" href="../00-INDEX.md"><span class="ix">00</span><span><div class="n">Review plan &amp; reading order</div><div class="d">Start here. What’s in the package, how to review it, and the decisions I need from you.</div></span></a>
+    <a class="doc" href="../01-walkthrough.md"><span class="ix">01</span><span><div class="n">End‑user walkthrough</div><div class="d">A first‑person walk through every flow with annotated Mermaid sequence diagrams. UX + UI issues, severity‑ranked.</div></span></a>
+    <a class="doc" href="../02-recommendations.md"><span class="ix">02</span><span><div class="n">Recommendations &amp; options</div><div class="d">Four design lenses → a shared system of fixes → the three directions with full color tokens &amp; type.</div></span></a>
+    <a class="doc" href="../03-issues-register.md"><span class="ix">03</span><span><div class="n">Issue register</div><div class="d">Every issue ID (U1–U26, V1–V17) in one table with severity, fix, and logic‑risk — the build backlog.</div></span></a>
+  </div>
+
+  <div class="section-h">How to review (≈25 min)</div>
+  <div class="howto">
+    <ol>
+      <li><b>Open the three mockups</b> and, in each, <b>toggle dark mode</b> (top‑right) and click <span class="pill">Toggle annotations</span> to see fixes mapped to issue IDs.</li>
+      <li>In any mockup, click a bookmark row (opens <b>Edit</b>), the <b>kebab ⋮</b> on a row (the new Revisit/Snooze/Done menu), <b>ReVisit this Page</b> (the capture card), and the <b>gear</b> (tabbed settings). <b>Esc</b> closes overlays.</li>
+      <li>Skim <b>01‑walkthrough</b> for the diagnosis, then <b>02‑recommendations</b> Part C for the three directions.</li>
+      <li>Tell me: <b>which direction</b> (or a blend), and whether to proceed to a phased build starting with the zero‑logic‑risk foundation.</li>
+    </ol>
+  </div>
+</div>
+</body>
+</html>

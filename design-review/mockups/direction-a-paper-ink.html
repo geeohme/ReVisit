@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ReVisit — Direction A · Paper &amp; Ink</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   DIRECTION A — "PAPER & INK"
+   Warm editorial. Reconciles the UI with the warm brand logo.
+   Single token file · one theme switch · line-icons via inline SVG.
+   This is a static design MOCKUP (no real data / no extension APIs).
+   ============================================================ */
+:root[data-theme="light"]{
+  --bg:#FBF7EF; --surface:#FFFDF8; --surface-2:#F3ECDD; --border:#E4D8C2;
+  --ink:#2A2622; --ink-soft:#6F6657; --ink-faint:#A89B85;
+  --accent:#D6492B; --accent-ink:#FFFFFF; --accent-soft:#F6E0D8;
+  --ok:#3E7C5A; --warn:#C8801E; --danger:#B23B2E; --highlight:#FCE9A8;
+  --shadow:0 1px 2px rgba(60,40,20,.06), 0 8px 24px -12px rgba(60,40,20,.22);
+  --card-edge:#EFE6D4;
+}
+:root[data-theme="dark"]{
+  --bg:#1C1814; --surface:#262019; --surface-2:#2F2820; --border:#3D3225;
+  --ink:#EDE4D3; --ink-soft:#B6A88E; --ink-faint:#7C6F58;
+  --accent:#E8633F; --accent-ink:#1C1814; --accent-soft:#3A241B;
+  --ok:#7FB894; --warn:#E0A645; --danger:#E2705F; --highlight:#4A3F1E;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 32px -12px rgba(0,0,0,.6);
+  --card-edge:#332A1E;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:"Newsreader",Georgia,serif;
+  background:var(--bg);
+  color:var(--ink);
+  font-size:15px; line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+  transition:background .3s ease,color .3s ease;
+}
+/* subtle paper grain */
+body::before{
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.4;
+  background-image:radial-gradient(circle at 1px 1px, rgba(120,90,40,.05) 1px, transparent 0);
+  background-size:14px 14px;
+}
+:root[data-theme="dark"] body::before{opacity:.5;background-image:radial-gradient(circle at 1px 1px, rgba(255,230,180,.03) 1px, transparent 0)}
+.serif-display{font-family:"Fraunces",Georgia,serif}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+svg.ic{width:18px;height:18px;stroke:currentColor;stroke-width:1.75;fill:none;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.ic.sm{width:15px;height:15px}
+
+/* ---------- App frame ---------- */
+.app{position:relative;z-index:1;display:flex;flex-direction:column;height:100vh}
+.topbar{
+  display:flex;align-items:center;gap:18px;padding:0 22px;height:60px;
+  border-bottom:1px solid var(--border);background:var(--surface);
+}
+.brand{display:flex;align-items:center;gap:10px;margin-right:6px}
+.brand .mark{
+  width:30px;height:34px;border-radius:5px 5px 5px 0;
+  background:linear-gradient(160deg,#F4E7CC,#E8D3A8);
+  border:1px solid var(--card-edge); position:relative; box-shadow:var(--shadow);
+}
+.brand .mark::after{content:"";position:absolute;inset:0;border-radius:inherit;
+  background:linear-gradient(225deg,transparent 70%, rgba(0,0,0,.08) 70%)}
+.brand .mark .grommet{position:absolute;top:4px;left:50%;transform:translateX(-50%);width:7px;height:7px;border-radius:50%;border:1.5px solid #9a8a64}
+.brand .mark .chk{position:absolute;left:6px;bottom:6px;color:var(--accent);font-weight:700;font-size:16px;line-height:1}
+.brand .name{font-family:"Fraunces";font-weight:600;font-size:21px;letter-spacing:.2px}
+.brand .name b{color:var(--accent);font-weight:600}
+
+.space-switch{display:flex;align-items:center;gap:7px;padding:6px 12px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);font-weight:500;font-size:14px}
+.space-switch svg{color:var(--ink-faint)}
+.topbar .spacer{flex:1}
+.icon-btn{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:9px;color:var(--ink-soft);transition:background .15s,color .15s}
+.icon-btn:hover{background:var(--surface-2);color:var(--ink)}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:9px;font-weight:500;font-size:14px;transition:.15s}
+.btn-primary{background:var(--accent);color:var(--accent-ink);box-shadow:var(--shadow)}
+.btn-primary:hover{filter:brightness(1.05)}
+.btn-ghost{border:1px solid var(--border);color:var(--ink-soft)}
+.btn-ghost:hover{background:var(--surface-2);color:var(--ink)}
+
+/* theme toggle */
+.theme-toggle{width:48px;height:27px;border-radius:20px;background:var(--surface-2);border:1px solid var(--border);position:relative;flex:none}
+.theme-toggle .knob{position:absolute;top:2px;left:2px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;transition:left .22s ease}
+:root[data-theme="dark"] .theme-toggle .knob{left:23px}
+
+/* ---------- Layout ---------- */
+.body{display:flex;flex:1;overflow:hidden}
+.sidebar{width:264px;flex:none;border-right:1px solid var(--border);background:var(--surface);overflow-y:auto;padding:18px 14px}
+.search{position:relative;margin-bottom:16px}
+.search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--ink-faint)}
+.search input{width:100%;padding:9px 11px 9px 34px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--ink);font-family:inherit;font-size:14px}
+.search input::placeholder{color:var(--ink-faint)}
+
+.seg{display:flex;gap:4px;background:var(--surface-2);padding:4px;border-radius:10px;margin-bottom:20px}
+.seg button{flex:1;padding:6px 4px;border-radius:7px;font-size:12.5px;font-weight:500;color:var(--ink-soft)}
+.seg button.active{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+
+.side-h{font-family:"Fraunces";font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);margin:18px 6px 8px}
+.cat{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;cursor:pointer;font-size:14px;color:var(--ink);position:relative}
+.cat:hover{background:var(--surface-2)}
+.cat .dot{width:8px;height:8px;border-radius:50%;background:var(--ink-faint);flex:none}
+.cat .nm{flex:1}
+.cat .ct{font-size:12px;color:var(--ink-faint);font-variant-numeric:tabular-nums}
+.cat.active{font-weight:600}
+.cat.active .nm{background:linear-gradient(transparent 62%, var(--highlight) 62%);padding:0 2px;border-radius:2px}
+.cat.active .dot{background:var(--accent)}
+
+.tagrow{display:flex;flex-wrap:wrap;gap:6px;padding:2px 6px}
+.tagrow .tag{font-size:12px;padding:3px 9px;border-radius:20px;border:1px solid var(--border);color:var(--ink-soft);background:var(--surface-2)}
+.tagrow .tag.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+
+/* ---------- Main column ---------- */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.toolbar{display:flex;align-items:center;gap:12px;padding:14px 24px;border-bottom:1px solid var(--border);background:var(--surface)}
+.toolbar h1{font-family:"Fraunces";font-size:20px;font-weight:600}
+.toolbar .count{color:var(--ink-faint);font-size:14px;margin-left:-4px}
+.toolbar .spacer{flex:1}
+.select{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);font-size:13.5px;color:var(--ink-soft)}
+.select b{color:var(--ink);font-weight:600}
+
+.list{flex:1;overflow-y:auto;padding:8px 24px 40px}
+.bucket{margin-top:18px}
+.bucket-h{display:flex;align-items:center;gap:9px;margin:6px 2px 10px}
+.bucket-h .lbl{font-family:"Fraunces";font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.bucket-h .ln{flex:1;height:1px;background:var(--border)}
+.bucket-h.over .lbl{color:var(--danger)}
+.bucket-h.today .lbl{color:var(--warn)}
+
+/* index-card row */
+.card{
+  position:relative;background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;padding:14px 16px 14px 18px;margin-bottom:10px;
+  box-shadow:var(--shadow);transition:transform .12s ease,box-shadow .12s ease;
+  cursor:pointer;
+}
+.card::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:var(--border)}
+.card.over::before{background:var(--danger)}
+.card.soon::before{background:var(--warn)}
+.card.someday::before{background:var(--ink-faint)}
+.card:hover{transform:translateY(-1px);box-shadow:0 2px 4px rgba(60,40,20,.08),0 16px 32px -14px rgba(60,40,20,.3)}
+.card .row1{display:flex;align-items:flex-start;gap:12px}
+.fav{width:26px;height:26px;border-radius:7px;flex:none;display:flex;align-items:center;justify-content:center;font-family:"Fraunces";font-weight:600;font-size:13px;color:#fff}
+.card h3{font-family:"Fraunces";font-size:16.5px;font-weight:600;line-height:1.25;margin-bottom:3px}
+.card .meta{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-faint);flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;padding:2px 8px;border-radius:20px;font-weight:500}
+.chip.cat{background:var(--surface-2);color:var(--ink-soft);border:1px solid var(--border)}
+.chip.due{background:var(--accent-soft);color:var(--accent)}
+.chip.due.warn{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
+.chip.due.ok{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.chip.due.faint{background:var(--surface-2);color:var(--ink-faint)}
+.summary{margin-top:9px;font-size:13.5px;line-height:1.5;color:var(--ink-soft);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card .actions{display:flex;align-items:center;gap:6px;margin-left:auto}
+.act{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:8px;font-size:13px;font-weight:500;border:1px solid var(--border);color:var(--ink-soft)}
+.act:hover{background:var(--surface-2);color:var(--ink)}
+.act.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.act.primary:hover{filter:brightness(1.05)}
+.kebab{position:relative}
+.menu{position:absolute;right:0;top:38px;background:var(--surface);border:1px solid var(--border);border-radius:11px;box-shadow:var(--shadow);padding:6px;min-width:184px;z-index:30;display:none}
+.menu.open{display:block}
+.menu button{display:flex;width:100%;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;font-size:13.5px;color:var(--ink);text-align:left}
+.menu button:hover{background:var(--surface-2)}
+.menu button.danger{color:var(--danger)}
+.menu .sep{height:1px;background:var(--border);margin:5px 4px}
+.menu .head{font-size:11px;color:var(--ink-faint);padding:6px 10px 4px;text-transform:uppercase;letter-spacing:.06em}
+
+/* ---------- Overlays ---------- */
+.scrim{position:fixed;inset:0;background:rgba(40,28,14,.5);backdrop-filter:blur(3px);z-index:100;display:none;align-items:center;justify-content:center;padding:30px}
+.scrim.open{display:flex}
+.sheet{background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:0 30px 70px -20px rgba(0,0,0,.5);width:100%;max-width:680px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
+.sheet.wide{max-width:860px}
+.sheet-h{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--border)}
+.sheet-h h2{font-family:"Fraunces";font-size:20px;font-weight:600}
+.sheet-b{padding:22px 24px;overflow-y:auto}
+.sheet-f{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 24px;border-top:1px solid var(--border);background:var(--surface-2)}
+.field{margin-bottom:18px}
+.field label{display:block;font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:7px}
+.field input[type=text],.field input[type=email],.field input[type=password],.field input[type=date],.field select,.field textarea{
+  width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--ink);font-family:"Newsreader",serif;font-size:14.5px}
+.field textarea{min-height:90px;resize:vertical}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.qchip{padding:7px 13px;border:1px solid var(--border);border-radius:20px;font-size:13px;color:var(--ink-soft);background:var(--surface-2)}
+.qchip:hover{border-color:var(--accent);color:var(--accent)}
+.qchip.on{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.tags-edit{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+.tag-pill{display:inline-flex;align-items:center;gap:6px;background:var(--accent-soft);color:var(--accent);padding:4px 10px;border-radius:20px;font-size:13px}
+.tag-pill span{cursor:pointer;font-weight:700}
+.md{border:1px solid var(--border);border-radius:10px;padding:14px;background:var(--bg);font-size:14.5px;line-height:1.6;min-height:90px}
+.md h4{font-family:"Fraunces";margin:.4em 0 .3em}
+.md p{margin:0 0 .7em}
+.md ul{margin:0 0 .7em 1.2em}
+.section-label{display:flex;align-items:center;justify-content:space-between;margin:20px 0 8px}
+.section-label .t{font-family:"Fraunces";font-size:14px;font-weight:600}
+.linkout{display:inline-flex;align-items:center;gap:6px;color:var(--accent);font-size:13px;font-weight:500}
+
+/* settings tabs */
+.tabs{display:flex;gap:4px;padding:0 24px;border-bottom:1px solid var(--border);background:var(--surface)}
+.tabs button{padding:13px 14px;font-size:14px;font-weight:500;color:var(--ink-faint);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button.active{color:var(--ink);border-bottom-color:var(--accent)}
+.tabpane{display:none}.tabpane.active{display:block}
+.note{background:var(--accent-soft);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:11px 14px;font-size:13.5px;color:var(--ink-soft);margin:10px 0}
+.status-good{display:inline-flex;align-items:center;gap:7px;color:var(--ok);font-size:13.5px;font-weight:500}
+.disclosure{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-top:12px}
+.disclosure>summary{padding:12px 14px;font-weight:500;font-size:14px;cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px}
+.disclosure>summary::-webkit-details-marker{display:none}
+.disclosure[open]>summary{border-bottom:1px solid var(--border)}
+.disclosure .inner{padding:14px}
+
+/* capture card preview frame */
+.pagebg{position:absolute;inset:0;background:repeating-linear-gradient(135deg,var(--surface-2),var(--surface-2) 22px,var(--bg) 22px,var(--bg) 44px);opacity:.5}
+
+/* annotation toggle */
+.anno{position:fixed;bottom:18px;right:18px;z-index:200;display:flex;gap:8px}
+.callout{position:absolute;background:var(--ink);color:var(--bg);font-family:ui-sans-serif,system-ui,sans-serif;font-size:11.5px;font-weight:600;padding:4px 8px;border-radius:7px;z-index:5;box-shadow:var(--shadow);display:none;max-width:210px;line-height:1.35}
+body.show-anno .callout{display:block}
+.callout::after{content:"";position:absolute;width:8px;height:8px;background:var(--ink);transform:rotate(45deg)}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- TOP BAR -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="mark"><span class="grommet"></span><span class="chk">✓</span></div>
+      <div class="name serif-display">Re<b>Visit</b></div>
+    </div>
+    <button class="space-switch" title="Switch Space">
+      <svg class="ic sm" viewBox="0 0 24 24"><path d="M3 7h18M3 7l2-3h6l2 3M5 7v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7"/></svg>
+      Read Later
+      <svg class="ic sm" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div class="spacer"></div>
+    <button class="btn btn-primary" onclick="openCapture()">
+      <svg class="ic sm" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> ReVisit this Page
+    </button>
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
+      <span class="knob"><svg class="ic sm" id="themeIcon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg></span>
+    </button>
+    <button class="icon-btn" onclick="openSettings()" aria-label="Settings">
+      <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </header>
+
+  <div class="body">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="search">
+        <svg class="ic sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="text" placeholder="Search titles, summaries, tags…">
+      </div>
+      <div class="seg" role="tablist" aria-label="Status filter">
+        <button class="active">To revisit</button>
+        <button>Revisited</button>
+        <button>Done</button>
+        <button>All</button>
+      </div>
+
+      <div class="side-h">Categories</div>
+      <div class="cat active"><span class="dot"></span><span class="nm">All</span><span class="ct">14</span></div>
+      <div class="cat"><span class="dot" style="background:#3E7C5A"></span><span class="nm">Articles</span><span class="ct">6</span></div>
+      <div class="cat"><span class="dot" style="background:#C8801E"></span><span class="nm">Watch</span><span class="ct">3</span></div>
+      <div class="cat"><span class="dot" style="background:#7159B5"></span><span class="nm">Research</span><span class="ct">4</span></div>
+      <div class="cat"><span class="dot" style="background:#2F6FE4"></span><span class="nm">Tools</span><span class="ct">1</span></div>
+
+      <div class="side-h">Tags</div>
+      <div class="tagrow">
+        <span class="tag on">ai</span><span class="tag">design</span><span class="tag">rust</span>
+        <span class="tag">recipe</span><span class="tag">finance</span><span class="tag">+9</span>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+      <div class="toolbar">
+        <h1 class="serif-display">Read Later</h1>
+        <span class="count">· 14 saved</span>
+        <div class="spacer"></div>
+        <button class="select" title="Group">
+          <svg class="ic sm" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+          Group: <b>Due date</b>
+        </button>
+        <button class="select" title="Sort">
+          <svg class="ic sm" viewBox="0 0 24 24"><path d="M3 6h11M3 12h7M3 18h4M18 9l3-3 3 3M21 6v12"/></svg>
+          Sort: <b>Soonest</b>
+        </button>
+      </div>
+
+      <div class="list">
+        <!-- OVERDUE -->
+        <div class="bucket">
+          <div class="bucket-h over"><span class="lbl">Overdue</span><span class="ln"></span></div>
+
+          <article class="card over" onclick="openDetail(event)">
+            <span class="callout" style="left:18px;top:-9px;">Due chip + left rail show state at a glance (B4)</span>
+            <div class="row1">
+              <div class="fav" style="background:#3E7C5A">A</div>
+              <div style="flex:1;min-width:0">
+                <h3>The case for reading things twice</h3>
+                <div class="meta">
+                  <span>aeon.co</span><span>·</span>
+                  <span class="chip cat">Articles</span>
+                  <span class="chip due">Overdue 3d</span>
+                  <span>added Apr 12</span>
+                </div>
+                <p class="summary">A long‑form argument that re‑reading, not collecting, is where understanding compounds — with notes on spaced repetition and the “collector’s fallacy” of endless bookmarking.</p>
+              </div>
+              <div class="actions" onclick="event.stopPropagation()">
+                <button class="act primary" onclick="flash('Opened link')"><svg class="ic sm" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>Open</button>
+                <div class="kebab">
+                  <button class="act" onclick="toggleMenu(this)" aria-label="More actions"><svg class="ic sm" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>
+                  <div class="menu">
+                    <span class="callout" style="right:0;top:-9px;">Primary action finally reschedules — wires the existing background engine (B3)</span>
+                    <button onclick="flash('Marked revisited · next reminder in 7 days');closeMenus()"><svg class="ic sm" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Revisited — remind again</button>
+                    <div class="head">Snooze until…</div>
+                    <button onclick="flash('Snoozed to tomorrow');closeMenus()">Tomorrow</button>
+                    <button onclick="flash('Snoozed 1 week');closeMenus()">Next week</button>
+                    <button onclick="flash('Snoozed 1 month');closeMenus()">Next month</button>
+                    <div class="sep"></div>
+                    <button onclick="flash('Marked done');closeMenus()"><svg class="ic sm" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Done</button>
+                    <button class="danger" onclick="flash('Deleted');closeMenus()"><svg class="ic sm" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>Delete</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="card over" onclick="openDetail(event)">
+            <div class="row1">
+              <div class="fav" style="background:#7159B5">R</div>
+              <div style="flex:1;min-width:0">
+                <h3>Rust ownership, explained with diagrams</h3>
+                <div class="meta"><span>rust-lang.org</span><span>·</span><span class="chip cat">Research</span><span class="chip due">Overdue 1d</span><span>added May 30</span></div>
+                <p class="summary">Visual walkthrough of moves, borrows, and lifetimes. The borrow checker is reframed as a graph‑coloring problem; includes a cheat‑sheet for the three rules.</p>
+              </div>
+              <div class="actions" onclick="event.stopPropagation()">
+                <button class="act primary"><svg class="ic sm" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>Open</button>
+                <div class="kebab"><button class="act" onclick="toggleMenu(this)"><svg class="ic sm" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>
+                  <div class="menu"><button onclick="flash('Revisited');closeMenus()"><svg class="ic sm" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Revisited — remind again</button><div class="head">Snooze until…</div><button onclick="closeMenus()">Tomorrow</button><button onclick="closeMenus()">Next week</button><button onclick="closeMenus()">Next month</button><div class="sep"></div><button onclick="closeMenus()"><svg class="ic sm" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Done</button><button class="danger" onclick="closeMenus()"><svg class="ic sm" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>Delete</button></div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <!-- TODAY -->
+        <div class="bucket">
+          <div class="bucket-h today"><span class="lbl">Today</span><span class="ln"></span></div>
+          <article class="card soon" onclick="openDetail(event)">
+            <div class="row1">
+              <div class="fav" style="background:#C8801E">W</div>
+              <div style="flex:1;min-width:0">
+                <h3>How a CPU executes an instruction (14 min)</h3>
+                <div class="meta"><span>youtube.com</span><span>·</span><span class="chip cat">Watch</span><span class="chip due warn">Due today</span><span>added Jun 1</span></div>
+                <p class="summary">Animated pipeline tour: fetch, decode, execute, memory, write‑back. Good primer before the “out‑of‑order execution” follow‑up. Transcript captured.</p>
+              </div>
+              <div class="actions" onclick="event.stopPropagation()">
+                <button class="act primary"><svg class="ic sm" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>Open</button>
+                <div class="kebab"><button class="act" onclick="toggleMenu(this)"><svg class="ic sm" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>
+                  <div class="menu"><button onclick="flash('Revisited');closeMenus()"><svg class="ic sm" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Revisited — remind again</button><div class="head">Snooze until…</div><button onclick="closeMenus()">Tomorrow</button><button onclick="closeMenus()">Next week</button><button onclick="closeMenus()">Next month</button><div class="sep"></div><button onclick="closeMenus()"><svg class="ic sm" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Done</button><button class="danger" onclick="closeMenus()"><svg class="ic sm" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>Delete</button></div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <!-- THIS WEEK -->
+        <div class="bucket">
+          <div class="bucket-h"><span class="lbl" style="color:var(--ink-soft)">This week</span><span class="ln"></span></div>
+          <article class="card" onclick="openDetail(event)">
+            <div class="row1">
+              <div class="fav" style="background:#2F6FE4">T</div>
+              <div style="flex:1;min-width:0">
+                <h3>Designing calm software</h3>
+                <div class="meta"><span>nngroup.com</span><span>·</span><span class="chip cat">Articles</span><span class="chip due ok">Due in 4d</span><span>added Jun 3</span></div>
+                <p class="summary">Principles for interfaces that respect attention: default to quiet, make state legible, and let people act without ceremony. Pairs well with the “index card” pattern.</p>
+              </div>
+              <div class="actions" onclick="event.stopPropagation()">
+                <button class="act primary"><svg class="ic sm" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>Open</button>
+                <div class="kebab"><button class="act" onclick="toggleMenu(this)"><svg class="ic sm" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>
+                  <div class="menu"><button onclick="closeMenus()"><svg class="ic sm" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Revisited — remind again</button><div class="head">Snooze until…</div><button onclick="closeMenus()">Tomorrow</button><button onclick="closeMenus()">Next week</button><button onclick="closeMenus()">Next month</button><div class="sep"></div><button onclick="closeMenus()"><svg class="ic sm" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Done</button><button class="danger" onclick="closeMenus()"><svg class="ic sm" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>Delete</button></div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <!-- SOMEDAY -->
+        <div class="bucket">
+          <div class="bucket-h"><span class="lbl" style="color:var(--ink-faint)">Someday · no date</span><span class="ln"></span></div>
+          <span class="callout" style="left:120px;margin-top:-6px;">“No date” is now allowed — items live here instead of being un‑saveable (B5)</span>
+          <article class="card someday" onclick="openDetail(event)">
+            <div class="row1">
+              <div class="fav" style="background:#9a8a64">M</div>
+              <div style="flex:1;min-width:0">
+                <h3>Miso‑butter pasta (someday)</h3>
+                <div class="meta"><span>cooking.nyt.com</span><span>·</span><span class="chip cat">Articles</span><span class="chip due faint">Someday</span><span>added Jun 4</span></div>
+                <p class="summary">15‑minute weeknight recipe. Saved without a reminder — it’ll wait in Someday until you decide to schedule it.</p>
+              </div>
+              <div class="actions" onclick="event.stopPropagation()">
+                <button class="act primary"><svg class="ic sm" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>Open</button>
+                <div class="kebab"><button class="act" onclick="toggleMenu(this)"><svg class="ic sm" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>
+                  <div class="menu"><div class="head">Schedule a reminder</div><button onclick="flash('Scheduled for tomorrow');closeMenus()">Tomorrow</button><button onclick="closeMenus()">Next week</button><button onclick="closeMenus()">Next month</button><div class="sep"></div><button onclick="closeMenus()"><svg class="ic sm" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Done</button><button class="danger" onclick="closeMenus()"><svg class="ic sm" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>Delete</button></div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ============ DETAIL / EDIT OVERLAY ============ -->
+<div class="scrim" id="detailScrim">
+  <div class="sheet wide">
+    <div class="sheet-h">
+      <h2 class="serif-display">Edit bookmark</h2>
+      <button class="icon-btn" onclick="close_('detailScrim')" aria-label="Close"><svg class="ic" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="sheet-b">
+      <div class="field">
+        <label>Title</label>
+        <input type="text" value="The case for reading things twice">
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
+        <a class="linkout" href="#" onclick="return false"><svg class="ic sm" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>aeon.co/essays/reading-twice</a>
+        <span class="callout" style="position:static;display:inline-block">Edit screen can finally open the page (V15)</span>
+      </div>
+      <div class="grid3">
+        <div class="field"><label>Category</label><select><option>Articles</option><option>Watch</option><option>Research</option><option>Tools</option></select></div>
+        <div class="field"><label>Status</label><select><option>To revisit</option><option>Revisited</option><option>Done</option></select></div>
+        <div class="field"><label>Revisit by</label><input type="date" value="2026-06-01"></div>
+      </div>
+      <div class="field">
+        <label>Reschedule quickly</label>
+        <div class="chips">
+          <button class="qchip">Tomorrow</button><button class="qchip on">Next week</button>
+          <button class="qchip">Next month</button><button class="qchip">No date · Someday</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Tags</label>
+        <div class="tags-edit"><span class="tag-pill">ai <span>×</span></span><span class="tag-pill">attention <span>×</span></span><input type="text" placeholder="+ add tag" style="border:1px dashed var(--border);border-radius:20px;padding:4px 12px;width:120px;background:transparent"></div>
+      </div>
+      <div class="section-label"><span class="t">AI Summary</span><button class="act" onclick="flash('Zoomed')"><svg class="ic sm" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>Zoom</button></div>
+      <div class="md"><h4>The collector’s fallacy</h4><p>Saving ≠ knowing. The essay argues understanding compounds through deliberate re‑reading, not accumulation.</p><ul><li>Spaced revisits beat one long read.</li><li>Notes should capture <em>why</em> you saved it.</li></ul></div>
+      <div class="section-label"><span class="t">Your notes</span><button class="act" onclick="flash('Zoomed')"><svg class="ic sm" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>Zoom</button></div>
+      <div class="md" style="color:var(--ink-soft)"><p>Compare with the spaced‑repetition piece. Worth a re‑read before writing the triage section.</p></div>
+      <span class="callout" style="position:static;display:inline-block;margin-top:8px">Notes get a Zoom too — symmetry with Summary (U14)</span>
+    </div>
+    <div class="sheet-f">
+      <button class="btn btn-ghost" onclick="flash('Deleted');close_('detailScrim')"><svg class="ic sm" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg> Delete</button>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-ghost" onclick="close_('detailScrim')">Cancel</button>
+        <button class="btn btn-primary" onclick="flash('Saved');close_('detailScrim')">Save changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CAPTURE CARD (injected on a page) ============ -->
+<div class="scrim" id="captureScrim">
+  <div class="pagebg"></div>
+  <div class="sheet" style="max-width:560px;position:relative">
+    <div class="sheet-h">
+      <h2 class="serif-display">Save to ReVisit</h2>
+      <button class="icon-btn" onclick="close_('captureScrim')" aria-label="Close"><svg class="ic" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="sheet-b">
+      <div class="field"><label>Title</label><input type="text" value="Designing calm software"></div>
+      <div class="grid3" style="grid-template-columns:1fr 1fr">
+        <div class="field" style="margin-bottom:0"><label>Space</label><select><option>Read Later</option><option>Watch</option><option>Work</option></select></div>
+        <div class="field" style="margin-bottom:0"><label>Category</label><input type="text" value="Articles" placeholder="Type or pick…"></div>
+      </div>
+      <div class="field" style="margin-top:18px">
+        <label>When should we remind you?</label>
+        <div class="chips">
+          <button class="qchip">Tomorrow</button><button class="qchip on">Next week</button>
+          <button class="qchip">Next month</button><button class="qchip">Pick date</button>
+          <button class="qchip">No reminder</button>
+        </div>
+        <span class="callout" style="position:static;display:inline-block;margin-top:8px">Quick chips + “No reminder” replace the required date that used to throw (U13, V11)</span>
+      </div>
+      <div class="section-label"><span class="t">AI Summary</span><button class="act"><svg class="ic sm" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>Zoom</button></div>
+      <div class="md"><p>Principles for interfaces that respect attention: default to quiet, make state legible, let people act without ceremony.</p></div>
+      <div class="field" style="margin-top:18px"><label>Tags</label><input type="text" value="design, attention"></div>
+      <div class="field" style="margin-bottom:0"><label>Your notes</label><textarea placeholder="Why are you saving this?"></textarea></div>
+    </div>
+    <div class="sheet-f" style="justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="close_('captureScrim')">Cancel</button>
+      <button class="btn btn-primary" onclick="flash('Saved to Read Later');close_('captureScrim')">Save bookmark</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SETTINGS (tabbed, theme-correct) ============ -->
+<div class="scrim" id="settingsScrim">
+  <div class="sheet wide" style="max-width:760px">
+    <div class="sheet-h">
+      <h2 class="serif-display">Settings</h2>
+      <button class="icon-btn" onclick="close_('settingsScrim')" aria-label="Close"><svg class="ic" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="tabs">
+      <button class="active" onclick="tab(this,'pane-ai')">AI</button>
+      <button onclick="tab(this,'pane-acct')">Account &amp; Sync</button>
+      <button onclick="tab(this,'pane-spaces')">Spaces</button>
+      <button onclick="tab(this,'pane-data')">Data</button>
+    </div>
+    <div class="sheet-b">
+      <span class="callout" style="position:static;display:inline-block;margin-bottom:12px">Settings now honor the theme — no more white flash in dark mode (V5). One accent, no Bootstrap rainbow (V6).</span>
+      <div class="tabpane active" id="pane-ai">
+        <div class="field"><label>Gateway API key</label><input type="password" value="kb-llm-revisit-9f3a2c"></div>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px">
+          <button class="btn btn-ghost" onclick="flash('Connected · 16 providers, 240 models')"><svg class="ic sm" viewBox="0 0 24 24"><path d="M5 12.5 10 17l9-10"/></svg>Test connection</button>
+          <span class="status-good"><svg class="ic sm" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Connected · real check (U7)</span>
+        </div>
+        <div class="field">
+          <label>Default model — used everywhere unless overridden</label>
+          <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:12px">
+            <select><option>Groq</option><option>Anthropic</option><option>OpenAI</option><option>Ollama Cloud</option></select>
+            <select><option>openai/gpt-oss-120b</option><option>llama-3.3-70b</option></select>
+          </div>
+        </div>
+        <details class="disclosure">
+          <summary><svg class="ic sm" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>Advanced — different model per task</summary>
+          <div class="inner">
+            <div class="field"><label>YouTube summaries</label><div style="display:grid;grid-template-columns:1fr 1.4fr;gap:12px"><select><option>Groq</option></select><select><option>openai/gpt-oss-120b</option></select></div></div>
+            <div class="field"><label>Transcript formatting</label><div style="display:grid;grid-template-columns:1fr 1.4fr;gap:12px"><select><option>Groq</option></select><select><option>openai/gpt-oss-120b</option></select></div></div>
+            <div class="field" style="margin-bottom:0"><label>Web page summaries</label><div style="display:grid;grid-template-columns:1fr 1.4fr;gap:12px"><select><option>Ollama Cloud</option></select><select><option>llama-3.3-70b</option></select></div></div>
+            <div class="note">Ollama Cloud models appear here automatically after you add a key below — no separate “Refresh” dance (U9).</div>
+          </div>
+        </details>
+        <div class="field" style="margin-top:18px"><label>Ollama Cloud API key (optional)</label><input type="password" placeholder="Leave blank to skip"></div>
+      </div>
+      <div class="tabpane" id="pane-acct">
+        <div class="status-good" style="margin-bottom:14px"><svg class="ic sm" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Signed in as you@example.com · last synced 2 min ago</div>
+        <div style="display:flex;gap:10px"><button class="btn btn-ghost"><svg class="ic sm" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Sync now</button><button class="btn btn-ghost">Sign out</button></div>
+        <div class="note">Cloud‑sync logic is untouched by this redesign — same Supabase path, same data shape.</div>
+      </div>
+      <div class="tabpane" id="pane-spaces">
+        <div class="field"><label>Your spaces (synced)</label>
+          <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
+            <div style="display:flex;align-items:center;gap:10px;padding:11px 13px;border-bottom:1px solid var(--border)"><svg class="ic sm" viewBox="0 0 24 24"><path d="M3 7h18M3 7l2-3h6l2 3"/></svg><b>Read Later</b><span style="color:var(--ink-faint);font-size:12px">14 · default</span><span style="flex:1"></span><button class="act">Edit categories</button></div>
+            <div style="display:flex;align-items:center;gap:10px;padding:11px 13px"><svg class="ic sm" viewBox="0 0 24 24"><path d="M3 7h18M3 7l2-3h6l2 3"/></svg><b>Work</b><span style="color:var(--ink-faint);font-size:12px">22</span><span style="flex:1"></span><button class="act">Edit categories</button></div>
+          </div>
+        </div>
+        <div class="note">Deleting a Space opens an in‑app dialog with “move bookmarks” vs “delete” radio buttons — no more typing the word “reassign” into a prompt (U10).</div>
+      </div>
+      <div class="tabpane" id="pane-data">
+        <div style="display:flex;gap:10px"><button class="btn btn-ghost"><svg class="ic sm" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Back up to file</button><button class="btn btn-ghost"><svg class="ic sm" viewBox="0 0 24 24"><path d="M12 21V9M7 14l5-5 5 5M5 3h14"/></svg>Restore</button></div>
+      </div>
+    </div>
+    <div class="sheet-f" style="justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="close_('settingsScrim')">Close</button>
+      <button class="btn btn-primary" onclick="flash('Settings saved');close_('settingsScrim')">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- toast -->
+<div id="toast" aria-live="polite" style="position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:11px;font-family:ui-sans-serif,system-ui;font-size:14px;font-weight:500;box-shadow:var(--shadow);opacity:0;transition:.25s;z-index:300;pointer-events:none"></div>
+
+<!-- annotation toggle -->
+<div class="anno">
+  <button class="btn btn-ghost" style="background:var(--surface)" onclick="document.body.classList.toggle('show-anno')">Toggle annotations</button>
+</div>
+
+<script>
+function toggleTheme(){const r=document.documentElement;const d=r.getAttribute('data-theme')==='dark';r.setAttribute('data-theme',d?'light':'dark');
+  document.getElementById('themeIcon').innerHTML=d?'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/>':'<path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/>';}
+function openDetail(e){if(e.target.closest('.actions'))return;document.getElementById('detailScrim').classList.add('open')}
+function openCapture(){document.getElementById('captureScrim').classList.add('open')}
+function openSettings(){document.getElementById('settingsScrim').classList.add('open')}
+function close_(id){document.getElementById(id).classList.remove('open')}
+function toggleMenu(btn){const m=btn.parentElement.querySelector('.menu');const wasOpen=m.classList.contains('open');closeMenus();if(!wasOpen)m.classList.add('open')}
+function closeMenus(){document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'))}
+function tab(btn,id){btn.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');document.querySelectorAll('.tabpane').forEach(p=>p.classList.remove('active'));document.getElementById(id).classList.add('active')}
+let toastT;function flash(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.opacity=1;t.style.transform='translateX(-50%) translateY(0)';clearTimeout(toastT);toastT=setTimeout(()=>{t.style.opacity=0;t.style.transform='translateX(-50%) translateY(20px)'},1900)}
+document.addEventListener('click',e=>{if(!e.target.closest('.kebab'))closeMenus()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.scrim.open').forEach(s=>s.classList.remove('open'));closeMenus()}});
+// quick chips toggle
+document.querySelectorAll('.chips').forEach(c=>c.addEventListener('click',e=>{if(e.target.classList.contains('qchip')){c.querySelectorAll('.qchip').forEach(q=>q.classList.remove('on'));e.target.classList.add('on')}}));
+</script>
+</body>
+</html>

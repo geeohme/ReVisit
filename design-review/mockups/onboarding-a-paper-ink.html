@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ReVisit — Onboarding (Direction A)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+<style>
+:root[data-theme="light"]{--bg:#FBF7EF;--surface:#FFFDF8;--surface-2:#F3ECDD;--border:#E4D8C2;--ink:#2A2622;--ink-soft:#6F6657;--ink-faint:#A89B85;--accent:#D6492B;--accent-ink:#FFF;--accent-soft:#F6E0D8;--ok:#3E7C5A;--highlight:#FCE9A8;--shadow:0 1px 2px rgba(60,40,20,.06),0 10px 30px -14px rgba(60,40,20,.3);--card-edge:#EFE6D4}
+:root[data-theme="dark"]{--bg:#1C1814;--surface:#262019;--surface-2:#2F2820;--border:#3D3225;--ink:#EDE4D3;--ink-soft:#B6A88E;--ink-faint:#7C6F58;--accent:#E8633F;--accent-ink:#1C1814;--accent-soft:#3A241B;--ok:#7FB894;--highlight:#4A3F1E;--shadow:0 1px 2px rgba(0,0,0,.4),0 14px 34px -14px rgba(0,0,0,.6);--card-edge:#332A1E}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Newsreader",Georgia,serif;background:var(--bg);color:var(--ink);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:30px;-webkit-font-smoothing:antialiased;transition:background .3s,color .3s}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.4;background-image:radial-gradient(circle at 1px 1px,rgba(120,90,40,.05) 1px,transparent 0);background-size:14px 14px}
+.serif{font-family:"Fraunces",Georgia,serif}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+svg.ic{width:18px;height:18px;stroke:currentColor;stroke-width:1.75;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.wrap{position:relative;z-index:1;width:100%;max-width:560px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:20px;box-shadow:var(--shadow);overflow:hidden}
+.head{padding:30px 34px 0;text-align:center}
+.brand{display:inline-flex;align-items:center;gap:11px;margin-bottom:24px}
+.mark{width:34px;height:38px;border-radius:6px 6px 6px 0;background:linear-gradient(160deg,#F4E7CC,#E8D3A8);border:1px solid var(--card-edge);position:relative;box-shadow:var(--shadow)}
+.mark .g{position:absolute;top:5px;left:50%;transform:translateX(-50%);width:8px;height:8px;border-radius:50%;border:1.5px solid #9a8a64}
+.mark .c{position:absolute;left:7px;bottom:7px;color:var(--accent);font-weight:700;font-size:18px;line-height:1}
+.brand .nm{font-family:"Fraunces";font-weight:600;font-size:23px}.brand .nm b{color:var(--accent)}
+.dots{display:flex;justify-content:center;gap:8px;margin:0 0 4px}
+.dots i{width:7px;height:7px;border-radius:50%;background:var(--border);transition:.2s}
+.dots i.on{background:var(--accent);width:22px;border-radius:5px}
+.body{padding:14px 34px 6px;min-height:300px}
+.body h1{font-family:"Fraunces";font-size:27px;font-weight:600;text-align:center;margin-bottom:8px;line-height:1.2}
+.body .sub{text-align:center;color:var(--ink-soft);margin-bottom:24px;font-size:15.5px}
+.field{margin-bottom:18px}
+.field label{display:block;font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:8px}
+input[type=text],input[type=email],input[type=password]{width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:11px;background:var(--bg);color:var(--ink);font-family:inherit;font-size:16px}
+input::placeholder{color:var(--ink-faint)}
+.tpl{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.tpl button{display:flex;align-items:center;gap:11px;padding:13px 14px;border:1px solid var(--border);border-radius:13px;background:var(--surface-2);text-align:left;transition:.15s}
+.tpl button:hover{border-color:var(--accent)}
+.tpl button.on{border-color:var(--accent);background:var(--accent-soft)}
+.tpl .ti{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:#fff;flex:none}
+.tpl .tt{font-family:"Fraunces";font-weight:600;font-size:15px}
+.tpl .ts{font-size:12px;color:var(--ink-faint)}
+.tpl .star{margin-left:auto;color:var(--accent);font-size:12px;font-weight:600;font-family:"Fraunces"}
+.help{font-size:13px;color:var(--ink-faint);text-align:center;margin-top:10px}
+.help a{color:var(--accent)}
+.disc{border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-top:8px}
+.disc>summary{padding:13px 15px;font-weight:500;cursor:pointer;list-style:none;display:flex;align-items:center;gap:9px;font-size:14.5px}
+.disc>summary::-webkit-details-marker{display:none}
+.disc[open]>summary{border-bottom:1px solid var(--border)}
+.disc .in{padding:15px}
+.foot{display:flex;align-items:center;justify-content:space-between;padding:20px 34px 28px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 20px;border-radius:11px;font-weight:600;font-size:15px;transition:.15s}
+.btn-primary{background:var(--accent);color:var(--accent-ink);box-shadow:var(--shadow)}
+.btn-primary:hover{filter:brightness(1.05)}
+.btn-ghost{color:var(--ink-soft)}.btn-ghost:hover{color:var(--ink)}
+.link{color:var(--ink-faint);font-size:14px}.link:hover{color:var(--accent)}
+.theme{position:fixed;top:20px;right:20px;z-index:5;width:46px;height:26px;border-radius:20px;background:var(--surface-2);border:1px solid var(--border)}
+.theme .k{position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:var(--accent);transition:left .22s}
+:root[data-theme="dark"] .theme .k{left:22px}
+.callout{display:inline-block;background:var(--ink);color:var(--bg);font-family:ui-sans-serif,system-ui;font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:7px;line-height:1.35}
+.step{display:none}.step.on{display:block}
+.starter-note{background:var(--surface-2);border-radius:11px;padding:11px 14px;font-size:13.5px;color:var(--ink-soft);margin-top:14px;display:flex;gap:9px;align-items:flex-start}
+</style>
+</head>
+<body>
+<button class="theme" onclick="(t=>{let d=document.documentElement;d.setAttribute('data-theme',d.getAttribute('data-theme')==='dark'?'light':'dark')})()" aria-label="Toggle theme"><span class="k"></span></button>
+<div class="wrap">
+  <div style="text-align:center;margin-bottom:14px"><span class="callout">Simplified 3-screen rails flow — removes the curl wall (U2) &amp; triple-provider step (U3); one path, sensible defaults (B9)</span></div>
+  <div class="card">
+    <div class="head">
+      <div class="brand"><span class="mark"><span class="g"></span><span class="c">✓</span></span><span class="nm serif">Re<b>Visit</b></span></div>
+      <div class="dots"><i class="on" data-d="1"></i><i data-d="2"></i><i data-d="3"></i></div>
+    </div>
+
+    <!-- STEP 1 -->
+    <div class="step on" id="s1">
+      <div class="body">
+        <h1>Save it. We’ll remind you.</h1>
+        <p class="sub">ReVisit turns “I’ll read this later” into a gentle, scheduled nudge — with an AI summary so you remember why you saved it.</p>
+        <div class="field"><label>What should we call you? <span style="text-transform:none;color:var(--ink-faint);font-weight:400">(optional)</span></label><input type="text" placeholder="Your name"></div>
+        <div class="help">Already use ReVisit? <a href="#" onclick="return false">Sign in to restore your library →</a></div>
+      </div>
+      <div class="foot"><span></span><button class="btn btn-primary" onclick="go(2)">Get started <svg class="ic" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div class="step" id="s2">
+      <div class="body">
+        <h1>Make it yours</h1>
+        <p class="sub">Pick a starter collection — a “Space” for the kind of thing you save. You can add more later. One becomes your default.</p>
+        <div class="tpl">
+          <button class="on" onclick="pick(this)"><span class="ti" style="background:#3E7C5A"><svg class="ic" viewBox="0 0 24 24"><path d="M4 19V5a2 2 0 0 1 2-2h11l3 3v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M8 7h7M8 11h7M8 15h4"/></svg></span><span><span class="tt">Read Later</span><br><span class="ts">Articles · Research · Tools</span></span><span class="star">Default</span></button>
+          <button onclick="pick(this)"><span class="ti" style="background:#C8801E"><svg class="ic" viewBox="0 0 24 24"><path d="m10 8 6 4-6 4V8z"/><rect x="3" y="4" width="18" height="16" rx="2"/></svg></span><span><span class="tt">Watch</span><br><span class="ts">Videos · Talks</span></span></button>
+          <button onclick="pick(this)"><span class="ti" style="background:#2F6FE4"><svg class="ic" viewBox="0 0 24 24"><path d="M3 7h18M3 7l2-3h6l2 3M5 7v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7"/></svg></span><span><span class="tt">Work</span><br><span class="ts">Docs · References</span></span></button>
+          <button onclick="pick(this)"><span class="ti" style="background:#7159B5"><svg class="ic" viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6z"/><path d="M9 13h6M9 17h6"/></svg></span><span><span class="tt">Shopping</span><br><span class="ts">Wishlist · Compare</span></span></button>
+        </div>
+        <div class="starter-note"><svg class="ic" style="color:var(--accent);flex:none" viewBox="0 0 24 24"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="9"/></svg><span>A <b>Space</b> is a binder you rarely switch. <b>Categories</b> (the shelves inside it) come pre‑filled and you can rename them anytime. Better than the old generic “Articles, Research, Work, Personal.”</span></div>
+      </div>
+      <div class="foot"><button class="btn btn-ghost" onclick="go(1)">Back</button><button class="btn btn-primary" onclick="go(3)">Next <svg class="ic" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="step" id="s3">
+      <div class="body">
+        <h1>Add AI summaries</h1>
+        <p class="sub">Optional. With a connection key, ReVisit auto‑summarizes, categorizes, and tags each page (and YouTube transcripts) as you save them.</p>
+        <div class="field"><label>Connection key</label><input type="password" placeholder="Paste your key — or skip for now"></div>
+        <div class="help" style="text-align:left;margin-top:-6px"><a href="#" onclick="return false">How do I get a key? →</a> &nbsp;We’ll walk you through it (no terminal required).</div>
+        <details class="disc">
+          <summary><svg class="ic sm" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>Advanced — choose models per task</summary>
+          <div class="in">
+            <div class="field" style="margin-bottom:12px"><label>Default model</label><div style="display:grid;grid-template-columns:1fr 1.3fr;gap:10px"><select style="padding:11px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--ink);font-family:inherit"><option>Groq (fast)</option><option>Anthropic</option><option>Ollama Cloud</option></select><select style="padding:11px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--ink);font-family:inherit"><option>openai/gpt-oss-120b</option></select></div></div>
+            <p style="font-size:13px;color:var(--ink-faint)">One model is used for everything by default. You can set different models for YouTube / transcripts / web pages later in Settings.</p>
+          </div>
+        </details>
+        <div class="starter-note"><svg class="ic" style="color:var(--accent);flex:none" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span>No key yet? <b>Skip</b> — ReVisit still saves, schedules, and reminds. Turn on AI anytime in Settings.</span></div>
+      </div>
+      <div class="foot"><button class="btn btn-ghost" onclick="go(2)">Back</button><div style="display:flex;gap:14px;align-items:center"><button class="link" onclick="flash()">Skip — set up AI later</button><button class="btn btn-primary" onclick="flash()">Finish <svg class="ic" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></button></div></div>
+    </div>
+  </div>
+</div>
+<div id="toast" aria-live="polite" style="position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:11px;font-family:ui-sans-serif,system-ui;font-size:14px;font-weight:600;opacity:0;transition:.25s;z-index:9">Setup complete → opening your ReVisit list ✓</div>
+<script>
+let cur=1;
+function go(n){document.getElementById('s'+cur).classList.remove('on');cur=n;document.getElementById('s'+cur).classList.add('on');document.querySelectorAll('.dots i').forEach(d=>d.classList.toggle('on',+d.dataset.d<=n))}
+function pick(b){b.parentElement.querySelectorAll('button').forEach(x=>{x.classList.remove('on');const s=x.querySelector('.star');if(s)s.remove()});b.classList.add('on');const st=document.createElement('span');st.className='star';st.textContent='Default';b.appendChild(st)}
+function flash(){const t=document.getElementById('toast');t.style.opacity=1;t.style.transform='translateX(-50%) translateY(0)';setTimeout(()=>{t.style.opacity=0;t.style.transform='translateX(-50%) translateY(20px)'},2400)}
+</script>
+</body>
+</html>
