@@ -53,10 +53,29 @@
                         <!-- Categories will be injected here -->
                     </div>
                 </div>
+
+                <div class="tag-filter">
+                    <h3>Tags</h3>
+                    <div id="tags-list">
+                        <!-- Tag chips injected here -->
+                    </div>
+                </div>
             </aside>
 
             <section class="column-middle">
-                <h2>Bookmarks</h2>
+                <div class="list-toolbar">
+                    <h2>Bookmarks</h2>
+                    <label class="sort-ctl" for="sort-select">
+                        Sort
+                        <select id="sort-select">
+                            <option value="due">Due date</option>
+                            <option value="added">Recently added</option>
+                            <option value="updated">Recently updated</option>
+                            <option value="title">Title A–Z</option>
+                            <option value="category">Category</option>
+                        </select>
+                    </label>
+                </div>
                 <div id="links-list" class="bookmark-list">
                     <!-- Bookmarks will be injected here -->
                 </div>

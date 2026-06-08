@@ -7,6 +7,8 @@ let rvLocal = { enabledSpaceIds: [], defaultSpaceId: '', lastUsedListSpaceId: ''
 let activeSpaceId = '';
 let settingsSpaceId = '';
 let selectedCategory = 'All';
+let selectedTag = null;
+let sortMode = 'due';
 let searchQuery = '';
 let statusFilter = 'Active';
 let priorityView = false;
@@ -166,6 +168,13 @@ function setupEventListeners() {
     renderLinks();
   });
 
+  // Sort control
+  const sortSel = document.getElementById('sort-select');
+  if (sortSel) {
+    sortSel.value = sortMode;
+    sortSel.addEventListener('change', (e) => { sortMode = e.target.value; renderLinks(); });
+  }
+
   document.querySelectorAll('.filter-tabs button').forEach(btn => {
     btn.addEventListener('click', (e) => {
       document.querySelectorAll('.filter-tabs button').forEach(b => b.classList.remove('active'));
@@ -175,13 +184,20 @@ function setupEventListeners() {
     });
   });
 
-  // Priority View Toggle
-  document.getElementById('priority-btn').addEventListener('click', (e) => {
-    priorityView = !priorityView;
-    e.target.classList.toggle('active');
-    // Update button text to reflect state
-    e.target.textContent = priorityView ? 'Date View' : 'Priority View';
+  // View toggle: grouped-by-due (default) vs flat list by date.
+  const priorityBtn = document.getElementById('priority-btn');
+  priorityBtn.textContent = 'Flat list';
+  priorityBtn.title = 'Toggle grouped / flat view';
+  priorityBtn.addEventListener('click', (e) => {
+    priorityView = !priorityView; // true = flat
+    e.target.classList.toggle('active', priorityView);
+    e.target.textContent = priorityView ? 'Grouped' : 'Flat list';
     renderLinks();
+  });
+
+  // Close any open row action menu when clicking elsewhere.
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.bk-kebab')) closeRowMenus();
   });
 
   // Close App
@@ -274,6 +290,8 @@ function renderCategories() {
     item.addEventListener('click', () => selectCategory(catName));
     container.appendChild(item);
   });
+
+  renderTagFilter();
 }
 
 function selectCategory(catName) {
@@ -291,6 +309,7 @@ function renderLinks() {
     if (b.spaceId !== activeSpaceId) return false; // show only the active Space
     if (selectedCategory !== 'All' && b.category !== selectedCategory) return false;
     if (statusFilter !== 'All' && b.status !== statusFilter) return false;
+    if (selectedTag && !(b.tags || []).includes(selectedTag)) return false;
     if (searchQuery) {
       const searchText = `${b.title} ${b.summary} ${b.userNotes} ${b.tags.join(' ')}`.toLowerCase();
       if (!searchText.includes(searchQuery)) return false;
@@ -298,48 +317,242 @@ function renderLinks() {
     return true;
   });
 
-  // Sort
-  if (priorityView) {
-    filtered = filtered.sort((a, b) => getPriorityScore(b) - getPriorityScore(a));
-  } else {
-    filtered = filtered.sort((a, b) => new Date(a.revisitBy) - new Date(b.revisitBy));
-  }
+  filtered.sort(SORTERS[sortMode] || SORTERS.due);
 
   if (filtered.length === 0) {
-    container.innerHTML = '<div class="empty-state">No bookmarks found</div>';
+    container.innerHTML = '<div class="empty-state">Nothing here yet.</div>';
     return;
   }
 
-  filtered.forEach(bookmark => {
-    const item = document.createElement('div');
-    item.className = 'bookmark-list-item';
-    item.innerHTML = `
-      <div class="bookmark-title">${bookmark.title}</div>
-      <div class="bookmark-meta">
-        <span class="bookmark-source">${new URL(bookmark.url).hostname.replace('www.', '')}</span>
-        <span class="bookmark-date">${new Date(bookmark.revisitBy).toLocaleDateString()}</span>
-      </div>
-      <div class="bookmark-actions" style="margin-top: 8px; display: flex; justify-content: flex-end;">
-        <button class="revisit-btn" data-url="${bookmark.url}" style="padding: 4px 8px; font-size: 12px; background: var(--color-primary); color: white; border: none; border-radius: 4px;">ReVisit ↗</button>
-      </div>
-    `;
-    
-    // Click on item opens details
-    item.addEventListener('click', (e) => {
-      // Prevent opening details if clicking the ReVisit button
-      if (e.target.classList.contains('revisit-btn')) return;
-      openDetailOverlay(bookmark);
-    });
+  // Group into due buckets only when sorting by due date and not in flat mode;
+  // any other sort renders a single flat list in the chosen order.
+  if (sortMode !== 'due' || priorityView) {
+    filtered.forEach(b => container.appendChild(buildBookmarkRow(b)));
+    return;
+  }
 
-    // ReVisit Button Action
-    const revisitBtn = item.querySelector('.revisit-btn');
-    revisitBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      window.open(bookmark.url, '_blank');
-    });
-
-    container.appendChild(item);
+  const groups = {};
+  DUE_BUCKETS.forEach(g => { groups[g.key] = []; });
+  filtered.forEach(b => { groups[getDueInfo(b).key].push(b); });
+  DUE_BUCKETS.forEach(g => {
+    const items = groups[g.key];
+    if (!items.length) return;
+    const head = document.createElement('div');
+    head.className = `bucket-h ${g.key}`;
+    head.innerHTML = `<span class="bucket-lbl">${g.label}</span><span class="bucket-ct">${items.length}</span><span class="bucket-ln"></span>`;
+    container.appendChild(head);
+    items.forEach(b => container.appendChild(buildBookmarkRow(b)));
   });
+}
+
+// --- Bookmark row: due state, summary preview, Open + actions menu ---
+
+const DUE_BUCKETS = [
+  { key: 'overdue', label: 'Overdue' },
+  { key: 'today',   label: 'Today' },
+  { key: 'week',    label: 'This week' },
+  { key: 'later',   label: 'Later' },
+  { key: 'someday', label: 'Someday' },
+];
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+// Strip light markdown so the list preview reads as plain prose.
+function stripMarkdown(s) {
+  return String(s || '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/^[>#\s-]+/gm, '')
+    .replace(/[*_]{1,3}/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function hostOf(b) { try { return new URL(b.url).hostname.replace(/^www\./, ''); } catch { return ''; } }
+function faviconLetter(b) { const h = hostOf(b); return (h && h[0] ? h[0] : '•').toUpperCase(); }
+function addDaysISO(base, days) { return new Date(base.getTime() + days * 86400000).toISOString(); }
+
+// Returns { key (bucket), label (chip text), cls } from revisitBy.
+function getDueInfo(b) {
+  if (!b.revisitBy) return { key: 'someday', label: 'Someday', cls: 'someday' };
+  const due = new Date(b.revisitBy);
+  if (isNaN(due)) return { key: 'someday', label: 'Someday', cls: 'someday' };
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+  const diff = Math.round((dueDay - today) / 86400000);
+  if (diff < 0) return { key: 'overdue', label: `Overdue ${-diff}d`, cls: 'overdue' };
+  if (diff === 0) return { key: 'today', label: 'Due today', cls: 'today' };
+  if (diff <= 7) return { key: 'week', label: `Due in ${diff}d`, cls: 'week' };
+  return { key: 'later', label: `Due ${due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, cls: 'later' };
+}
+
+function dueSortKey(b) {
+  if (!b.revisitBy) return Number.MAX_SAFE_INTEGER;
+  const t = new Date(b.revisitBy).getTime();
+  return isNaN(t) ? Number.MAX_SAFE_INTEGER : t;
+}
+
+const tsOf = (v) => { const t = v ? new Date(v).getTime() : 0; return isNaN(t) ? 0 : t; };
+const SORTERS = {
+  due: (a, b) => dueSortKey(a) - dueSortKey(b),
+  added: (a, b) => tsOf(b.addedTimestamp) - tsOf(a.addedTimestamp),
+  updated: (a, b) => tsOf(b.updatedAt || b.addedTimestamp) - tsOf(a.updatedAt || a.addedTimestamp),
+  title: (a, b) => String(a.title || '').localeCompare(String(b.title || ''), undefined, { sensitivity: 'base' }),
+  category: (a, b) => String(a.category || '').localeCompare(String(b.category || ''), undefined, { sensitivity: 'base' }) || (dueSortKey(a) - dueSortKey(b)),
+};
+
+// Sidebar tag filter — chips for every tag present in the active Space.
+// (Named renderTagFilter to avoid colliding with renderTags(), which renders the
+// editable tag pills inside the detail overlay.)
+function renderTagFilter() {
+  const container = document.getElementById('tags-list');
+  if (!container) return;
+  const counts = new Map();
+  bookmarks.forEach(b => {
+    if (b.deletedAt || b.spaceId !== activeSpaceId) return;
+    (b.tags || []).forEach(t => counts.set(t, (counts.get(t) || 0) + 1));
+  });
+  const tags = [...counts.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  container.innerHTML = '';
+  if (!tags.length) {
+    container.innerHTML = '<span class="tag-empty">No tags yet</span>';
+    return;
+  }
+  // Clear-filter chip when a tag is active.
+  if (selectedTag) {
+    const clear = document.createElement('button');
+    clear.className = 'tag-chip clear';
+    clear.textContent = '✕ Clear';
+    clear.addEventListener('click', () => { selectedTag = null; renderTagFilter(); renderLinks(); });
+    container.appendChild(clear);
+  }
+  tags.forEach(t => {
+    const chip = document.createElement('button');
+    chip.className = `tag-chip${selectedTag === t ? ' on' : ''}`;
+    chip.textContent = t;
+    chip.addEventListener('click', () => {
+      selectedTag = (selectedTag === t) ? null : t;
+      renderTagFilter();
+      renderLinks();
+    });
+    container.appendChild(chip);
+  });
+}
+
+function closeRowMenus() {
+  document.querySelectorAll('.bk-menu.open').forEach(m => m.classList.remove('open'));
+}
+
+function buildBookmarkRow(bookmark) {
+  const due = getDueInfo(bookmark);
+  const item = document.createElement('article');
+  item.className = `bk-card ${due.cls}`;
+  const cat = bookmark.category
+    ? `<span class="chip chip-cat">${escapeHtml(bookmark.category)}</span>` : '';
+  const preview = stripMarkdown(bookmark.summary);
+  const summary = preview ? `<p class="bk-summary">${escapeHtml(preview)}</p>` : '';
+  item.innerHTML = `
+    <div class="bk-main">
+      <div class="bk-fav" aria-hidden="true">${escapeHtml(faviconLetter(bookmark))}</div>
+      <div class="bk-body">
+        <h3 class="bk-title">${escapeHtml(bookmark.title || 'Untitled')}</h3>
+        <div class="bk-meta">
+          <span class="bk-host">${escapeHtml(hostOf(bookmark))}</span>
+          ${cat}
+          <span class="chip chip-due ${due.cls}">${escapeHtml(due.label)}</span>
+        </div>
+        ${summary}
+      </div>
+      <div class="bk-actions">
+        <button class="bk-open">Open</button>
+        <div class="bk-kebab">
+          <button class="bk-kebab-btn" aria-haspopup="true" aria-expanded="false" aria-label="More actions">⋯</button>
+          <div class="bk-menu" role="menu">
+            <button data-act="revisit" role="menuitem">Revisited — remind again</button>
+            <div class="bk-menu-head">Snooze until…</div>
+            <button data-act="snooze" data-days="1" role="menuitem">Tomorrow</button>
+            <button data-act="snooze" data-days="7" role="menuitem">Next week</button>
+            <button data-act="snooze" data-days="30" role="menuitem">Next month</button>
+            <div class="bk-menu-sep"></div>
+            <button data-act="done" role="menuitem">Done</button>
+            <button data-act="delete" class="danger" role="menuitem">Delete</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  item.addEventListener('click', (e) => {
+    if (e.target.closest('.bk-actions')) return;
+    openDetailOverlay(bookmark);
+  });
+  item.querySelector('.bk-open').addEventListener('click', (e) => {
+    e.stopPropagation();
+    window.open(bookmark.url, '_blank');
+  });
+  const kebab = item.querySelector('.bk-kebab-btn');
+  const menu = item.querySelector('.bk-menu');
+  kebab.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const wasOpen = menu.classList.contains('open');
+    closeRowMenus();
+    if (!wasOpen) { menu.classList.add('open'); kebab.setAttribute('aria-expanded', 'true'); }
+  });
+  menu.querySelectorAll('button[data-act]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeRowMenus();
+      handleRowAction(bookmark.id, btn.dataset.act, btn.dataset.days);
+    });
+  });
+  return item;
+}
+
+// Apply a ReVisit action to a bookmark using the SAME saveData() LWW + push path
+// the editor uses — no new sync logic, no background message needed.
+async function handleRowAction(id, act, days) {
+  const b = bookmarks.find(x => x.id === id);
+  if (!b) return;
+  const now = new Date();
+  if (act === 'revisit') {
+    const iv = (settings && settings.defaultIntervalDays) || 7;
+    b.revisitBy = addDaysISO(now, iv);
+    b.status = 'Active';
+    pushHistory(b, `ReVisited — reminder in ${iv}d`);
+    await saveData();
+    showToast(`Revisited — back in ${iv} day${iv === 1 ? '' : 's'}`, 'success');
+  } else if (act === 'snooze') {
+    const d = parseInt(days, 10) || 1;
+    b.revisitBy = addDaysISO(now, d);
+    if (b.status === 'Complete') b.status = 'Active';
+    pushHistory(b, `Snoozed ${d}d`);
+    await saveData();
+    showToast(`Snoozed ${d} day${d === 1 ? '' : 's'}`, 'success');
+  } else if (act === 'done') {
+    b.status = 'Complete';
+    pushHistory(b, 'Marked Complete');
+    await saveData();
+    showToast('Marked done', 'success');
+  } else if (act === 'delete') {
+    b.deletedAt = now.toISOString();
+    b.updatedAt = now.toISOString();
+    b._dirty = true;
+    b.status = 'Deleted';
+    await saveData();
+    showToast('Deleted', 'success');
+  }
+  renderLinks();
+  renderCategories();
+}
+
+function pushHistory(b, action) {
+  b.history = b.history || [];
+  b.history.push({ timestamp: Date.now(), action });
 }
 
 // --- Detail Overlay Logic ---
@@ -1191,6 +1404,7 @@ function renderSpaceSelector() {
 async function onSpaceSelectorChange(e) {
   activeSpaceId = e.target.value;
   selectedCategory = 'All';                 // reset view state for the new Space
+  selectedTag = null;
   rvLocal.lastUsedListSpaceId = activeSpaceId;
   await chrome.storage.local.set({ rvLocal }); // rvLocal ONLY — never rvData
   renderCategories();
