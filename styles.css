@@ -1,42 +1,139 @@
 /* Global styles for ReVisit extension */
+/* ============================================================
+   THEME SYSTEM — 3 color schemes × light/dark.
+   Schemes are selected via <html data-scheme="paper|quiet|system">
+   and <html data-theme="light|dark"> (applied by theme.js, persisted
+   in localStorage; default = paper / light). Every scheme maps onto
+   the SAME variable names the rest of this file already uses, so the
+   whole app re-themes with no other CSS changes. Two extra font tokens
+   (--font-ui, --font-display) let each scheme carry its own type.
+   ============================================================ */
 :root {
-  /* Base Variables (Light Mode) */
-  --color-primary: #3B82F6;
-  --color-dark-text: #1F2937;
-  --color-medium-text: #6B7280;
-  --color-light-text: #9CA3AF;
-  --color-bg-light: #F9FAFB;
-  --color-bg-panel: #FFFFFF;
-  --color-border: #E5E7EB;
-  --color-active-bg: #E0EEFF; /* Lighter tint of primary */
-  --color-tag-bg-active: #D1FAE5; /* Light green for active tags */
-  --color-tag-text-active: #065F46; /* Darker green for active tags */
-  --color-hover-bg: #F3F4F6; /* Hover background for list items */
-  --color-danger: #EF4444;
-  --color-warning: #F59E0B;
-  --color-success: #10B981;
-
   --border-radius-default: 0.375rem; /* 6px */
   --spacing-unit: 0.5rem; /* 8px */
+
+  /* ---- Default = Direction A · Paper & Ink (light) ---- */
+  --font-ui: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-display: 'Fraunces', Georgia, serif;
+  --color-primary: #D6492B;
+  --color-primary-contrast: #FFFFFF;
+  --color-dark-text: #2A2622;
+  --color-medium-text: #6F6657;
+  --color-light-text: #A89B85;
+  --color-bg-light: #FBF7EF;
+  --color-bg-panel: #FFFDF8;
+  --color-border: #E4D8C2;
+  --color-active-bg: #F6E0D8;
+  --color-tag-bg-active: #DDEAE0;
+  --color-tag-text-active: #3E7C5A;
+  --color-hover-bg: #F3ECDD;
+  --color-danger: #B23B2E;
+  --color-warning: #C8801E;
+  --color-success: #3E7C5A;
 }
 
-/* Dark Mode Variables */
-html[data-theme="dark"] {
-  --color-dark-text: #E0E0E0; /* Lighter for dark backgrounds */
-  --color-medium-text: #A0A0A0; /* Medium gray */
-  --color-light-text: #606060; /* Darker gray for subtle text */
-  --color-bg-light: #121212; /* Very dark background */
-  --color-bg-panel: #1E1E1E; /* Slightly lighter panel background */
-  --color-border: #3A3A3A; /* Muted border */
-  --color-active-bg: #183D69; /* Darker blue for active state */
-  --color-tag-bg-active: #0A4D2E; /* Dark green for active tags */
-  --color-tag-text-active: #6EE7B7; /* Light green for active tag text */
-  --color-hover-bg: #2A2A2A; /* Subtle hover background */
+/* Paper & Ink — dark */
+:root[data-scheme="paper"][data-theme="dark"] {
+  --color-primary: #E8633F;
+  --color-primary-contrast: #1C1814;
+  --color-dark-text: #EDE4D3;
+  --color-medium-text: #B6A88E;
+  --color-light-text: #7C6F58;
+  --color-bg-light: #1C1814;
+  --color-bg-panel: #262019;
+  --color-border: #3D3225;
+  --color-active-bg: #3A241B;
+  --color-tag-bg-active: #26342A;
+  --color-tag-text-active: #7FB894;
+  --color-hover-bg: #2F2820;
+  --color-danger: #E2705F;
+  --color-warning: #E0A645;
+  --color-success: #7FB894;
+}
+
+/* ---- Direction B · Quiet Focus (cool, refined) ---- */
+:root[data-scheme="quiet"] {
+  --font-ui: 'Schibsted Grotesk', system-ui, -apple-system, sans-serif;
+  --font-display: 'Schibsted Grotesk', system-ui, -apple-system, sans-serif;
+}
+:root[data-scheme="quiet"][data-theme="light"] {
+  --color-primary: #2F6FE4;
+  --color-primary-contrast: #FFFFFF;
+  --color-dark-text: #1A1F26;
+  --color-medium-text: #5A6470;
+  --color-light-text: #98A2AE;
+  --color-bg-light: #F6F7F9;
+  --color-bg-panel: #FFFFFF;
+  --color-border: #E2E6EB;
+  --color-active-bg: #E5EEFD;
+  --color-tag-bg-active: #DDF0E6;
+  --color-tag-text-active: #1E9E63;
+  --color-hover-bg: #F0F2F5;
+  --color-danger: #CE4434;
+  --color-warning: #B9791A;
+  --color-success: #1E9E63;
+}
+:root[data-scheme="quiet"][data-theme="dark"] {
+  --color-primary: #5B8DEF;
+  --color-primary-contrast: #0E1116;
+  --color-dark-text: #E6EAF0;
+  --color-medium-text: #9AA6B2;
+  --color-light-text: #5C6773;
+  --color-bg-light: #0E1116;
+  --color-bg-panel: #151A21;
+  --color-border: #232B36;
+  --color-active-bg: #172132;
+  --color-tag-bg-active: #14302A;
+  --color-tag-text-active: #4CB782;
+  --color-hover-bg: #1B212A;
+  --color-danger: #E5604D;
+  --color-warning: #E0A23C;
+  --color-success: #4CB782;
+}
+
+/* ---- Direction C · Confident System (disciplined blue) ---- */
+:root[data-scheme="system"] {
+  --font-ui: 'Public Sans', system-ui, -apple-system, sans-serif;
+  --font-display: 'Bricolage Grotesque', system-ui, -apple-system, sans-serif;
+}
+:root[data-scheme="system"][data-theme="light"] {
+  --color-primary: #2E5BD8;
+  --color-primary-contrast: #FFFFFF;
+  --color-dark-text: #1B1D22;
+  --color-medium-text: #585C66;
+  --color-light-text: #8A8E98;
+  --color-bg-light: #F7F6F3;
+  --color-bg-panel: #FFFFFF;
+  --color-border: #E3E0D9;
+  --color-active-bg: #E6ECFB;
+  --color-tag-bg-active: #DDF0E6;
+  --color-tag-text-active: #1F9D57;
+  --color-hover-bg: #EFEDE8;
+  --color-danger: #D03A2C;
+  --color-warning: #C07C12;
+  --color-success: #1F9D57;
+}
+:root[data-scheme="system"][data-theme="dark"] {
+  --color-primary: #6E97FF;
+  --color-primary-contrast: #16171A;
+  --color-dark-text: #ECEDEF;
+  --color-medium-text: #A4A8B0;
+  --color-light-text: #6E727A;
+  --color-bg-light: #16171A;
+  --color-bg-panel: #1E2024;
+  --color-border: #32363D;
+  --color-active-bg: #1C2740;
+  --color-tag-bg-active: #15302A;
+  --color-tag-text-active: #43BE7C;
+  --color-hover-bg: #25282D;
+  --color-danger: #E76558;
+  --color-warning: #DDA53F;
+  --color-success: #43BE7C;
 }
 
 body {
   margin: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-family: var(--font-ui);
   font-size: 14px;
   color: var(--color-dark-text);
   background-color: var(--color-bg-light);
@@ -46,7 +143,7 @@ body {
 /* Ensure modals don't inherit page styles */
 .rv-overlay, .rv-modal {
   all: initial;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-family: var(--font-ui);
 }
 
 /* Button styles */
@@ -124,8 +221,10 @@ button:hover {
 }
 
 .app-header .logo {
+  font-family: var(--font-display);
   font-weight: 700;
-  font-size: 1.25rem;
+  font-size: 1.375rem;
+  letter-spacing: 0.2px;
   color: var(--color-dark-text);
 }
 
@@ -771,11 +870,12 @@ input:checked + .slider:before {
    RESTORED SETTINGS PANEL STYLES
    ============================================ */
 
-/* Settings Modal Styles */
+/* Settings Modal Styles — token-driven so the panel respects the active
+   scheme + light/dark instead of flashing hardcoded white. */
 .settings-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.7);
+  background: rgba(0,0,0,0.55);
   z-index: 10000;
   display: none;
   align-items: center;
@@ -787,38 +887,46 @@ input:checked + .slider:before {
 }
 
 .settings-modal {
-  background: white;
-  border-radius: 8px;
+  background: var(--color-bg-panel);
+  color: var(--color-dark-text);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
   width: 90%;
   max-width: 800px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-  display: block; /* Override flex from new design if needed */
+  box-shadow: 0 24px 60px -20px rgba(0,0,0,0.45);
+  display: block;
 }
 
 .settings-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
-  border-bottom: 2px solid #e0e0e0;
-  background: #f9f9f9;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-panel);
 }
 
 .settings-header h2 {
   margin: 0;
-  color: #333;
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--color-dark-text);
 }
 
 .settings-close-btn {
-  background: #dc3545;
-  color: white;
-  border: none;
-  border-radius: 4px;
+  background: transparent;
+  color: var(--color-medium-text);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
   padding: 8px 16px;
   cursor: pointer;
   font-size: 14px;
+}
+.settings-close-btn:hover {
+  background: var(--color-hover-bg);
+  color: var(--color-dark-text);
 }
 
 .settings-body {
@@ -826,9 +934,9 @@ input:checked + .slider:before {
 }
 
 .settings-section {
-  margin-bottom: 30px;
+  margin-bottom: 28px;
   padding-bottom: 20px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .settings-section:last-child {
@@ -837,108 +945,160 @@ input:checked + .slider:before {
 
 .settings-section h3 {
   margin-top: 0;
-  color: #4a90e2;
-  font-size: 18px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-display);
+  color: var(--color-dark-text);
+  font-size: 1.0625rem;
+  font-weight: 600;
 }
 
+/* Line icon used in section headers (replaces emoji). */
+.settings-h-icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  stroke: var(--color-primary);
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.settings-section h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.settings-h-icon.sm { width: 16px; height: 16px; stroke: var(--color-medium-text); }
+
 .settings-field {
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 
 .settings-field label {
   display: block;
-  font-weight: 500;
-  margin-bottom: 5px;
-  color: #333;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--color-medium-text);
+  font-size: 0.8125rem;
 }
 
 .settings-field input,
 .settings-field select {
   width: 100%;
   padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
   font-size: 14px;
   box-sizing: border-box;
-  background-color: white; /* Ensure white bg */
-  color: #333; /* Ensure dark text */
+  background-color: var(--color-bg-light);
+  color: var(--color-dark-text);
+  font-family: inherit;
 }
 
 .settings-field input[type="password"] {
-  font-family: monospace;
+  font-family: 'SFMono-Regular', Menlo, Consolas, monospace;
 }
 
 .settings-help-text {
   font-size: 12px;
-  color: #666;
+  color: var(--color-medium-text);
   margin-top: 5px;
-  line-height: 1.4;
+  line-height: 1.45;
 }
+
+/* Appearance scheme preview swatches — driven by the live token set. */
+.scheme-preview {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+.scheme-preview .sw {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: 1px solid var(--color-border);
+}
+.scheme-preview .sw-bg { background: var(--color-bg-light); }
+.scheme-preview .sw-panel { background: var(--color-bg-panel); }
+.scheme-preview .sw-accent { background: var(--color-primary); border-color: transparent; }
+.scheme-preview .sw-text { background: var(--color-dark-text); border-color: transparent; }
+.scheme-preview .sw-ok { background: var(--color-success); border-color: transparent; }
 
 .settings-button-group {
   display: flex;
   gap: 10px;
   margin-top: 10px;
+  flex-wrap: wrap;
 }
 
 .settings-btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 4px;
+  padding: 9px 16px;
+  border: 1px solid transparent;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
+  font-family: inherit;
 }
 
+/* One accent, no Bootstrap rainbow. Primary = accent; info = soft accent;
+   secondary = neutral bordered. */
 .settings-btn-primary {
-  background: #28a745;
-  color: white;
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
 }
 
 .settings-btn-primary:hover {
-  background: #218838;
+  filter: brightness(1.06);
 }
 
 .settings-btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--color-bg-light);
+  color: var(--color-dark-text);
+  border-color: var(--color-border);
 }
 
 .settings-btn-secondary:hover {
-  background: #5a6268;
+  background: var(--color-hover-bg);
 }
 
 .settings-btn-info {
-  background: #17a2b8;
-  color: white;
+  background: var(--color-active-bg);
+  color: var(--color-primary);
+  border-color: var(--color-border);
 }
 
 .settings-btn-info:hover {
-  background: #138496;
+  filter: brightness(0.98);
 }
 
 .api-key-instructions {
-  background: #f8f9fa;
+  background: var(--color-bg-light);
   padding: 15px;
-  border-radius: 4px;
+  border-radius: 8px;
   margin-top: 10px;
   font-size: 13px;
-  border-left: 4px solid #17a2b8;
+  border-left: 4px solid var(--color-primary);
+  color: var(--color-dark-text);
 }
 
 .api-key-instructions h4 {
   margin-top: 0;
-  color: #17a2b8;
+  color: var(--color-primary);
 }
 
 .api-key-instructions pre {
-  background: #333;
-  color: #0f0;
+  background: var(--color-dark-text);
+  color: var(--color-bg-panel);
   padding: 10px;
-  border-radius: 4px;
+  border-radius: 6px;
   overflow-x: auto;
   font-size: 11px;
   margin: 10px 0;
+  font-family: 'SFMono-Regular', Menlo, Consolas, monospace;
 }
 
 .api-key-instructions ol {
@@ -951,16 +1111,17 @@ input:checked + .slider:before {
 }
 
 .transaction-config {
-  background: #f8f9fa;
+  background: var(--color-bg-light);
   padding: 15px;
-  border-radius: 4px;
+  border-radius: 8px;
   margin-bottom: 15px;
+  border: 1px solid var(--color-border);
 }
 
 .transaction-config h4 {
   margin-top: 0;
-  color: #495057;
-  font-size: 16px;
+  color: var(--color-dark-text);
+  font-size: 15px;
 }
 
 .settings-grid {
@@ -971,9 +1132,9 @@ input:checked + .slider:before {
 
 /* Categories Manager Styles */
 #categories-manager {
-  background: #f8f9fa;
+  background: var(--color-bg-light);
   padding: 15px;
-  border-radius: 4px;
+  border-radius: 8px;
   margin-bottom: 20px;
 }
 
@@ -982,10 +1143,10 @@ input:checked + .slider:before {
   grid-template-columns: 2fr 1fr 1fr;
   gap: 10px;
   padding: 10px;
-  background: #e9ecef;
-  border-radius: 4px;
+  background: var(--color-hover-bg);
+  border-radius: 6px;
   font-weight: 600;
-  color: #495057;
+  color: var(--color-medium-text);
   margin-bottom: 10px;
 }
 
@@ -999,33 +1160,33 @@ input:checked + .slider:before {
   grid-template-columns: 2fr 1fr 1fr;
   gap: 10px;
   padding: 10px;
-  background: white;
-  border-radius: 4px;
+  background: var(--color-bg-panel);
+  border-radius: 6px;
   margin-bottom: 8px;
   align-items: center;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--color-border);
   cursor: move;
   transition: all 0.2s ease;
 }
 
 .category-settings-item:hover {
-  background: #f0f7ff;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  background: var(--color-hover-bg);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.08);
 }
 
 .category-settings-item.dragging {
   opacity: 0.5;
-  background: #e3f2fd;
-  border: 2px dashed #4a90e2;
+  background: var(--color-active-bg);
+  border: 2px dashed var(--color-primary);
 }
 
 .category-settings-item.drag-over {
-  border-top: 3px solid #4a90e2;
+  border-top: 3px solid var(--color-primary);
 }
 
 .cat-name {
   font-weight: 500;
-  color: #333;
+  color: var(--color-dark-text);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1033,13 +1194,13 @@ input:checked + .slider:before {
 
 .cat-name::before {
   content: '⋮⋮';
-  color: #999;
+  color: var(--color-light-text);
   font-size: 16px;
   font-weight: bold;
 }
 
 .cat-count {
-  color: #666;
+  color: var(--color-medium-text);
   text-align: center;
 }
 
@@ -1053,21 +1214,23 @@ input:checked + .slider:before {
 .cat-priority input {
   width: 60px;
   padding: 5px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   text-align: center;
+  background: var(--color-bg-light);
+  color: var(--color-dark-text);
 }
 
 .add-category-form {
-  background: #f8f9fa;
+  background: var(--color-bg-light);
   padding: 15px;
-  border-radius: 4px;
-  border-left: 4px solid #4a90e2;
+  border-radius: 8px;
+  border-left: 4px solid var(--color-primary);
 }
 
 .add-category-form h4 {
   margin-top: 0;
-  color: #4a90e2;
+  color: var(--color-primary);
 }
 
 .add-category-inputs {
@@ -1079,9 +1242,11 @@ input:checked + .slider:before {
 .add-category-inputs input {
   flex: 1;
   padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
   font-size: 14px;
+  background: var(--color-bg-light);
+  color: var(--color-dark-text);
 }
 
 .add-category-inputs input[type="number"] {
@@ -1097,6 +1262,80 @@ input:checked + .slider:before {
 }
 .spaces-panel.active { transform: translateX(0); }
 .spaces-panel-header { display: flex; justify-content: space-between; align-items: center; }
+.spaces-panel-header h2 { font-family: var(--font-display); font-weight: 600; }
 .spaces-zone { border-top: 1px solid var(--color-border, #ddd); padding: 12px 0; }
+.spaces-zone h3, .spaces-zone h4 { font-family: var(--font-display); color: var(--color-dark-text); }
 /* These can be opened from inside the settings overlay (z-index 10000), so they must sit above it. */
 #legacy-restore-overlay.active, #setup-gate-overlay.active { z-index: 10001; }
+
+/* Spaces panel rows + inputs — token-driven (were unstyled browser defaults). */
+.space-row { display: grid; grid-template-columns: 2fr auto 70px auto auto; gap: 8px; align-items: center; padding: 8px 0; }
+.space-install-row { display: flex; gap: 16px; align-items: center; padding: 6px 0; }
+.space-count { color: var(--color-medium-text); font-size: 13px; text-align: center; }
+.spaces-panel input[type="text"], .spaces-panel input[type="number"], .add-space-form input {
+  padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 6px;
+  background: var(--color-bg-light); color: var(--color-dark-text); font-family: inherit; font-size: 14px;
+}
+.add-space-form { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.add-space-form input { flex: 1; }
+.space-edit-cats, .space-delete {
+  background: var(--color-bg-light); border: 1px solid var(--color-border); color: var(--color-medium-text);
+  border-radius: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer;
+}
+.space-edit-cats:hover, .space-delete:hover { background: var(--color-hover-bg); color: var(--color-dark-text); }
+
+/* ============================================================
+   HEADER ACTION CONTROLS — these were unstyled <button>/<select>
+   browser defaults; give them a consistent token-driven look.
+   ============================================================ */
+#settings-btn, #priority-btn, #close-btn, #space-selector {
+  font-family: inherit;
+  font-size: 0.875rem;
+  padding: 7px 13px;
+  border-radius: var(--border-radius-default);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-light);
+  color: var(--color-dark-text);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+#settings-btn:hover, #priority-btn:hover, #close-btn:hover { background: var(--color-hover-bg); }
+#space-selector { max-width: 200px; }
+#priority-btn.active {
+  background: var(--color-active-bg);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+#close-btn { color: var(--color-medium-text); }
+
+/* ============================================================
+   ACCESSIBILITY BASELINE
+   ============================================================ */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+/* The theme slider is a styled checkbox; keep a visible ring when focused. */
+.theme-switch input:focus-visible + .slider {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}

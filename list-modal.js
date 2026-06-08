@@ -70,10 +70,9 @@ function getDefaultSettings() {
 function catKey(c) { return c.spaceId + ' ' + c.name; }
 
 async function init() {
-  // Theme Initialization
-  const savedTheme = localStorage.getItem('theme') || 'light';
-  document.documentElement.setAttribute('data-theme', savedTheme);
-  document.getElementById('checkbox').checked = savedTheme === 'dark';
+  // Theme Initialization — theme.js (loaded in <head>) already applied the
+  // persisted scheme + light/dark. Just reflect the dark state in the toggle.
+  document.getElementById('checkbox').checked = RvTheme.getTheme() === 'dark';
 
   // Load data
   const data = await chrome.storage.local.get(['rvData', 'rvLocal']);
@@ -130,11 +129,29 @@ async function init() {
 }
 
 function setupEventListeners() {
-  // Theme Toggle
+  // Theme Toggle (light/dark) — delegate to the shared theme controller.
   document.getElementById('checkbox').addEventListener('change', (e) => {
-    const newTheme = e.target.checked ? 'dark' : 'light';
-    document.documentElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('theme', newTheme);
+    RvTheme.setTheme(e.target.checked ? 'dark' : 'light');
+  });
+
+  // Appearance — color scheme picker (Paper & Ink / Quiet Focus / Confident System)
+  // and a light/dark mode select that mirrors the header toggle.
+  const schemeSel = document.getElementById('scheme-select');
+  const modeSel = document.getElementById('mode-select');
+  if (schemeSel) {
+    schemeSel.value = RvTheme.getScheme();
+    schemeSel.addEventListener('change', (e) => RvTheme.setScheme(e.target.value));
+  }
+  if (modeSel) {
+    modeSel.value = RvTheme.getTheme();
+    modeSel.addEventListener('change', (e) => RvTheme.setTheme(e.target.value));
+  }
+  // Keep every theme control in sync when the theme changes from anywhere.
+  window.addEventListener('rv-theme-change', (e) => {
+    const cb = document.getElementById('checkbox');
+    if (cb) cb.checked = e.detail.theme === 'dark';
+    if (schemeSel) schemeSel.value = e.detail.scheme;
+    if (modeSel) modeSel.value = e.detail.theme;
   });
 
   // Spaces — header selector + manager panel

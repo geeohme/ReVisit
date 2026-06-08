@@ -1,18 +1,28 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>ReVisit - Onboarding</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Public+Sans:wght@400;500;600;700&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <script src="theme.js"></script>
   <style>
+    /* Onboarding now consumes the shared theme tokens so it matches the app
+       and follows the active scheme + light/dark. */
+    body { background: var(--color-bg-light); color: var(--color-dark-text); }
     .onboarding-container {
       max-width: 600px;
       margin: 50px auto;
       padding: 30px;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      background: var(--color-bg-panel);
+      border: 1px solid var(--color-border);
+      border-radius: 14px;
+      box-shadow: 0 20px 50px -24px rgba(0,0,0,0.4);
     }
+    .onboarding-container h1,
+    .onboarding-container h2 { font-family: var(--font-display); color: var(--color-dark-text); }
     .step {
       display: none;
     }
@@ -28,15 +38,15 @@
       width: 10px;
       height: 10px;
       border-radius: 50%;
-      background: #ddd;
+      background: var(--color-border);
       margin: 0 5px;
     }
     .step-dot.active {
-      background: #4a90e2;
+      background: var(--color-primary);
     }
     .loading-message {
       text-align: center;
-      color: #4a90e2;
+      color: var(--color-primary);
       margin: 15px 0;
       display: none;
     }
@@ -44,14 +54,15 @@
       display: block;
     }
     .transaction-config {
-      background: #f8f9fa;
+      background: var(--color-bg-light);
       padding: 15px;
-      border-radius: 4px;
+      border-radius: 8px;
       margin-bottom: 15px;
+      border: 1px solid var(--color-border);
     }
     .transaction-config h4 {
       margin-top: 0;
-      color: #495057;
+      color: var(--color-dark-text);
     }
     .settings-grid {
       display: grid;
@@ -63,17 +74,20 @@
     }
     .settings-field label {
       display: block;
-      font-weight: 500;
+      font-weight: 600;
       margin-bottom: 5px;
-      color: #333;
+      color: var(--color-medium-text);
     }
     input, textarea, select {
       width: 100%;
       padding: 10px;
       margin: 8px 0 20px 0;
-      border: 1px solid #ddd;
-      border-radius: 4px;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
       box-sizing: border-box;
+      background: var(--color-bg-light);
+      color: var(--color-dark-text);
+      font-family: inherit;
     }
     .button-group {
       display: flex;
@@ -82,24 +96,29 @@
     }
     button {
       padding: 10px 20px;
-      border: none;
-      border-radius: 4px;
+      border: 1px solid transparent;
+      border-radius: 8px;
       cursor: pointer;
       font-size: 14px;
+      font-family: inherit;
     }
     .btn-primary {
-      background: #4a90e2;
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-primary-contrast);
     }
     .btn-secondary {
-      background: #f0f0f0;
+      background: var(--color-bg-light);
+      color: var(--color-dark-text);
+      border-color: var(--color-border);
     }
     .alert {
-      background: #fff3cd;
-      border: 1px solid #ffc107;
+      background: var(--color-active-bg);
+      border: 1px solid var(--color-border);
+      border-left: 4px solid var(--color-primary);
       padding: 10px;
-      border-radius: 4px;
+      border-radius: 8px;
       margin-bottom: 15px;
+      color: var(--color-dark-text);
     }
   </style>
 </head>

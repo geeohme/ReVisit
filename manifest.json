@@ -32,7 +32,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["styles.css", "utils.js", "rv-sync-core.js", "sync.js"],
+      "resources": ["styles.css", "theme.js", "utils.js", "rv-sync-core.js", "sync.js"],
       "matches": ["<all_urls>"]
     }
   ],
