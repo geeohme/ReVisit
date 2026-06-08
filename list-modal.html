@@ -149,6 +149,7 @@
                 <h2><svg class="settings-h-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Settings</h2>
                 <button class="settings-close-btn" id="settings-close-btn">Close</button>
             </div>
+            <div class="settings-tabs" id="settings-tabs" role="tablist"><!-- tab buttons injected --></div>
             <div class="settings-body">
                 <!-- Appearance Section -->
                 <div class="settings-section" id="appearance-section">
@@ -205,7 +206,7 @@
                     </div>
                 </div>
                 <!-- LLM Gateway Setup Section -->
-                <div class="settings-section">
+                <div class="settings-section" id="gateway-section">
                     <h3><svg class="settings-h-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 7.5a4 4 0 1 0-3.9 5L7 17v3h3l1-1h2l1-1v-2l1.5-1.5A4 4 0 0 0 15.5 7.5z"/><circle cx="16.5" cy="7.5" r="0.6" fill="currentColor"/></svg> LLM Gateway Setup</h3>
                     <div class="settings-field">
                         <label for="gateway-api-key">Gateway API Key</label>
@@ -240,7 +241,7 @@
                 </div>
 
                 <!-- Ollama Setup Section -->
-                <div class="settings-section">
+                <div class="settings-section" id="ollama-section">
                     <h3><svg class="settings-h-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg> Ollama Setup</h3>
                     <div class="settings-field">
                         <label for="ollama-local-url">Local Ollama URL</label>
@@ -263,9 +264,21 @@
                 </div>
 
                 <!-- Transaction Settings Section -->
-                <div class="settings-section">
+                <div class="settings-section" id="aiprovider-section">
                     <h3><svg class="settings-h-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/></svg> AI Provider Settings</h3>
-                    <p class="settings-help-text">Configure which AI provider and model to use for each type of task.</p>
+                    <p class="settings-help-text">Pick one default model for everything. Open “Advanced” to use a different model per task.</p>
+
+                    <!-- Global default model -->
+                    <div class="settings-field">
+                        <label for="global-provider">Default model — used for every task unless overridden</label>
+                        <div class="settings-grid">
+                            <select id="global-provider"></select>
+                            <select id="global-model"></select>
+                        </div>
+                    </div>
+
+                  <details class="advanced-models" id="advanced-models">
+                    <summary>Advanced — different model per task</summary>
 
                     <!-- YouTube Summary Configuration -->
                     <div class="transaction-config">
@@ -341,10 +354,11 @@
                             </div>
                         </div>
                     </div>
+                  </details>
                 </div>
 
                 <!-- Backup & Restore Section -->
-                <div class="settings-section">
+                <div class="settings-section" id="backup-section">
                     <h3><svg class="settings-h-icon" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg> Backup &amp; Restore</h3>
                     <p class="settings-help-text">Backup your Spaces, bookmarks, categories, and transcripts to a JSON file. Restore from a previous backup. Note: app settings and per-installation Space selection (which Spaces are enabled/default here) are NOT backed up.</p>
                     <div class="settings-button-group">
@@ -354,7 +368,7 @@
                 </div>
 
                 <!-- Spaces Section -->
-                <div class="settings-section">
+                <div class="settings-section" id="spaces-section">
                     <h3><svg class="settings-h-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h6l2 2h10v9a2 2 0 0 1-2 2H3z"/><path d="M3 7V5a2 2 0 0 1 2-2h4l2 2"/></svg> Spaces</h3>
                     <p class="settings-help-text">A Space is a top-level container. Each Space owns its own categories and bookmarks. Manage your Spaces, their categories, and which are available on this installation.</p>
                     <div class="settings-button-group">

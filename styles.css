@@ -453,6 +453,42 @@ button:hover {
   flex: 1;
 }
 
+/* Settings tab bar */
+.settings-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-panel);
+  flex-shrink: 0;
+}
+.settings-tab-btn {
+  padding: 12px 14px;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-medium-text);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+}
+.settings-tab-btn:hover { color: var(--color-dark-text); }
+.settings-tab-btn.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+
+/* Advanced per-task models disclosure */
+.advanced-models { margin-top: 10px; border: 1px solid var(--color-border); border-radius: 8px; }
+.advanced-models > summary {
+  padding: 11px 14px; cursor: pointer; font-weight: 500; font-size: 0.875rem;
+  color: var(--color-dark-text); list-style: none; user-select: none;
+}
+.advanced-models > summary::-webkit-details-marker { display: none; }
+.advanced-models > summary::before { content: '▸'; color: var(--color-medium-text); margin-right: 8px; }
+.advanced-models[open] > summary::before { content: '▾'; }
+.advanced-models[open] > summary { border-bottom: 1px solid var(--color-border); }
+.advanced-models .transaction-config { margin: 12px; }
+
 .settings-header {
   padding: 20px;
   border-bottom: 1px solid var(--color-border);

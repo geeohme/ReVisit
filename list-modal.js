@@ -208,40 +208,12 @@ function setupEventListeners() {
   document.getElementById('save-bookmark-btn').addEventListener('click', saveCurrentBookmark);
   document.getElementById('delete-bookmark-btn').addEventListener('click', deleteCurrentBookmark);
 
-  // Settings
+  // Settings — open/close only. The section handlers (toggle instructions, the REAL
+  // Test Connection = testGatewayConnection, save, etc.) are bound in
+  // setupSettingsEventListeners() each time the panel opens. (The old init-time
+  // duplicates + the mock "Connection successful!" test have been removed.)
   document.getElementById('settings-btn').addEventListener('click', openSettings);
   document.getElementById('settings-close-btn').addEventListener('click', closeSettings);
-  
-  // Settings - Toggle Instructions
-  document.getElementById('toggle-instructions-btn').addEventListener('click', () => {
-    const instructions = document.getElementById('api-key-instructions');
-    instructions.style.display = instructions.style.display === 'none' ? 'block' : 'none';
-  });
-  document.getElementById('save-settings-btn').addEventListener('click', saveSettings);
-  
-  // Settings - Toggle Instructions
-  document.getElementById('toggle-instructions-btn').addEventListener('click', () => {
-    const instructions = document.getElementById('api-key-instructions');
-    instructions.style.display = instructions.style.display === 'none' ? 'block' : 'none';
-  });
-
-  // Settings - Test Connection
-  document.getElementById('test-connection-btn').addEventListener('click', async () => {
-    const apiKey = document.getElementById('gateway-api-key').value;
-    if (!apiKey) {
-      showToast('Please enter an API Key first.', 'error');
-      return;
-    }
-    // Mock test for now, or implement actual fetch if endpoint known
-    showToast('Testing connection...', 'info');
-    try {
-        // Simulating a check
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        showToast('Connection successful!', 'success');
-    } catch (e) {
-        showToast('Connection failed.', 'error');
-    }
-  });
 
   // Settings - Add Category is bound via add-category-btn.onclick = handleAddCategory
   // (Space-scoped). The old inline listener here pushed a spaceId-less category and
@@ -1001,10 +973,91 @@ function openSettings() {
     updateModelDropdown('page-model', pageConfig.provider, pageConfig.model);
   }
 
+  // Global default model + Advanced disclosure state.
+  initGlobalModel();
+
+  // Build/refresh the tab bar and default to Appearance.
+  activeSettingsTab = 'appearance';
+  buildSettingsTabs();
+
   // Setup event listeners
   setupSettingsEventListeners();
 
   refreshAccountUI();
+}
+
+// --- Settings tabs ---
+
+const SETTINGS_TABS = [
+  { id: 'appearance', label: 'Appearance', sections: ['appearance-section'] },
+  { id: 'ai',         label: 'AI',         sections: ['gateway-section', 'ollama-section', 'aiprovider-section'] },
+  { id: 'account',    label: 'Account',    sections: ['account-section'] },
+  { id: 'spaces',     label: 'Spaces',     sections: ['spaces-section'] },
+  { id: 'data',       label: 'Data',       sections: ['backup-section'] },
+];
+let activeSettingsTab = 'appearance';
+
+function showSettingsTab(tabId) {
+  const tab = SETTINGS_TABS.find(t => t.id === tabId) || SETTINGS_TABS[0];
+  activeSettingsTab = tab.id;
+  const shown = new Set(tab.sections);
+  SETTINGS_TABS.forEach(t => t.sections.forEach(sid => {
+    const el = document.getElementById(sid);
+    if (el) el.style.display = shown.has(sid) ? '' : 'none';
+  }));
+  document.querySelectorAll('#settings-tabs .settings-tab-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === tab.id));
+}
+
+function buildSettingsTabs() {
+  const bar = document.getElementById('settings-tabs');
+  if (!bar) return;
+  bar.innerHTML = SETTINGS_TABS.map(t =>
+    `<button class="settings-tab-btn${t.id === activeSettingsTab ? ' active' : ''}" data-tab="${t.id}" role="tab">${t.label}</button>`
+  ).join('');
+  bar.querySelectorAll('.settings-tab-btn').forEach(b =>
+    b.addEventListener('click', () => showSettingsTab(b.dataset.tab)));
+  showSettingsTab(activeSettingsTab);
+}
+
+// --- Global default model (drives the three per-task selects) ---
+
+function initGlobalModel() {
+  const gp = document.getElementById('global-provider');
+  const gm = document.getElementById('global-model');
+  if (!gp || !gm) return;
+  const md = settings.llmGateway && settings.llmGateway.modelsData;
+  // Mirror the provider options already built for the per-task selects.
+  const src = document.getElementById('youtube-provider');
+  if (src) gp.innerHTML = src.innerHTML;
+  const tx = (settings.llmGateway && settings.llmGateway.transactions) || {};
+  const y = tx.youtubeSummary || { provider: 'groq', model: 'openai/gpt-oss-120b' };
+  const t = tx.transcriptFormatting || y;
+  const p = tx.pageSummary || y;
+  gp.value = y.provider;
+  if (md) updateModelDropdownFromGateway('global-model', y.provider, md);
+  else updateModelDropdown('global-model', y.provider, y.model);
+  gm.value = y.model;
+  // Reveal Advanced only when the three tasks already differ.
+  const same = y.provider === t.provider && y.model === t.model
+            && y.provider === p.provider && y.model === p.model;
+  const adv = document.getElementById('advanced-models');
+  if (adv) adv.open = !same;
+}
+
+function syncGlobalToAll() {
+  const gp = document.getElementById('global-provider');
+  const gm = document.getElementById('global-model');
+  if (!gp || !gm) return;
+  const md = settings.llmGateway && settings.llmGateway.modelsData;
+  ['youtube', 'transcript', 'page'].forEach(key => {
+    const ps = document.getElementById(key + '-provider');
+    if (ps) ps.value = gp.value;
+    if (md) updateModelDropdownFromGateway(key + '-model', gp.value, md);
+    else updateModelDropdown(key + '-model', gp.value);
+    const ms = document.getElementById(key + '-model');
+    if (ms) ms.value = gm.value;
+  });
 }
 
 /**
@@ -1066,7 +1119,7 @@ function setupSettingsEventListeners() {
     instructions.style.display = instructions.style.display === 'none' ? 'block' : 'none';
   };
 
-  // Test connection
+  // Test connection (REAL gateway check via background — not the old mock)
   document.getElementById('test-connection-btn').onclick = testGatewayConnection;
 
   // Ollama buttons
@@ -1075,6 +1128,16 @@ function setupSettingsEventListeners() {
 
   // Provider change listeners - update model dropdowns
   const modelsData = settings.llmGateway?.modelsData;
+
+  // Global default model drives the three per-task selects.
+  const gProv = document.getElementById('global-provider');
+  const gModel = document.getElementById('global-model');
+  if (gProv) gProv.onchange = () => {
+    if (modelsData) updateModelDropdownFromGateway('global-model', gProv.value, modelsData);
+    else updateModelDropdown('global-model', gProv.value);
+    syncGlobalToAll();
+  };
+  if (gModel) gModel.onchange = syncGlobalToAll;
 
   document.getElementById('youtube-provider').onchange = (e) => {
     if (modelsData) {
