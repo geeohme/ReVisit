@@ -105,10 +105,11 @@ function populateProviderDropdowns() {
 
   const providers = Object.keys(modelsData);
   const providerDropdowns = [
+    document.getElementById('onb-global-provider'),
     document.getElementById('youtube-provider'),
     document.getElementById('transcript-provider'),
     document.getElementById('page-provider')
-  ];
+  ].filter(Boolean);
 
   // Populate each provider dropdown
   providerDropdowns.forEach(dropdown => {
@@ -127,9 +128,26 @@ function populateProviderDropdowns() {
   });
 
   // Update model dropdowns based on default provider
+  updateModelDropdown('onb-global-model', document.getElementById('onb-global-provider').value);
   updateModelDropdown('youtube-model', document.getElementById('youtube-provider').value);
   updateModelDropdown('transcript-model', document.getElementById('transcript-provider').value);
   updateModelDropdown('page-model', document.getElementById('page-provider').value);
+  // The global default drives all three per-task selects until Advanced is used.
+  syncOnbGlobal();
+}
+
+// Copy the onboarding global default model into the three per-task selects.
+function syncOnbGlobal() {
+  const gp = document.getElementById('onb-global-provider');
+  const gm = document.getElementById('onb-global-model');
+  if (!gp || !gm) return;
+  ['youtube', 'transcript', 'page'].forEach(key => {
+    const ps = document.getElementById(key + '-provider');
+    if (ps) ps.value = gp.value;
+    updateModelDropdown(key + '-model', gp.value);
+    const ms = document.getElementById(key + '-model');
+    if (ms && gm.value) ms.value = gm.value;
+  });
 }
 
 /**
@@ -317,15 +335,30 @@ async function completeOnboarding() {
   const pageProvider = document.getElementById('page-provider').value;
   const pageModel = document.getElementById('page-model').value;
 
-  if (!userName || !gatewayApiKey) {
-    alert('Please fill in your name and LLM Gateway API key.');
-    return;
-  }
-
-  if (!youtubeProvider || !youtubeModel || !transcriptProvider || !transcriptModel || !pageProvider || !pageModel) {
-    alert('Please select a provider and model for all three transaction types.');
-    return;
-  }
+  // Name and AI are both optional now — onboarding can complete with neither.
+  // Build the gateway config only when a key was provided; otherwise store a
+  // disabled gateway the user can fill in later from Settings.
+  const def = (p, m) => ({ provider: p || 'groq', model: m || 'openai/gpt-oss-120b' });
+  const llmGateway = gatewayApiKey
+    ? {
+        enabled: true,
+        apiKey: gatewayApiKey,
+        modelsData: modelsData,
+        transactions: {
+          youtubeSummary: { ...def(youtubeProvider, youtubeModel), options: { temperature: 0.7, maxTokens: 10000 } },
+          transcriptFormatting: { ...def(transcriptProvider, transcriptModel), options: { temperature: 0.3, maxTokens: 64000 } },
+          pageSummary: { ...def(pageProvider, pageModel), options: { temperature: 0.7, maxTokens: 2500 } },
+        },
+      }
+    : {
+        enabled: false,
+        apiKey: '',
+        transactions: {
+          youtubeSummary: { ...def(), options: { temperature: 0.7, maxTokens: 10000 } },
+          transcriptFormatting: { ...def(), options: { temperature: 0.3, maxTokens: 64000 } },
+          pageSummary: { ...def(), options: { temperature: 0.7, maxTokens: 2500 } },
+        },
+      };
 
   const data = {
     spaces: [{ id: firstSpaceId, name: firstSpaceName, priority: 1, updatedAt: now }],
@@ -336,28 +369,7 @@ async function completeOnboarding() {
       defaultIntervalDays: interval,
       onboardingComplete: true,
       priorityThresholdDays: threshold,
-      llmGateway: {
-        enabled: true,
-        apiKey: gatewayApiKey,
-        modelsData: modelsData, // SAVE MODELS DATA TO STORAGE
-        transactions: {
-          youtubeSummary: {
-            provider: youtubeProvider,
-            model: youtubeModel,
-            options: { temperature: 0.7, maxTokens: 10000 }
-          },
-          transcriptFormatting: {
-            provider: transcriptProvider,
-            model: transcriptModel,
-            options: { temperature: 0.3, maxTokens: 64000 }
-          },
-          pageSummary: {
-            provider: pageProvider,
-            model: pageModel,
-            options: { temperature: 0.7, maxTokens: 2500 }
-          }
-        }
-      },
+      llmGateway,
       ollama: buildOllamaSettings(
         document.getElementById('ollama-local-url').value,
         document.getElementById('ollama-cloud-api-key').value
@@ -402,17 +414,44 @@ document.addEventListener('DOMContentLoaded', function() {
   if (prevBtn3) prevBtn3.addEventListener('click', prevStep);
   if (nextBtn3) nextBtn3.addEventListener('click', nextStep);
 
+  // Step 2 — category template chips append to the comma list.
+  const catTemplates = document.getElementById('cat-templates');
+  if (catTemplates) {
+    catTemplates.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-cat]');
+      if (!btn) return;
+      const input = document.getElementById('initial-categories');
+      const cats = input.value.split(',').map(c => c.trim()).filter(Boolean);
+      if (!cats.some(c => c.toLowerCase() === btn.dataset.cat.toLowerCase())) {
+        cats.push(btn.dataset.cat);
+        input.value = cats.join(', ');
+      }
+      btn.classList.add('used');
+    });
+  }
+
+  // Jump from Step 4 straight to the Spaces step (skips the per-task provider step).
+  const skipToSpaces = () => {
+    document.getElementById(stepElementId(currentStep)).classList.remove('active');
+    currentStep = 6;
+    document.getElementById(stepElementId(6)).classList.add('active');
+    updateStepIndicator();
+  };
+
   // Step 4 buttons
   const prevBtn4 = document.getElementById('prev-btn-4');
   const nextBtn4 = document.getElementById('next-btn-4');
+  const skipAiBtn = document.getElementById('skip-ai-btn');
   if (prevBtn4) prevBtn4.addEventListener('click', prevStep);
+  if (skipAiBtn) skipAiBtn.addEventListener('click', skipToSpaces);
   if (nextBtn4) {
     nextBtn4.addEventListener('click', async () => {
-      // Test connection and fetch models before proceeding to Step 5
+      // No key entered → treat Next as "skip AI" (no curl wall, AI is optional).
+      const key = document.getElementById('gateway-api-key').value.trim();
+      if (!key) { skipToSpaces(); return; }
+      // Key entered → test connection + fetch models, then go to model selection.
       const success = await testAndFetchModels();
-      if (success) {
-        nextStep();
-      }
+      if (success) nextStep();
     });
   }
 
@@ -449,5 +488,18 @@ document.addEventListener('DOMContentLoaded', function() {
     pageProviderDropdown.addEventListener('change', (e) => {
       updateModelDropdown('page-model', e.target.value);
     });
+  }
+
+  // Global default model (Step 5) drives the three per-task selects.
+  const onbGlobalProvider = document.getElementById('onb-global-provider');
+  const onbGlobalModel = document.getElementById('onb-global-model');
+  if (onbGlobalProvider) {
+    onbGlobalProvider.addEventListener('change', (e) => {
+      updateModelDropdown('onb-global-model', e.target.value);
+      syncOnbGlobal();
+    });
+  }
+  if (onbGlobalModel) {
+    onbGlobalModel.addEventListener('change', syncOnbGlobal);
   }
 });

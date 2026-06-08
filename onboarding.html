@@ -120,6 +120,32 @@
       margin-bottom: 15px;
       color: var(--color-dark-text);
     }
+    /* Category template chips */
+    .tpl-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: -8px 0 16px; }
+    .tpl-chips button {
+      padding: 6px 12px; border: 1px solid var(--color-border); border-radius: 20px;
+      background: var(--color-bg-light); color: var(--color-medium-text);
+      font-size: 13px; cursor: pointer; font-family: inherit;
+    }
+    .tpl-chips button:hover { border-color: var(--color-primary); color: var(--color-primary); }
+    .tpl-chips button.used { background: var(--color-active-bg); border-color: var(--color-primary); color: var(--color-primary); }
+    /* Collapsible how-to / Ollama panels */
+    .howto-key { border: 1px solid var(--color-border); border-radius: 8px; margin-top: 12px; }
+    .howto-key > summary {
+      padding: 11px 14px; cursor: pointer; font-weight: 500; font-size: 14px;
+      color: var(--color-dark-text); list-style: none;
+    }
+    .howto-key > summary::-webkit-details-marker { display: none; }
+    .howto-key > summary::before { content: '▸'; color: var(--color-medium-text); margin-right: 8px; }
+    .howto-key[open] > summary::before { content: '▾'; }
+    .howto-key[open] > summary { border-bottom: 1px solid var(--color-border); }
+    .howto-inner { padding: 14px; font-size: 13px; color: var(--color-medium-text); }
+    .howto-inner pre {
+      background: var(--color-dark-text); color: var(--color-bg-panel);
+      padding: 10px; border-radius: 6px; overflow-x: auto; font-size: 11px;
+      font-family: 'SFMono-Regular', Menlo, monospace;
+    }
+    .howto-inner code { background: var(--color-bg-light); padding: 1px 5px; border-radius: 3px; font-family: monospace; }
   </style>
 </head>
 <body>
@@ -185,9 +211,17 @@
     </div>
     
     <div id="step-2" class="step">
-      <h2>Step 2: Initial Interests</h2>
-      <p>Choose some starting categories (comma-separated):</p>
+      <h2>Step 2: Your categories</h2>
+      <p>Tap a starter category to add it, or type your own (comma-separated). These are the shelves inside your first Space.</p>
       <input type="text" id="initial-categories" value="Articles, Research, Work, Personal" placeholder="e.g., Tech, Books, Research">
+      <div class="tpl-chips" id="cat-templates">
+        <button type="button" data-cat="Read Later">+ Read Later</button>
+        <button type="button" data-cat="Watch">+ Watch</button>
+        <button type="button" data-cat="Reference">+ Reference</button>
+        <button type="button" data-cat="Shopping">+ Shopping</button>
+        <button type="button" data-cat="Recipes">+ Recipes</button>
+        <button type="button" data-cat="Ideas">+ Ideas</button>
+      </div>
       <div class="button-group">
         <button class="btn-secondary" id="prev-btn-2">Back</button>
         <button class="btn-primary" id="next-btn-2">Next</button>
@@ -213,62 +247,67 @@
     </div>
     
     <div id="step-4" class="step">
-      <h2>Step 4: AI Configuration</h2>
-      <div class="alert">
-        <strong>Note:</strong> Your API key is stored locally and never transmitted elsewhere.
-      </div>
+      <h2>Step 4: Add AI summaries <span style="font-weight:400;color:var(--color-medium-text);font-size:0.8em;">(optional)</span></h2>
+      <p>With a connection key, ReVisit auto-summarizes, categorizes, and tags each page as you save it. You can skip this and turn it on later in Settings.</p>
 
-      <div class="api-key-section" style="margin-bottom: 25px;">
-        <h3 style="margin-bottom: 10px;">🔑 LLM Gateway API Key (Required)</h3>
-        <p style="margin-bottom: 10px;">Provides access to 16+ AI providers (OpenAI, Anthropic, Google, Groq, and more) through a unified interface.</p>
-        <input type="password" id="gateway-api-key" placeholder="kb-llm-yourapp-xyz123">
-
-        <div style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 4px; border-left: 4px solid #17a2b8;">
-          <h4 style="margin-top: 0; color: #17a2b8;">How to Get Your API Key</h4>
-          <ol style="font-size: 13px; margin: 10px 0; padding-left: 20px;">
-            <li>Open your terminal or command prompt</li>
-            <li>Copy and paste this command:</li>
-          </ol>
-          <pre style="background: #333; color: #0f0; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 11px; margin: 10px 0;">curl -X POST https://llmproxy.api.sparkbright.me/admin/apps \
+      <div class="api-key-section" style="margin-bottom: 20px;">
+        <div class="settings-field">
+          <label for="gateway-api-key">Connection key</label>
+          <input type="password" id="gateway-api-key" placeholder="Paste your key — or skip for now">
+        </div>
+        <details class="howto-key">
+          <summary>How do I get a key? (no terminal expertise needed)</summary>
+          <div class="howto-inner">
+            <p>Run this one-line command in your terminal; it returns a key starting with <code>kb-llm-</code>:</p>
+            <pre>curl -X POST https://llmproxy.api.sparkbright.me/admin/apps \
   -H "Content-Type: application/json" \
   -d '{"appName": "ReVisit Extension", "rateLimit": 120}'</pre>
-          <ol start="3" style="font-size: 13px; margin: 10px 0; padding-left: 20px;">
-            <li>Press Enter to execute</li>
-            <li>Copy the "apiKey" value (starts with "kb-llm-")</li>
-            <li>Paste it above</li>
-          </ol>
-          <p style="font-size: 12px; margin-bottom: 0;"><strong>Note:</strong> Save your key immediately - it cannot be retrieved later!</p>
-        </div>
+            <p style="font-size:12px;margin-bottom:0;">Copy the <code>apiKey</code> value and paste it above. Save it — it can’t be retrieved later. Your key is stored locally.</p>
+          </div>
+        </details>
       </div>
 
-      <div class="api-key-section" style="margin-bottom: 25px;">
-        <h3 style="margin-bottom: 10px;">🦙 Ollama (Optional)</h3>
-        <p style="margin-bottom: 10px;">Use a local Ollama instance and/or Ollama Cloud. Leave blank to skip — you can add these later in Settings.</p>
-        <div class="settings-field">
-          <label for="ollama-local-url">Local Ollama URL</label>
-          <input type="text" id="ollama-local-url" placeholder="http://localhost:11434">
-          <div class="alert" style="background:#f8f9fa;border-color:#ddd;font-size:12px;">Leave blank to disable local Ollama.</div>
+      <details class="howto-key" style="margin-bottom:20px;">
+        <summary>Use Ollama instead (local / cloud)</summary>
+        <div class="howto-inner">
+          <div class="settings-field">
+            <label for="ollama-local-url">Local Ollama URL</label>
+            <input type="text" id="ollama-local-url" placeholder="http://localhost:11434">
+          </div>
+          <div class="settings-field">
+            <label for="ollama-cloud-api-key">Ollama Cloud API Key</label>
+            <input type="password" id="ollama-cloud-api-key" placeholder="Ollama Cloud API key">
+          </div>
         </div>
-        <div class="settings-field">
-          <label for="ollama-cloud-api-key">Ollama Cloud API Key</label>
-          <input type="password" id="ollama-cloud-api-key" placeholder="Ollama Cloud API key">
-          <div class="alert" style="background:#f8f9fa;border-color:#ddd;font-size:12px;">API key for Ollama Cloud (ollama.com). Leave blank to disable.</div>
-        </div>
-      </div>
+      </details>
 
       <div class="loading-message" id="loading-message">
-        ⏳ Testing connection and fetching available models...
+        Testing connection and fetching available models…
       </div>
 
-      <div class="button-group" style="margin-top: 25px;">
+      <div class="button-group" style="margin-top: 25px; justify-content: space-between;">
         <button class="btn-secondary" id="prev-btn-4">Back</button>
-        <button class="btn-primary" id="next-btn-4">Next</button>
+        <div style="display:flex;gap:10px;">
+          <button class="btn-secondary" id="skip-ai-btn">Skip — set up later</button>
+          <button class="btn-primary" id="next-btn-4">Next</button>
+        </div>
       </div>
     </div>
 
     <div id="step-5" class="step">
-      <h2>Step 5: AI Provider Selection</h2>
-      <p>Choose which AI provider and model to use for each task.</p>
+      <h2>Step 5: Pick a default model</h2>
+      <p>One model is used for everything. Open “Advanced” to choose a different model per task.</p>
+
+      <div class="settings-field">
+        <label for="onb-global-provider">Default model</label>
+        <div class="settings-grid">
+          <select id="onb-global-provider"><option value="">Loading…</option></select>
+          <select id="onb-global-model"><option value="">Select provider first</option></select>
+        </div>
+      </div>
+
+      <details class="advanced-models" id="onb-advanced-models">
+        <summary>Advanced — different model per task</summary>
 
       <!-- YouTube Summary Configuration -->
       <div class="transaction-config">
@@ -326,6 +365,7 @@
           </div>
         </div>
       </div>
+      </details>
 
       <div class="button-group" style="margin-top: 25px;">
         <button class="btn-secondary" id="prev-btn-5">Back</button>
