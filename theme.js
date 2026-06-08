@@ -32,6 +32,17 @@
   function apply() {
     root.setAttribute('data-scheme', readScheme());
     root.setAttribute('data-theme', readTheme());
+    mirrorToChromeStorage();
+  }
+
+  // Mirror the choice into chrome.storage.local so the content-script capture card
+  // (which can't see an extension page's localStorage) can match the active scheme.
+  function mirrorToChromeStorage() {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({ rvScheme: readScheme(), rvTheme: readTheme() });
+      }
+    } catch (e) { /* not in an extension context */ }
   }
 
   // Apply as early as possible to avoid a flash of the wrong scheme.

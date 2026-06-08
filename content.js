@@ -441,6 +441,19 @@ textarea {
   line-height: 1.6;
   color: var(--color-text-main);
 }
+#rv-notes-zoom-wrap { padding: 0; display: flex; }
+#rv-notes-zoom-area {
+  flex: 1;
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 20px 28px;
+  font-size: 16px;
+  line-height: 1.6;
+  background: var(--color-bg-panel);
+  color: var(--color-text-main);
+  font-family: inherit;
+}
 `;
 
 // Wrap entire script in try-catch to catch any initialization errors
@@ -890,6 +903,38 @@ function renderMarkdown(md) {
   return html;
 }
 
+// Scheme tokens for the capture card, mirroring styles.css so the injected
+// overlay matches whichever scheme + light/dark the user picked in the app.
+const RV_SCHEME_TOKENS = {
+  paper: {
+    light: { primary:'#D6492B', hover:'#BD3E22', panel:'#FFFDF8', text:'#2A2622', text2:'#6F6657', border:'#E4D8C2', input:'#FBF7EF', font:"'Newsreader', Georgia, serif" },
+    dark:  { primary:'#E8633F', hover:'#D9542F', panel:'#262019', text:'#EDE4D3', text2:'#B6A88E', border:'#3D3225', input:'#1C1814', font:"'Newsreader', Georgia, serif" },
+  },
+  quiet: {
+    light: { primary:'#2F6FE4', hover:'#2A63CC', panel:'#FFFFFF', text:'#1A1F26', text2:'#5A6470', border:'#E2E6EB', input:'#F6F7F9', font:"'Schibsted Grotesk', system-ui, sans-serif" },
+    dark:  { primary:'#5B8DEF', hover:'#4F7FE0', panel:'#151A21', text:'#E6EAF0', text2:'#9AA6B2', border:'#232B36', input:'#0E1116', font:"'Schibsted Grotesk', system-ui, sans-serif" },
+  },
+  system: {
+    light: { primary:'#2E5BD8', hover:'#2950C2', panel:'#FFFFFF', text:'#1B1D22', text2:'#585C66', border:'#E3E0D9', input:'#F7F6F3', font:"'Public Sans', system-ui, sans-serif" },
+    dark:  { primary:'#6E97FF', hover:'#5F8AF5', panel:'#1E2024', text:'#ECEDEF', text2:'#A4A8B0', border:'#32363D', input:'#16171A', font:"'Public Sans', system-ui, sans-serif" },
+  },
+};
+
+// Apply the saved scheme to a shadow host by overriding the :host CSS variables.
+function applyShadowTheme(host, scheme, theme) {
+  const t = (RV_SCHEME_TOKENS[scheme] && RV_SCHEME_TOKENS[scheme][theme]) || RV_SCHEME_TOKENS.paper.light;
+  const s = host.style;
+  s.setProperty('--color-primary', t.primary);
+  s.setProperty('--color-primary-hover', t.hover);
+  s.setProperty('--color-bg-panel', t.panel);
+  s.setProperty('--color-text-main', t.text);
+  s.setProperty('--color-text-secondary', t.text2);
+  s.setProperty('--color-border', t.border);
+  s.setProperty('--color-bg-input', t.input);
+  s.setProperty('color', t.text);
+  s.setProperty('font-family', t.font);
+}
+
 // Create a shadow-DOM host that prevents keyboard/input events from leaking
 // to the host page (e.g., YouTube's 'k', space, '/' shortcuts).
 function createIsolatedHost(id) {
@@ -921,7 +966,7 @@ async function injectBookmarkOverlay(bookmarkId, bookmarkData) {
   if (existingHost) existingHost.remove();
 
   // Fetch existing categories and spaces from storage so the user can pick one
-  const stored = await chrome.storage.local.get(['rvData', 'rvLocal']);
+  const stored = await chrome.storage.local.get(['rvData', 'rvLocal', 'rvScheme', 'rvTheme']);
   const allCategories = (stored.rvData && stored.rvData.categories) || [];
   const allSpaces = ((stored.rvData && stored.rvData.spaces) || []).filter(s => !s.deletedAt);
   const rvLocal = stored.rvLocal || { enabledSpaceIds: [], defaultSpaceId: '', lastUsedListSpaceId: '' };
@@ -947,6 +992,7 @@ async function injectBookmarkOverlay(bookmarkId, bookmarkData) {
   categoryOptions.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }));
 
   const { host, shadow } = createIsolatedHost('rv-overlay-host');
+  applyShadowTheme(host, stored.rvScheme || 'paper', stored.rvTheme || 'light');
 
   // Create Overlay HTML
   const overlayContainer = document.createElement('div');
@@ -997,7 +1043,10 @@ async function injectBookmarkOverlay(bookmarkId, bookmarkData) {
         </div>
         
         <div class="form-group">
-          <label>Your Notes</label>
+          <div class="summary-label-row">
+            <label>Your Notes</label>
+            <button type="button" class="zoom-btn" id="rv-notes-zoom-btn">Zoom</button>
+          </div>
           <textarea id="rv-notes" placeholder="Add your own notes..."></textarea>
         </div>
         
@@ -1024,6 +1073,16 @@ async function injectBookmarkOverlay(bookmarkId, bookmarkData) {
           <button type="button" class="zoom-btn" id="rv-summary-zoom-close">Close</button>
         </div>
         <div class="summary-zoom-body" id="rv-summary-zoom-body"></div>
+      </div>
+
+      <div class="summary-zoom" id="rv-notes-zoom" aria-hidden="true">
+        <div class="summary-zoom-header">
+          <h3>Your Notes</h3>
+          <button type="button" class="zoom-btn" id="rv-notes-zoom-close">Close</button>
+        </div>
+        <div class="summary-zoom-body" id="rv-notes-zoom-wrap">
+          <textarea id="rv-notes-zoom-area" placeholder="Add your own notes..."></textarea>
+        </div>
       </div>
     </div>
   `;
@@ -1055,11 +1114,34 @@ async function injectBookmarkOverlay(bookmarkId, bookmarkData) {
   };
   shadow.getElementById('rv-summary-zoom-btn').addEventListener('click', openZoom);
   shadow.getElementById('rv-summary-zoom-close').addEventListener('click', closeZoom);
+
+  // Notes zoom — same expand affordance as Summary, but editable (syncs both ways).
+  const notesEl = shadow.getElementById('rv-notes');
+  const notesZoomLayer = shadow.getElementById('rv-notes-zoom');
+  const notesZoomArea = shadow.getElementById('rv-notes-zoom-area');
+  const openNotesZoom = () => {
+    notesZoomArea.value = notesEl.value;
+    prevCardOverflow = overlayCardEl.style.overflowY;
+    overlayCardEl.scrollTop = 0;
+    overlayCardEl.style.overflowY = 'hidden';
+    notesZoomLayer.classList.add('open');
+    notesZoomLayer.setAttribute('aria-hidden', 'false');
+    notesZoomArea.focus();
+  };
+  const closeNotesZoom = () => {
+    notesEl.value = notesZoomArea.value;
+    notesZoomLayer.classList.remove('open');
+    notesZoomLayer.setAttribute('aria-hidden', 'true');
+    overlayCardEl.style.overflowY = prevCardOverflow || '';
+  };
+  notesZoomArea.addEventListener('input', () => { notesEl.value = notesZoomArea.value; });
+  shadow.getElementById('rv-notes-zoom-btn').addEventListener('click', openNotesZoom);
+  shadow.getElementById('rv-notes-zoom-close').addEventListener('click', closeNotesZoom);
+
   shadow.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && zoomLayer.classList.contains('open')) {
-      e.stopPropagation();
-      closeZoom();
-    }
+    if (e.key !== 'Escape') return;
+    if (zoomLayer.classList.contains('open')) { e.stopPropagation(); closeZoom(); }
+    else if (notesZoomLayer.classList.contains('open')) { e.stopPropagation(); closeNotesZoom(); }
   });
   
   // Event Listeners (attached to elements within shadow root)
