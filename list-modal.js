@@ -675,11 +675,16 @@ async function openDetailOverlay(bookmark) {
   // Per-bookmark letter-color override
   const lc = document.getElementById('detail-letter-color');
   lc.value = bookmark.letterColor || categoryColorFor(bookmark) || faviconColor(bookmark);
+  // touched: user picked a custom colour → set an override on save.
+  // cleared: user pressed "Use category" → remove the override on save.
+  // Neither: leave letterColor exactly as-is (don't pin the fallback colour).
+  lc.dataset.touched = '';
   lc.dataset.cleared = '';
-  lc.oninput = () => { lc.dataset.cleared = ''; isDirty = true; };
+  lc.oninput = () => { lc.dataset.touched = '1'; lc.dataset.cleared = ''; isDirty = true; };
   document.getElementById('detail-letter-color-clear').onclick = () => {
     lc.value = categoryColorFor(bookmark) || faviconColor(bookmark);
     lc.dataset.cleared = '1';
+    lc.dataset.touched = '';
     isDirty = true;
   };
 
@@ -1041,9 +1046,9 @@ async function saveCurrentBookmark() {
   const lcInput = document.getElementById('detail-letter-color');
   if (lcInput.dataset.cleared === '1') {
     delete bookmark.letterColor; // revert to category colour
-  } else {
-    bookmark.letterColor = lcInput.value;
-  }
+  } else if (lcInput.dataset.touched === '1') {
+    bookmark.letterColor = lcInput.value; // explicit override
+  } // otherwise leave letterColor as-is (don't pin the fallback colour)
 
   // Space reassignment — if changed, clear category when it doesn't exist in the
   // destination space (to avoid a dangling (spaceId, name) pair).
