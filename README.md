@@ -8,6 +8,69 @@
 
 ---
 
+## ✨ What's New — UI/UX Refresh
+
+This release is a ground-up refresh of the interface and the core "revisit" loop.
+**No cloud-sync logic or stored-data shape changed** — everything below is UI,
+presentation, or a wiring of behavior that already existed. (Branch:
+`ui-foundation-themes`. Design rationale lives in [`design-review/`](design-review/).)
+
+### 🎨 Themes — three looks, light & dark
+Open **Settings → Appearance** and pick a **Color scheme** and **Mode**:
+- **Paper & Ink** (default) — warm, editorial.
+- **Quiet Focus** — calm, dark-first.
+- **Confident System** — clean blue.
+
+Your choice is remembered on this browser and applies to **every** surface (list,
+settings, onboarding, the capture card, and the toolbar popup). The header
+**sun/moon toggle** flips light/dark instantly.
+
+### 📋 The ReVisit List — now a real triage view
+- **Grouped by due date:** Overdue · Today · This week · Later · Someday. Each row
+  shows a colored **status rail**, a relative **due chip** ("Overdue 3d", "Due in
+  4d", "Someday"), the site's color **tile**, a **category chip**, and a **2-line AI
+  summary preview** — so you get the gist without opening anything.
+- **Open the page** by clicking the **title link** *or* the **Open** button. ➜ Opening
+  a bookmark from the list **marks it Done** (you went and read it — the reminder is
+  fulfilled).
+- **Row actions (⋮ menu):**
+  - **Revisited — remind again:** pushes the next reminder out by your default
+    interval and keeps it active.
+  - **Snooze:** Tomorrow / Next week / Next month.
+  - **Done:** archives it (moves to the *Done* filter).
+  - **Delete:** removes it (soft-deleted, syncs).
+- **Sort** (top-right): Due date · Recently added · Recently updated · Title ·
+  Category. **Flat list** toggles grouping off.
+- **Filter:** status tabs (**To revisit / Revisited / Done / All**), the category
+  sidebar, the new **Tag filter** (click a tag chip; "✕ Clear" to reset), and search.
+
+### ➕ Saving a page (capture card)
+- **"When should we remind you?"** quick chips: **Tomorrow / Next week / Next month**,
+  pick a custom date, or **No reminder**. ➜ You can now **save without a date** — it
+  lands in **Someday** (previously this silently failed).
+- **Zoom** is available on **both** the AI Summary *and* your Notes.
+- The card matches your chosen theme.
+
+### ✏️ Editing a bookmark
+- An **Open page** link sits right under the title.
+- **Reschedule** chips (Tomorrow / Next week / Next month / **No date · Someday**).
+- Unsaved-changes and delete prompts are now **in-app dialogs** (no more browser
+  pop-ups); deleting a Space offers a **radio choice** (move its bookmarks vs delete
+  them) instead of typing a word.
+
+### ⚙️ Settings — tabbed
+**Appearance · AI · Account · Spaces · Data.** On the **AI** tab, set **one default
+model** for everything; open **Advanced** only if you want a different model per task
+(YouTube / transcript / web page). **Test Connection** now performs a real check.
+
+### 🚀 Onboarding — faster, AI optional
+One path, and the AI step is **optional**: leave the key blank and hit **Next**
+(or **Skip — set up later**) to finish without it — **no terminal/curl required**
+up front (it's tucked behind a "How do I get a key?" link). Pick starter category
+templates with a tap, and choose a single default model.
+
+---
+
 ## 📋 Table of Contents
 
 1. [Overview](#overview)
