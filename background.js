@@ -856,7 +856,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           tags: [],
           userNotes: '',
           addedTimestamp: Date.now(),
-          revisitBy: new Date(Date.now() + (settings.defaultIntervalDays || 7) * 24 * 60 * 60 * 1000).toISOString(),
+          revisitBy: (settings.defaultIntervalDays === null)
+            ? null
+            : new Date(Date.now() + (settings.defaultIntervalDays ?? 7) * 24 * 60 * 60 * 1000).toISOString(),
           status: 'Active',
           history: [],
           isPreliminary: true, // Mark as preliminary
@@ -1101,7 +1103,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           tags: [],
           userNotes: '',
           addedTimestamp: Date.now(),
-          revisitBy: new Date(Date.now() + (settings.defaultIntervalDays || 7) * 24 * 60 * 60 * 1000).toISOString(),
+          revisitBy: (settings.defaultIntervalDays === null)
+            ? null
+            : new Date(Date.now() + (settings.defaultIntervalDays ?? 7) * 24 * 60 * 60 * 1000).toISOString(),
           status: 'Active',
           history: [],
           isPreliminary: true,

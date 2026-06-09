@@ -1293,6 +1293,10 @@ function openSettings() {
   // Global default model + Advanced disclosure state.
   initGlobalModel();
 
+  // Populate default interval selector
+  const ivSel = document.getElementById('set-default-interval');
+  if (ivSel) ivSel.value = (settings.defaultIntervalDays === null) ? 'none' : String(settings.defaultIntervalDays ?? 7);
+
   // Spaces tab (inline) + ensure the categories layer starts closed.
   renderSpacesTab();
   hideCategoriesLayer();
@@ -1481,6 +1485,13 @@ function setupSettingsEventListeners() {
   // Auto-save AI text/model fields on change (no Save button — saved as you go).
   ['gateway-api-key', 'ollama-local-url', 'ollama-cloud-api-key', 'youtube-model', 'transcript-model', 'page-model']
     .forEach(id => { const el = document.getElementById(id); if (el) el.onchange = persistAiSettings; });
+
+  // Default revisit interval
+  const defaultIvSel = document.getElementById('set-default-interval');
+  if (defaultIvSel) defaultIvSel.onchange = (e) => {
+    settings.defaultIntervalDays = (e.target.value === 'none') ? null : parseInt(e.target.value, 10);
+    saveData();
+  };
 
   // Backup data
   document.getElementById('export-data-btn').onclick = exportData;
