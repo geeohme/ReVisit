@@ -10,7 +10,7 @@ let selectedCategory = 'All';
 let selectedTag = null;
 let sortMode = 'due';
 let searchQuery = '';
-let statusFilter = 'Active';
+let statusFilter = 'All';
 let priorityView = false;
 let currentBookmarkId = null;
 let isDirty = false;
@@ -544,12 +544,13 @@ async function handleRowAction(id, act, days) {
     await saveData();
     showToast('Opened — marked done', 'success');
   } else if (act === 'revisit') {
-    const iv = (settings && settings.defaultIntervalDays) || 7;
-    b.revisitBy = addDaysISO(now, iv);
-    b.status = 'Active';
-    pushHistory(b, `ReVisited — reminder in ${iv}d`);
+    const iv = RvListCore.resolveInterval(settings);
+    const t = RvListCore.revisitTransition(now, iv);
+    b.status = t.status; // 'ReVisited'
+    if (t.revisitBy !== undefined) b.revisitBy = t.revisitBy; // null interval keeps existing date
+    pushHistory(b, iv == null ? 'ReVisited' : `ReVisited — reminder in ${iv}d`);
     await saveData();
-    showToast(`Revisited — back in ${iv} day${iv === 1 ? '' : 's'}`, 'success');
+    showToast(iv == null ? 'Revisited' : `Revisited — back in ${iv} day${iv === 1 ? '' : 's'}`, 'success');
   } else if (act === 'snooze') {
     const d = parseInt(days, 10) || 1;
     b.revisitBy = addDaysISO(now, d);
