@@ -449,6 +449,17 @@ function renderTagFilter() {
   });
 }
 
+// Centralised "filter the list by this tag" used by card chips, detail chips, and the sidebar.
+function applyTagFilter(tag) {
+  selectedTag = tag || null;
+  // Close the detail overlay if open so the filtered list is visible.
+  const ov = document.getElementById('detail-overlay');
+  if (ov && ov.classList.contains('active')) ov.classList.remove('active');
+  renderTagFilter();
+  renderLinks();
+  document.getElementById('links-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 function closeRowMenus() {
   document.querySelectorAll('.bk-menu.open').forEach(m => m.classList.remove('open'));
   // Drop the elevated stacking context so a closed row can't sit above its neighbours.
@@ -466,6 +477,10 @@ function buildBookmarkRow(bookmark) {
   const summary = preview ? `<p class="bk-summary">${escapeHtml(preview)}</p>` : '';
   const added = bookmark.addedTimestamp
     ? `<span class="bk-added">added ${new Date(bookmark.addedTimestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>` : '';
+  const tagChips = (bookmark.tags || []).length
+    ? `<div class="bk-tags">${bookmark.tags.map(t =>
+        `<span class="bk-tag" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('')}</div>`
+    : '';
   item.innerHTML = `
     <div class="bk-main">
       <div class="bk-fav" aria-hidden="true" style="background:${faviconColor(bookmark)}">${escapeHtml(faviconLetter(bookmark))}</div>
@@ -478,6 +493,7 @@ function buildBookmarkRow(bookmark) {
           ${added}
         </div>
         ${summary}
+        ${tagChips}
       </div>
       <div class="bk-actions">
         <button class="bk-open" title="Open the page (marks it done)">Open</button>
@@ -525,6 +541,12 @@ function buildBookmarkRow(bookmark) {
       e.stopPropagation();
       closeRowMenus();
       handleRowAction(bookmark.id, btn.dataset.act, btn.dataset.days);
+    });
+  });
+  item.querySelectorAll('.bk-tag').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation(); // don't open the detail overlay
+      applyTagFilter(el.dataset.tag);
     });
   });
   return item;
@@ -629,12 +651,17 @@ async function closeDetailOverlay() {
 function renderTags(tags) {
   const container = document.getElementById('detail-tags');
   container.innerHTML = ''; // Clear existing tags
-  
+
   tags.forEach(tag => {
     const tagEl = document.createElement('span');
     tagEl.className = 'tag';
-    tagEl.innerHTML = `${tag} <span class="tag-remove">×</span>`;
-    tagEl.querySelector('.tag-remove').addEventListener('click', () => {
+    tagEl.innerHTML = `<span class="tag-label">${escapeHtml(tag)}</span> <span class="tag-remove">×</span>`;
+    const label = tagEl.querySelector('.tag-label');
+    label.style.cursor = 'pointer';
+    label.title = 'Filter list by this tag';
+    label.addEventListener('click', () => applyTagFilter(tag));
+    tagEl.querySelector('.tag-remove').addEventListener('click', (e) => {
+      e.stopPropagation();
       removeTag(tag);
     });
     container.appendChild(tagEl);
