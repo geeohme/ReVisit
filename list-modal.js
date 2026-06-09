@@ -214,6 +214,19 @@ function setupEventListeners() {
   document.getElementById('save-bookmark-btn').addEventListener('click', saveCurrentBookmark);
   document.getElementById('delete-bookmark-btn').addEventListener('click', deleteCurrentBookmark);
 
+  // Zoom overlay — open from Summary/Notes headings, close via button or backdrop
+  document.querySelectorAll('.zoom-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const id = btn.dataset.zoomTarget;
+      openZoom(id, id === 'detail-summary' ? 'Summary' : 'Your Notes');
+    });
+  });
+  document.getElementById('zoom-close').addEventListener('click', closeZoom);
+  document.getElementById('zoom-overlay').addEventListener('click', (e) => {
+    if (e.target.id === 'zoom-overlay') closeZoom();
+  });
+
   // Settings — open/close only. The section handlers (toggle instructions, the REAL
   // Test Connection = testGatewayConnection, save, etc.) are bound in
   // setupSettingsEventListeners() each time the panel opens. (The old init-time
@@ -647,6 +660,61 @@ async function closeDetailOverlay() {
   document.getElementById('detail-overlay').classList.remove('active');
   currentBookmarkId = null;
   isDirty = false;
+}
+
+// Zoom a markdown field into a large editable overlay. Edits sync back live to the
+// source contenteditable so the existing save path persists them unchanged.
+//
+// setupMarkdownEditor stores raw markdown in element.dataset.raw.  When the field is
+// focused it shows element.textContent (raw); when blurred it renders HTML back into
+// element.innerHTML and keeps dataset.raw up-to-date.  saveCurrentBookmark reads
+// dataset.raw (falling back to textContent when the element is focused).
+//
+// openZoom therefore:
+//   1. Reads dataset.raw as the authoritative raw markdown source.
+//   2. Sets zoom-editor's textContent to that raw text (stays editable).
+//   3. On every input, writes zoom-editor.textContent back to src.dataset.raw so
+//      Save picks it up, and also updates src.textContent in case the source field
+//      is currently focused (though it won't be while zoom is open).
+//   4. closeZoom re-renders the source field so it shows formatted markdown again
+//      (matching the normal onblur behaviour of setupMarkdownEditor).
+
+let zoomSourceId = null;
+
+function openZoom(targetId, title) {
+  const src = document.getElementById(targetId);
+  if (!src) return;
+  zoomSourceId = targetId;
+  const editor = document.getElementById('zoom-editor');
+  document.getElementById('zoom-title').textContent = title;
+  // Use dataset.raw as the single source of truth for raw markdown.
+  editor.textContent = src.dataset.raw || '';
+  editor.oninput = () => {
+    const raw = editor.textContent;
+    src.dataset.raw = raw;
+    // Keep src.textContent in sync in case it's focused (shouldn't happen normally).
+    if (document.activeElement === src) {
+      src.textContent = raw;
+    }
+    isDirty = true;
+  };
+  document.getElementById('zoom-overlay').classList.add('active');
+  editor.focus();
+}
+
+function closeZoom() {
+  document.getElementById('zoom-overlay').classList.remove('active');
+  // Re-render the source field as formatted markdown (mirrors setupMarkdownEditor onblur).
+  if (zoomSourceId) {
+    const src = document.getElementById(zoomSourceId);
+    if (src) {
+      src.innerHTML = renderMarkdown(src.dataset.raw || '');
+    }
+  }
+  // Detach the oninput handler to avoid stale closures.
+  const editor = document.getElementById('zoom-editor');
+  if (editor) editor.oninput = null;
+  zoomSourceId = null;
 }
 
 function renderTags(tags) {

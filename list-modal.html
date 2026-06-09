@@ -136,16 +136,31 @@
                 <button type="button" class="rs-chip" data-clear="1">No date · Someday</button>
             </div>
 
-            <h3 class="section-heading">Summary</h3>
+            <h3 class="section-heading">Summary
+                <button type="button" class="zoom-btn" data-zoom-target="detail-summary" title="Zoom">⤢</button>
+            </h3>
             <div id="detail-summary" class="markdown-content" contenteditable="true" placeholder="AI Summary..."></div>
 
-            <h3 class="section-heading">Your Notes</h3>
+            <h3 class="section-heading">Your Notes
+                <button type="button" class="zoom-btn" data-zoom-target="detail-notes" title="Zoom">⤢</button>
+            </h3>
             <div id="detail-notes" class="markdown-content" contenteditable="true" placeholder="Add your notes..."></div>
 
             <div class="overlay-actions">
                 <button id="delete-bookmark-btn" class="btn-delete">Delete</button>
                 <button id="save-bookmark-btn" class="btn-save">Save Changes</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Zoom overlay for Summary / Notes (editable) -->
+    <div class="zoom-overlay" id="zoom-overlay">
+        <div class="zoom-card">
+            <div class="zoom-head">
+                <span id="zoom-title">Summary</span>
+                <button type="button" class="close-overlay-btn" id="zoom-close">×</button>
+            </div>
+            <div id="zoom-editor" class="markdown-content zoom-editor" contenteditable="true"></div>
         </div>
     </div>
 
