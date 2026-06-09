@@ -350,7 +350,10 @@ function renderLinks() {
 
   filtered.sort(SORTERS[sortMode] || SORTERS.due);
 
+  const nav = document.getElementById('bucket-nav');
+
   if (filtered.length === 0) {
+    if (nav) { nav.hidden = true; nav.innerHTML = ''; }
     container.innerHTML = '<div class="empty-state">Nothing here yet.</div>';
     return;
   }
@@ -358,6 +361,7 @@ function renderLinks() {
   // Group into due buckets only when sorting by due date and not in flat mode;
   // any other sort renders a single flat list in the chosen order.
   if (sortMode !== 'due' || priorityView) {
+    if (nav) { nav.hidden = true; nav.innerHTML = ''; }
     filtered.forEach(b => container.appendChild(buildBookmarkRow(b)));
     return;
   }
@@ -365,6 +369,21 @@ function renderLinks() {
   const groups = {};
   DUE_BUCKETS.forEach(g => { groups[g.key] = []; });
   filtered.forEach(b => { groups[getDueInfo(b).key].push(b); });
+
+  if (nav) {
+    nav.hidden = false;
+    nav.innerHTML = DUE_BUCKETS.map(g => {
+      const n = groups[g.key].length;
+      return `<button class="bucket-jump ${n ? '' : 'empty'} ${g.key}" data-bucket="${g.key}" ${n ? '' : 'disabled'}>${escapeHtml(g.label)}<span class="bj-ct">${n}</span></button>`;
+    }).join('');
+    nav.querySelectorAll('.bucket-jump').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const head = container.querySelector(`.bucket-h.${btn.dataset.bucket}`);
+        head?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  }
+
   DUE_BUCKETS.forEach(g => {
     const items = groups[g.key];
     if (!items.length) return;

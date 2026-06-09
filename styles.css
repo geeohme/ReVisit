@@ -1605,6 +1605,18 @@ input:checked + .slider .ts-knob .ts-moon { display: inline; }
 .bucket-h.overdue .bucket-lbl { color: var(--color-danger); }
 .bucket-h.today .bucket-lbl { color: var(--color-warning); }
 
+.bucket-nav { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+.bucket-nav[hidden] { display: none; }
+.bucket-jump {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+  padding: 4px 10px; border-radius: 14px; border: 1px solid var(--color-border);
+  background: var(--color-bg-panel); color: var(--color-dark-text); cursor: pointer;
+}
+.bucket-jump:hover { border-color: var(--color-primary); }
+.bucket-jump.empty { opacity: 0.4; cursor: default; }
+.bucket-jump .bj-ct { font-weight: 700; }
+.bucket-jump.overdue { color: var(--color-danger); }
+
 .bk-card {
   position: relative;
   border: 1px solid var(--color-border);
