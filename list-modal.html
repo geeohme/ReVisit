@@ -54,17 +54,20 @@
                     <button data-filter="Complete">Done</button>
                 </div>
 
-                <div class="category-list">
-                    <h3>Categories</h3>
-                    <div id="categories-list">
-                        <!-- Categories will be injected here -->
+                <div class="sidebar-ct">
+                    <div class="sct-search-row">
+                        <input type="text" id="sct-search" placeholder="Filter categories or tags…" aria-label="Filter categories or tags">
+                        <button type="button" id="sct-search-clear" class="link-btn">Clear</button>
                     </div>
-                </div>
-
-                <div class="tag-filter">
-                    <h3>Tags</h3>
-                    <div id="tags-list">
-                        <!-- Tag chips injected here -->
+                    <div class="sct-tabs">
+                        <button class="sct-tab active" data-scttab="categories">Categories</button>
+                        <button class="sct-tab" data-scttab="tags">Tags</button>
+                    </div>
+                    <div id="sct-categories" class="sct-pane">
+                        <div id="categories-list"><!-- Categories injected here --></div>
+                    </div>
+                    <div id="sct-tags" class="sct-pane" hidden>
+                        <div id="tags-list"><!-- Tag chips injected here --></div>
                     </div>
                 </div>
             </aside>
@@ -464,18 +467,9 @@
                         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         Spaces
                     </button>
-                    <h3>Categories &amp; Tags &mdash; <span id="space-cats-space-name">—</span></h3>
+                    <h3>Categories &mdash; <span id="space-cats-space-name">—</span></h3>
                 </div>
-                <div class="ct-search-row">
-                    <input type="text" id="ct-search" placeholder="Search categories or tags…">
-                    <button type="button" id="ct-search-clear" class="link-btn">Clear</button>
-                </div>
-                <div class="ct-tabs">
-                    <button class="ct-tab active" data-cttab="categories">Categories</button>
-                    <button class="ct-tab" data-cttab="tags">Tags</button>
-                </div>
-                <div id="ct-categories" class="ct-pane">
-                    <p class="settings-help-text">Priority sets display order (1 ranks highest). Drag to reorder. A category can only be deleted when it has no bookmarks.</p>
+                <p class="settings-help-text">Priority sets display order (1 ranks highest). Drag to reorder. Deleting a category lets you move its bookmarks to another category first.</p>
                     <div id="categories-manager">
                         <div class="categories-list-header">
                             <span class="cat-name-header">Category Name</span>
@@ -494,10 +488,6 @@
                             <button class="settings-btn settings-btn-primary" id="add-category-btn">Add Category</button>
                         </div>
                     </div>
-                </div>
-                <div id="ct-tags" class="ct-pane" hidden>
-                    <div id="tags-settings-list"><!-- tag rows injected --></div>
-                </div>
             </div>
         </div>
     </div>

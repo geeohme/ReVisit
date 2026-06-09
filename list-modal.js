@@ -6,8 +6,8 @@ let spaces = [];
 let rvLocal = { enabledSpaceIds: [], defaultSpaceId: '', lastUsedListSpaceId: '' };
 let activeSpaceId = '';
 let settingsSpaceId = '';
-let ctTab = 'categories';   // active sub-tab in the categories/tags layer
-let ctSearch = '';           // shared search term (persists across tab toggle)
+let sctTab = 'categories';  // active sidebar tab (Categories | Tags)
+let sctSearch = '';         // shared sidebar filter term (persists across tab toggle)
 let selectedCategory = 'All';
 let selectedTag = null;
 let sortMode = 'due';
@@ -245,6 +245,21 @@ function setupEventListeners() {
     if (e.target.id === 'zoom-overlay') closeZoom();
   });
 
+  // Sidebar Categories|Tags tabs + shared filter search.
+  document.querySelectorAll('.sct-tab').forEach(b =>
+    b.addEventListener('click', () => showSctTab(b.dataset.scttab)));
+  const sctSearchEl = document.getElementById('sct-search');
+  if (sctSearchEl) sctSearchEl.addEventListener('input', () => {
+    sctSearch = sctSearchEl.value;
+    if (sctTab === 'categories') renderCategories(); else renderTagFilter();
+  });
+  const sctClearEl = document.getElementById('sct-search-clear');
+  if (sctClearEl) sctClearEl.addEventListener('click', () => {
+    sctSearch = '';
+    if (sctSearchEl) sctSearchEl.value = '';
+    if (sctTab === 'categories') renderCategories(); else renderTagFilter();
+  });
+
   // Settings — open/close only. The section handlers (toggle instructions, the REAL
   // Test Connection = testGatewayConnection, save, etc.) are bound in
   // setupSettingsEventListeners() each time the panel opens. (The old init-time
@@ -311,8 +326,10 @@ function renderCategories() {
   allItem.addEventListener('click', () => selectCategory('All'));
   container.appendChild(allItem);
 
-  // Dynamic Categories — scoped to the active Space.
-  const scoped = categories.filter(c => c.spaceId === activeSpaceId && !c.deletedAt);
+  // Dynamic Categories — scoped to the active Space, filtered by the sidebar search.
+  // ("All" above is always shown; the filter only narrows the named categories.)
+  const q = (sctSearch || '').toLowerCase();
+  const scoped = categories.filter(c => c.spaceId === activeSpaceId && !c.deletedAt && (!q || c.name.toLowerCase().includes(q)));
   const sortedCategories = [...scoped].sort((a, b) => a.priority - b.priority);
   sortedCategories.forEach(cat => {
     const catName = cat.name;
@@ -484,9 +501,13 @@ function renderTagFilter() {
     if (b.deletedAt || b.spaceId !== activeSpaceId) return;
     (b.tags || []).forEach(t => counts.set(t, (counts.get(t) || 0) + 1));
   });
-  const tags = [...counts.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  const allTags = [...counts.keys()];
+  const q = (sctSearch || '').toLowerCase();
+  const tags = allTags
+    .filter(t => !q || t.toLowerCase().includes(q))
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
   container.innerHTML = '';
-  if (!tags.length) {
+  if (!allTags.length) {
     container.innerHTML = '<span class="tag-empty">No tags yet</span>';
     return;
   }
@@ -498,6 +519,9 @@ function renderTagFilter() {
     clear.addEventListener('click', () => applyTagFilter(null));
     container.appendChild(clear);
   }
+  if (!tags.length) {
+    container.insertAdjacentHTML('beforeend', '<span class="tag-empty">No matching tags</span>');
+  }
   tags.forEach(t => {
     const chip = document.createElement('button');
     chip.className = `tag-chip${selectedTag === t ? ' on' : ''}`;
@@ -505,6 +529,18 @@ function renderTagFilter() {
     chip.addEventListener('click', () => applyTagFilter(selectedTag === t ? null : t));
     container.appendChild(chip);
   });
+}
+
+// Switch the sidebar Categories|Tags tabs. The shared search (sctSearch) persists
+// across toggles and is applied by whichever renderer runs.
+function showSctTab(tab) {
+  sctTab = tab;
+  document.querySelectorAll('.sct-tab').forEach(b => b.classList.toggle('active', b.dataset.scttab === tab));
+  const catPane = document.getElementById('sct-categories');
+  const tagPane = document.getElementById('sct-tags');
+  if (catPane) catPane.hidden = tab !== 'categories';
+  if (tagPane) tagPane.hidden = tab !== 'tags';
+  if (tab === 'categories') renderCategories(); else renderTagFilter();
 }
 
 // Centralised "filter the list by this tag" used by card chips, detail chips, and the sidebar.
@@ -1874,24 +1910,7 @@ function showCategoriesLayer(spaceId) {
   layer.classList.add('active');
   layer.setAttribute('aria-hidden', 'false');
   document.querySelector('.settings-modal').classList.add('cats-open');
-
-  // Wire tabs + search bar once (guard prevents double-binding on re-open).
-  if (!showCategoriesLayer._wired) {
-    showCategoriesLayer._wired = true;
-    document.querySelectorAll('.ct-tab').forEach(b =>
-      b.addEventListener('click', () => showCtTab(b.dataset.cttab)));
-    const search = document.getElementById('ct-search');
-    search.addEventListener('input', () => {
-      ctSearch = search.value;
-      if (ctTab === 'categories') renderCategoriesSettings(); else renderTagsSettings();
-    });
-    document.getElementById('ct-search-clear').addEventListener('click', () => {
-      ctSearch = ''; document.getElementById('ct-search').value = '';
-      if (ctTab === 'categories') renderCategoriesSettings(); else renderTagsSettings();
-    });
-  }
-  document.getElementById('ct-search').value = ctSearch; // restore persisted search
-  showCtTab(ctTab);
+  renderCategoriesSettings();
 }
 function hideCategoriesLayer() {
   const layer = document.getElementById('settings-cats-layer');
@@ -2026,9 +2045,9 @@ async function onDeleteSpace(id) {
 
 // --- Spaces: per-Space category editor (operates on settingsSpaceId) ---
 
-// Sets only the editor title. The category list is rendered by showCtTab() on the
-// open path (avoids a double render); callers that aren't going through showCtTab
-// call renderCategoriesSettings() themselves.
+// Sets only the editor title. The category list is rendered separately by
+// showCategoriesLayer() on open and by renderCategoriesSettings() after edits,
+// so callers that change the list (e.g. space delete) call it themselves.
 function renderSpaceCategoryEditor() {
   const live = RvSpacesCore.liveSpaces(spaces);
   const cur = live.find(s => s.id === settingsSpaceId);
@@ -2083,55 +2102,14 @@ async function onSetDefault(e) {
 
 // --- Categories/Tags layer: shared tab + search state ---
 
-function showCtTab(tab) {
-  ctTab = tab;
-  document.querySelectorAll('.ct-tab').forEach(b => b.classList.toggle('active', b.dataset.cttab === tab));
-  document.getElementById('ct-categories').hidden = tab !== 'categories';
-  document.getElementById('ct-tags').hidden = tab !== 'tags';
-  if (tab === 'categories') renderCategoriesSettings(); else renderTagsSettings();
-}
-
-function renderTagsSettings() {
-  const host = document.getElementById('tags-settings-list');
-  if (!host) return;
-  const scope = bookmarks.filter(b => !b.deletedAt && (!settingsSpaceId || b.spaceId === settingsSpaceId));
-  const counts = {};
-  scope.forEach(b => (b.tags || []).forEach(t => { counts[t] = (counts[t] || 0) + 1; }));
-  const q = ctSearch.toLowerCase();
-  const tags = Object.keys(counts).filter(t => !q || t.toLowerCase().includes(q)).sort();
-  host.innerHTML = tags.length
-    ? tags.map(t => `<div class="ct-row"><span class="ct-name">${escapeHtml(t)}</span><span class="ct-count">${counts[t]}</span><button class="ct-del" data-tag="${escapeHtml(t)}">Delete</button></div>`).join('')
-    : '<div class="empty-state">No tags.</div>';
-  host.querySelectorAll('.ct-del').forEach(btn => btn.addEventListener('click', () => deleteTag(btn.dataset.tag)));
-}
-
-async function deleteTag(tag) {
-  const ok = await rvConfirm('Delete tag?', `Remove the tag "${tag}" from all bookmarks in this space?`, { confirmText: 'Delete', danger: true });
-  if (!ok) return;
-  // Match the Tags-list scope exactly (live bookmarks in this space) so the change
-  // count reflects what the user saw and we don't churn soft-deleted tombstones.
-  const scope = bookmarks.filter(b => !b.deletedAt && (!settingsSpaceId || b.spaceId === settingsSpaceId));
-  const changed = RvListCore.removeTagFromBookmarks(scope, tag, new Date().toISOString());
-  if (changed) {
-    if (selectedTag === tag) selectedTag = null;
-    await saveData();
-    renderTagsSettings();
-    renderTagFilter();
-    renderLinks();
-  }
-  showToast(`Removed "${tag}" from ${changed} bookmark(s)`, 'success');
-}
-
 function renderCategoriesSettings() {
   const container = document.getElementById('categories-settings-list');
   if (!container) return;
   container.innerHTML = '';
 
   // Sort categories by priority — scoped to the panel's selected Space (skip tombstones).
-  const q = ctSearch.toLowerCase();
   const sortedCategories = [...categories]
     .filter(c => c.spaceId === settingsSpaceId && !c.deletedAt)
-    .filter(c => !q || c.name.toLowerCase().includes(q))
     .sort((a, b) => a.priority - b.priority);
 
   sortedCategories.forEach((cat, index) => {

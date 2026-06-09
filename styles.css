@@ -1831,13 +1831,16 @@ input:checked + .slider .ts-knob .ts-moon { display: inline; }
 
 /* --- Categories & Tags layer: tabbed panel --- */
 .cats-layer-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-.ct-search-row { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
-.ct-search-row input { flex: 1; padding: 6px 10px; }
-.ct-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
-.ct-tab { padding: 6px 12px; border: none; background: transparent; cursor: pointer; border-bottom: 2px solid transparent; color: var(--color-medium-text); }
-.ct-tab.active { border-bottom-color: var(--color-primary); color: var(--color-dark-text); font-weight: 600; }
-.ct-pane[hidden] { display: none; }
-.ct-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
-.ct-row .ct-name { flex: 1; }
-.ct-row .ct-count { color: var(--color-medium-text); font-size: 12px; }
-.ct-del { border: none; background: none; color: var(--color-danger); cursor: pointer; font-size: 12px; }
+
+/* Sidebar Categories|Tags tabs + shared filter search (ReVisit List left column). */
+.sidebar-ct { margin-top: 4px; }
+.sct-search-row { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+.sct-search-row input { flex: 1; min-width: 0; padding: 6px 10px; font-size: 13px; }
+.sct-tabs { display: flex; gap: 4px; margin-bottom: 8px; border-bottom: 1px solid var(--color-border); }
+.sct-tab {
+  padding: 6px 12px; border: none; background: transparent; cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  color: var(--color-medium-text); font-size: 13px; font-weight: 500;
+}
+.sct-tab.active { border-bottom-color: var(--color-primary); color: var(--color-dark-text); font-weight: 600; }
+.sct-pane[hidden] { display: none; }
