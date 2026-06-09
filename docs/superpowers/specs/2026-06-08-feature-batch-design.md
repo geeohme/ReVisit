@@ -88,7 +88,7 @@ These small schema additions are introduced in the earliest phase that needs the
    - Clear empties the search and restores both lists.
    - Categories list reuses `renderCategoriesSettings()` (`list-modal.js:1724-1775`), now also showing each category's color swatch (item 6). Tags list is derived from the union of tags across bookmarks in scope.
 
-3. **Default revisit interval control (with None).** Add a control in Settings (Appearance or Account — implementer's call to match layout) bound to `settings.defaultIntervalDays`, accepting a number or **None** (`null`). When `null`, saves create bookmarks with no `revisitBy`. Update save paths that read `defaultIntervalDays` to treat `null` as "no reminder" (`background.js:859,1189`).
+3. **Default revisit interval control (with None).** Add a control in the **Appearance** tab bound to `settings.defaultIntervalDays`, accepting a number or **None** (`null`). When `null`, saves create bookmarks with no `revisitBy`. Update save paths that read `defaultIntervalDays` to treat `null` as "no reminder" (`background.js:859,1189`).
 
 4. **Delete category (incl. non-empty).** Extend `deleteCategory()` (`list-modal.js:1779-1790`, currently empty-only) to support non-empty deletion via a reassign dialog mirroring the Space-delete flow (`onDeleteSpace`, `list-modal.js:1609-1667`): reassign the category's bookmarks to another category (or clear their category), then tombstone the category.
 
@@ -102,12 +102,17 @@ These small schema additions are introduced in the earliest phase that needs the
 
 **Files:** `content.js`, `background.js`.
 
-1. **Summarize-only, then Save.** Split summarize from save in the capture overlay:
-   - Add a **Summarize** button that runs summarization and fills the Summary field **without persisting a bookmark**.
-   - A **Save to ReVisit** button then persists the bookmark (with whatever the user kept/edited).
-   - Today summarize is fused into the save flow (`background.js:961-981,1449-1472`; overlay shown only after AI completes, `content.js:721-793`). Refactor so the overlay can open first (no summary), with summarize as an explicit user action that returns `{summary, category, tags}` to fill fields, and save as a separate `updateBookmark` step (`content.js:1252-1309`). Existing auto-summarize-on-open behavior may remain as the default, with the explicit buttons added for the "changed my mind" flow — implementer to confirm during planning.
+1. **Summarize-only → ReVisit this page.** Add a flow that summarizes without pre-saving a bookmark. The key insight: **reuse the existing create-bookmark pipeline almost entirely** (including its YouTube transcript-scraping logic). The *only* differences are (a) no preliminary bookmark is created up front, and (b) what renders when summarization completes.
 
-2. **Capture popup position (9-grid).** Add `settings.capturePopupPosition` and honor it when positioning the capture overlay, which is currently always flex-centered (`content.js:82-91`). Provide a setting control (Appearance tab) to choose among the 9 presets. Default `center` preserves current behavior.
+   **Trigger.** A new action (e.g. from the popup / context) that summarizes **only the content presently on the open active page** (regular page scrape, or YouTube transcript — same scraping path as today, `content.js:721-793`, `background.js:1476-1580`).
+
+   **Summarize result display.** When the completion message arrives, instead of opening the full Save overlay, render a **popup overlay on the same page showing only the summary in Zoom Mode (read-only, no editing)**. At the bottom of this zoomed-summary overlay are two outcomes:
+   - **ReVisit this page** → opens the normal Save Bookmark modal (the existing capture overlay), with the already-computed **summary pre-filled in the Summary box (unzoomed)**, all other fields (title, space, category, tags, revisit date) defaulted exactly as normal. For a **YouTube page**, the scraped transcript used for the summary is **kept in memory** and carried into this save so it persists normally on save. On **Save**, the bookmark is persisted as usual (the standard `updateBookmark` save path) — no second summarization, since it's already done.
+   - **Dismiss** (close without choosing) → **drop everything**: no bookmark, discard the in-memory summary/transcript.
+
+   **Implementation note.** Because no preliminary bookmark is pre-saved in this flow, the refactor is: run the same scrape+summarize, branch on display (zoomed-summary overlay vs. today's auto-open Save overlay), hold the `{summary, transcript?, scrapedData}` in memory, and only on "ReVisit this page" instantiate the Save overlay pre-seeded with that data. The existing auto-summarize-then-save flow remains available unchanged for the normal "Add Bookmark" path.
+
+2. **Capture popup position (9-grid).** Add `settings.capturePopupPosition` and honor it when positioning the capture overlay, which is currently always flex-centered (`content.js:82-91`). Provide a setting control in the **Appearance** tab to choose among the 9 presets. Default `center` preserves current behavior.
 
 ---
 
