@@ -619,12 +619,13 @@ function populateBulkTargets() {
     .map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
   // Re-populate category options whenever the space picker changes so category
   // choices always reflect the chosen destination, preventing dangling (spaceId, name).
-  spaceSel.addEventListener('change', () => {
+  // Use onchange (not addEventListener) so re-entering select mode doesn't stack handlers.
+  spaceSel.onchange = () => {
     const destSpaceId = spaceSel.value || activeSpaceId;
     catSel.innerHTML = `<option value="">Move to category…</option>` + categories
       .filter(c => c.spaceId === destSpaceId && !c.deletedAt)
       .map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
-  });
+  };
 }
 
 function setSelectMode(on) {
