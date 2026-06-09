@@ -641,6 +641,16 @@ async function openDetailOverlay(bookmark) {
   const catSelect = document.getElementById('detail-category');
   catSelect.innerHTML = categories.filter(c => c.spaceId === bookmark.spaceId && !c.deletedAt).map(c => `<option value="${c.name}" ${c.name === bookmark.category ? 'selected' : ''}>${c.name}</option>`).join('');
 
+  // Space reassignment — limited to Spaces enabled on THIS install (plus the
+  // bookmark's current space, so it always shows even if not locally enabled).
+  const spaceSel = document.getElementById('detail-space');
+  const enabledIds = new Set(rvLocal.enabledSpaceIds || []);
+  spaceSel.innerHTML = spaces
+    .filter(s => !s.deletedAt && (enabledIds.has(s.id) || s.id === bookmark.spaceId))
+    .map(s => `<option value="${s.id}" ${s.id === bookmark.spaceId ? 'selected' : ''}>${escapeHtml(s.name)}</option>`)
+    .join('');
+  spaceSel.onchange = () => { isDirty = true; };
+
   // Tags
   renderTags(bookmark.tags);
 
@@ -994,7 +1004,16 @@ async function saveCurrentBookmark() {
 
   // Tags are already updated in the bookmark object by addTag/removeTag
   // but we need to ensure we save the current state
-  
+
+  // Space reassignment — if changed, clear category when it doesn't exist in the
+  // destination space (to avoid a dangling (spaceId, name) pair).
+  const newSpaceId = document.getElementById('detail-space').value;
+  if (newSpaceId && newSpaceId !== bookmark.spaceId) {
+    bookmark.spaceId = newSpaceId;
+    const catOk = categories.some(c => c.spaceId === newSpaceId && c.name === bookmark.category && !c.deletedAt);
+    if (!catOk) bookmark.category = '';
+  }
+
   await saveData();
   isDirty = false;
   showToast('Bookmark saved!', 'success');
