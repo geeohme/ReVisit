@@ -935,6 +935,23 @@ function applyShadowTheme(host, scheme, theme) {
   s.setProperty('font-family', t.font);
 }
 
+// Map a 9-grid preset to flexbox alignment on the backdrop.
+function positionStyleFor(pos) {
+  const map = {
+    'center':        ['center', 'center'],
+    'top-left':      ['flex-start', 'flex-start'],
+    'top-center':    ['flex-start', 'center'],
+    'top-right':     ['flex-start', 'flex-end'],
+    'mid-left':      ['center', 'flex-start'],
+    'mid-right':     ['center', 'flex-end'],
+    'bottom-left':   ['flex-end', 'flex-start'],
+    'bottom-center': ['flex-end', 'center'],
+    'bottom-right':  ['flex-end', 'flex-end'],
+  };
+  const [alignItems, justifyContent] = map[pos] || map['center'];
+  return { alignItems, justifyContent };
+}
+
 // Create a shadow-DOM host that prevents keyboard/input events from leaking
 // to the host page (e.g., YouTube's 'k', space, '/' shortcuts).
 function createIsolatedHost(id) {
@@ -997,6 +1014,14 @@ async function injectBookmarkOverlay(bookmarkId, bookmarkData) {
   // Create Overlay HTML
   const overlayContainer = document.createElement('div');
   overlayContainer.className = 'overlay-backdrop';
+  const captureSettings = (stored.rvData && stored.rvData.settings) || {};
+  const capturePos = captureSettings.capturePopupPosition || 'center';
+  const posStyle = positionStyleFor(capturePos);
+  overlayContainer.style.alignItems = posStyle.alignItems;
+  overlayContainer.style.justifyContent = posStyle.justifyContent;
+  // Edge padding only for non-center positions; center keeps the original (padless)
+  // layout so the default behaviour is unchanged.
+  if (capturePos !== 'center') overlayContainer.style.padding = '24px';
   overlayContainer.innerHTML = `
     <div class="overlay-card">
       <div class="card-header">

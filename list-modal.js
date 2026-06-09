@@ -1308,6 +1308,10 @@ function openSettings() {
   const ivSel = document.getElementById('set-default-interval');
   if (ivSel) ivSel.value = (settings.defaultIntervalDays === null) ? 'none' : String(settings.defaultIntervalDays ?? 7);
 
+  // Populate capture popup position selector
+  const ppSel = document.getElementById('set-popup-position');
+  if (ppSel) ppSel.value = settings.capturePopupPosition || 'center';
+
   // Spaces tab (inline) + ensure the categories layer starts closed.
   renderSpacesTab();
   hideCategoriesLayer();
@@ -1503,6 +1507,10 @@ function setupSettingsEventListeners() {
     settings.defaultIntervalDays = (e.target.value === 'none') ? null : parseInt(e.target.value, 10);
     saveData();
   };
+
+  // Capture popup position
+  const ppSelW = document.getElementById('set-popup-position');
+  if (ppSelW) ppSelW.onchange = (e) => { settings.capturePopupPosition = e.target.value; saveData(); };
 
   // Backup data
   document.getElementById('export-data-btn').onclick = exportData;
