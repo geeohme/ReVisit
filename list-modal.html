@@ -371,69 +371,58 @@
                     </div>
                 </div>
 
-                <!-- Spaces Section -->
+                <!-- Spaces Section (inline; categories pop over via the layer below) -->
                 <div class="settings-section" id="spaces-section">
                     <h3><svg class="settings-h-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h6l2 2h10v9a2 2 0 0 1-2 2H3z"/><path d="M3 7V5a2 2 0 0 1 2-2h4l2 2"/></svg> Spaces</h3>
-                    <p class="settings-help-text">A Space is a top-level container. Each Space owns its own categories and bookmarks. Manage your Spaces, their categories, and which are available on this installation.</p>
-                    <div class="settings-button-group">
-                        <button class="settings-btn settings-btn-primary" id="manage-spaces-btn">Manage Spaces</button>
-                    </div>
-                </div>
 
-                <!-- Save Settings Button -->
-                <div class="settings-button-group">
-                    <button class="settings-btn settings-btn-primary" id="save-settings-btn">Save Settings</button>
+                    <div class="spaces-zone">
+                        <h4>Your Spaces</h4>
+                        <p class="settings-help-text">A Space is a top-level container with its own categories and bookmarks. These definitions sync to all your devices. Click “Categories” to edit a Space’s shelves.</p>
+                        <div id="spaces-list"><!-- rows injected --></div>
+                        <div class="add-space-form">
+                            <input type="text" id="new-space-name" placeholder="New Space name">
+                            <button class="settings-btn settings-btn-primary" id="add-space-btn">Add Space</button>
+                        </div>
+                    </div>
+
+                    <div class="spaces-zone">
+                        <h4>This Installation</h4>
+                        <p class="settings-help-text">Choose which Spaces are available on this browser and which is the default. These choices do NOT sync.</p>
+                        <div id="spaces-install-list"><!-- checkbox + radio rows injected --></div>
+                    </div>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <!-- Spaces Manager slide-in panel -->
-    <div class="spaces-panel" id="spaces-panel">
-        <div class="spaces-panel-header">
-            <h2>Manage Spaces</h2>
-            <button id="spaces-panel-close">Done</button>
-        </div>
-        <div class="spaces-panel-body">
-            <!-- Zone A: synced definitions -->
-            <section class="spaces-zone">
-                <h3>Your Spaces</h3>
-                <p class="settings-help-text">These definitions sync to all your devices.</p>
-                <div id="spaces-list"><!-- rows injected --></div>
-                <div class="add-space-form">
-                    <input type="text" id="new-space-name" placeholder="New Space name">
-                    <button class="settings-btn settings-btn-primary" id="add-space-btn">Add Space</button>
+            <!-- Categories editor — pops over the Spaces tab, inside the modal -->
+            <div class="settings-cats-layer" id="settings-cats-layer" aria-hidden="true">
+                <div class="settings-cats-header">
+                    <button class="settings-cats-back" id="cats-back-btn" aria-label="Back to Spaces">
+                        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        Spaces
+                    </button>
+                    <h3>Categories in <span id="space-cats-space-name">—</span></h3>
                 </div>
-            </section>
-
-            <!-- Per-Space category editor (relocated from global settings) -->
-            <section class="spaces-zone" id="space-categories-zone">
-                <h3>Categories in <span id="space-cats-space-name">—</span></h3>
-                <p class="settings-help-text">Select a Space above to edit its categories. Priority sets display order (1 ranks highest).</p>
-                <div id="categories-manager">
-                    <div class="categories-list-header">
-                        <span class="cat-name-header">Category Name</span>
-                        <span class="cat-count-header">Bookmarks</span>
-                        <span class="cat-priority-header">Priority</span>
+                <div class="settings-cats-body">
+                    <p class="settings-help-text">Priority sets display order (1 ranks highest). Drag to reorder. A category can only be deleted when it has no bookmarks.</p>
+                    <div id="categories-manager">
+                        <div class="categories-list-header">
+                            <span class="cat-name-header">Category Name</span>
+                            <span class="cat-count-header">Bookmarks</span>
+                            <span class="cat-priority-header">Priority</span>
+                            <span class="cat-actions-header"></span>
+                        </div>
+                        <div id="categories-settings-list" class="categories-settings-list"></div>
                     </div>
-                    <div id="categories-settings-list" class="categories-settings-list"></div>
-                </div>
-                <div class="add-category-form">
-                    <h4>Add New Category</h4>
-                    <div class="add-category-inputs">
-                        <input type="text" id="new-category-name" placeholder="Category name">
-                        <input type="number" id="new-category-priority" placeholder="Priority (1-100)" min="1" max="100" value="1">
-                        <button class="settings-btn settings-btn-primary" id="add-category-btn">Add Category</button>
+                    <div class="add-category-form">
+                        <h4>Add New Category</h4>
+                        <div class="add-category-inputs">
+                            <input type="text" id="new-category-name" placeholder="Category name">
+                            <input type="number" id="new-category-priority" placeholder="Priority" min="1" max="100" value="1">
+                            <button class="settings-btn settings-btn-primary" id="add-category-btn">Add Category</button>
+                        </div>
                     </div>
                 </div>
-            </section>
-
-            <!-- Zone B: this installation (writes rvLocal ONLY) -->
-            <section class="spaces-zone">
-                <h3>This Installation</h3>
-                <p class="settings-help-text">Choose which Spaces are available on this browser and which is the default. These choices do NOT sync.</p>
-                <div id="spaces-install-list"><!-- checkbox + radio rows injected --></div>
-            </section>
+            </div>
         </div>
     </div>
 

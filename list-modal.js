@@ -156,11 +156,11 @@ function setupEventListeners() {
     if (modeSel) modeSel.value = e.detail.theme;
   });
 
-  // Spaces — header selector + manager panel
+  // Spaces — header selector + (Spaces are now managed inline in the Settings modal)
   document.getElementById('space-selector').addEventListener('change', onSpaceSelectorChange);
-  document.getElementById('manage-spaces-btn').addEventListener('click', openSpacesPanel);
-  document.getElementById('spaces-panel-close').addEventListener('click', closeSpacesPanel);
   document.getElementById('add-space-btn').addEventListener('click', onAddSpace);
+  // Categories editor layer (pops over the Spaces tab inside the modal).
+  document.getElementById('cats-back-btn').addEventListener('click', hideCategoriesLayer);
 
   // Search & Filter
   document.getElementById('search-input').addEventListener('input', (e) => {
@@ -269,7 +269,7 @@ function renderCategories() {
   container.appendChild(allItem);
 
   // Dynamic Categories — scoped to the active Space.
-  const scoped = categories.filter(c => c.spaceId === activeSpaceId);
+  const scoped = categories.filter(c => c.spaceId === activeSpaceId && !c.deletedAt);
   const sortedCategories = [...scoped].sort((a, b) => a.priority - b.priority);
   sortedCategories.forEach(cat => {
     const catName = cat.name;
@@ -596,7 +596,7 @@ async function openDetailOverlay(bookmark) {
   // Categories Dropdown — scoped to THIS bookmark's Space so a reassign can't pick
   // a category name from another Space (which would orphan the (spaceId, name) pair).
   const catSelect = document.getElementById('detail-category');
-  catSelect.innerHTML = categories.filter(c => c.spaceId === bookmark.spaceId).map(c => `<option value="${c.name}" ${c.name === bookmark.category ? 'selected' : ''}>${c.name}</option>`).join('');
+  catSelect.innerHTML = categories.filter(c => c.spaceId === bookmark.spaceId && !c.deletedAt).map(c => `<option value="${c.name}" ${c.name === bookmark.category ? 'selected' : ''}>${c.name}</option>`).join('');
 
   // Tags
   renderTags(bookmark.tags);
@@ -984,6 +984,10 @@ function openSettings() {
   // Global default model + Advanced disclosure state.
   initGlobalModel();
 
+  // Spaces tab (inline) + ensure the categories layer starts closed.
+  renderSpacesTab();
+  hideCategoriesLayer();
+
   // Build/refresh the tab bar and default to Appearance.
   activeSettingsTab = 'appearance';
   buildSettingsTabs();
@@ -1072,6 +1076,7 @@ function syncGlobalToAll() {
  * Close settings modal
  */
 function closeSettings() {
+  hideCategoriesLayer();
   document.getElementById('settings-overlay').classList.remove('active');
 }
 
@@ -1144,32 +1149,29 @@ function setupSettingsEventListeners() {
     if (modelsData) updateModelDropdownFromGateway('global-model', gProv.value, modelsData);
     else updateModelDropdown('global-model', gProv.value);
     syncGlobalToAll();
+    persistAiSettings();
   };
-  if (gModel) gModel.onchange = syncGlobalToAll;
+  if (gModel) gModel.onchange = () => { syncGlobalToAll(); persistAiSettings(); };
 
   document.getElementById('youtube-provider').onchange = (e) => {
-    if (modelsData) {
-      updateModelDropdownFromGateway('youtube-model', e.target.value, modelsData);
-    } else {
-      updateModelDropdown('youtube-model', e.target.value);
-    }
+    if (modelsData) updateModelDropdownFromGateway('youtube-model', e.target.value, modelsData);
+    else updateModelDropdown('youtube-model', e.target.value);
+    persistAiSettings();
   };
-
   document.getElementById('transcript-provider').onchange = (e) => {
-    if (modelsData) {
-      updateModelDropdownFromGateway('transcript-model', e.target.value, modelsData);
-    } else {
-      updateModelDropdown('transcript-model', e.target.value);
-    }
+    if (modelsData) updateModelDropdownFromGateway('transcript-model', e.target.value, modelsData);
+    else updateModelDropdown('transcript-model', e.target.value);
+    persistAiSettings();
+  };
+  document.getElementById('page-provider').onchange = (e) => {
+    if (modelsData) updateModelDropdownFromGateway('page-model', e.target.value, modelsData);
+    else updateModelDropdown('page-model', e.target.value);
+    persistAiSettings();
   };
 
-  document.getElementById('page-provider').onchange = (e) => {
-    if (modelsData) {
-      updateModelDropdownFromGateway('page-model', e.target.value, modelsData);
-    } else {
-      updateModelDropdown('page-model', e.target.value);
-    }
-  };
+  // Auto-save AI text/model fields on change (no Save button — saved as you go).
+  ['gateway-api-key', 'ollama-local-url', 'ollama-cloud-api-key', 'youtube-model', 'transcript-model', 'page-model']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.onchange = persistAiSettings; });
 
   // Backup data
   document.getElementById('export-data-btn').onclick = exportData;
@@ -1179,9 +1181,6 @@ function setupSettingsEventListeners() {
 
   // Add category
   document.getElementById('add-category-btn').onclick = handleAddCategory;
-
-  // Save settings
-  document.getElementById('save-settings-btn').onclick = saveSettings;
 
   // Account / auth
   const signinBtn  = document.getElementById('auth-signin-btn');
@@ -1442,19 +1441,10 @@ async function refreshOllamaModels() {
 /**
  * Save settings to storage
  */
-async function saveSettings() {
+// Auto-saved (no Save button): persist the AI tab's gateway + ollama settings.
+// Whatever is on screen is written; the runtime validates an actual API call.
+async function persistAiSettings() {
   const apiKey = document.getElementById('gateway-api-key').value.trim();
-
-  const allTransactionProviders = [
-    document.getElementById('youtube-provider')?.value,
-    document.getElementById('transcript-provider')?.value,
-    document.getElementById('page-provider')?.value
-  ].filter(Boolean);
-  const needsGatewayKey = allTransactionProviders.some(p => p !== 'ollama-local' && p !== 'ollama-cloud');
-  if (needsGatewayKey && !apiKey) {
-    showToast('Please enter an LLM Gateway API key for the selected providers', 'error');
-    return;
-  }
 
   // Build settings object (preserve modelsData if it exists)
   const existingModelsData = settings.llmGateway?.modelsData;
@@ -1500,8 +1490,6 @@ async function saveSettings() {
   );
 
   await saveData();
-  showToast('✅ Settings saved successfully!', 'success');
-  closeSettings();
 }
 
 /**
@@ -1531,17 +1519,28 @@ async function onSpaceSelectorChange(e) {
 
 // --- Spaces: manager panel open/close ---
 
-function openSpacesPanel() {
-  // Default the category editor to the active Space (or first live Space).
+// Render the inline Spaces tab (called when the settings modal opens).
+function renderSpacesTab() {
   const live = RvSpacesCore.liveSpaces(spaces);
   settingsSpaceId = (live.find(s => s.id === activeSpaceId) && activeSpaceId) || (live[0] && live[0].id) || '';
-  document.getElementById('spaces-panel').classList.add('active');
   renderSpacesList();
   renderSpacesInstallList();
-  renderSpaceCategoryEditor();
 }
-function closeSpacesPanel() {
-  document.getElementById('spaces-panel').classList.remove('active');
+
+// Categories editor pops over the Spaces tab inside the modal (and resizes it).
+function showCategoriesLayer(spaceId) {
+  settingsSpaceId = spaceId;
+  renderSpaceCategoryEditor();
+  const layer = document.getElementById('settings-cats-layer');
+  layer.classList.add('active');
+  layer.setAttribute('aria-hidden', 'false');
+  document.querySelector('.settings-modal').classList.add('cats-open');
+}
+function hideCategoriesLayer() {
+  const layer = document.getElementById('settings-cats-layer');
+  layer.classList.remove('active');
+  layer.setAttribute('aria-hidden', 'true');
+  document.querySelector('.settings-modal').classList.remove('cats-open');
 }
 
 // --- Spaces: Zone A — definitions list (rename / priority / delete + counts) ---
@@ -1555,17 +1554,17 @@ function renderSpacesList() {
     const row = document.createElement('div');
     row.className = 'space-row';
     row.innerHTML = `
-      <input type="text" class="space-name-input" data-id="${s.id}" value="${s.name}">
+      <input type="text" class="space-name-input" data-id="${s.id}" value="${escapeHtml(s.name)}">
       <span class="space-count">${count}</span>
       <input type="number" class="space-priority-input" data-id="${s.id}" value="${s.priority}" min="1" max="100">
-      <button class="space-edit-cats" data-id="${s.id}">Categories</button>
-      <button class="space-delete" data-id="${s.id}">🗑</button>
+      <button class="space-edit-cats settings-btn settings-btn-secondary" data-id="${s.id}">Categories</button>
+      <button class="space-delete" data-id="${s.id}" aria-label="Delete Space" title="Delete Space">
+        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
     `;
     row.querySelector('.space-name-input').addEventListener('change', onRenameSpace);
     row.querySelector('.space-priority-input').addEventListener('change', onSpacePriorityChange);
-    row.querySelector('.space-edit-cats').addEventListener('click', () => {
-      settingsSpaceId = s.id; renderSpaceCategoryEditor();
-    });
+    row.querySelector('.space-edit-cats').addEventListener('click', () => showCategoriesLayer(s.id));
     row.querySelector('.space-delete').addEventListener('click', () => onDeleteSpace(s.id));
     container.appendChild(row);
   });
@@ -1726,14 +1725,14 @@ function renderCategoriesSettings() {
   const container = document.getElementById('categories-settings-list');
   container.innerHTML = '';
 
-  // Sort categories by priority — scoped to the panel's selected Space.
+  // Sort categories by priority — scoped to the panel's selected Space (skip tombstones).
   const sortedCategories = [...categories]
-    .filter(c => c.spaceId === settingsSpaceId)
+    .filter(c => c.spaceId === settingsSpaceId && !c.deletedAt)
     .sort((a, b) => a.priority - b.priority);
 
   sortedCategories.forEach((cat, index) => {
     const catName = typeof cat === 'string' ? cat : cat.name;
-    const count = bookmarks.filter(b => b.spaceId === settingsSpaceId && b.category === catName).length;
+    const count = bookmarks.filter(b => b.spaceId === settingsSpaceId && b.category === catName && !b.deletedAt).length;
 
     const item = document.createElement('div');
     item.className = 'category-settings-item';
@@ -1742,13 +1741,17 @@ function renderCategoriesSettings() {
     item.dataset.spaceId = cat.spaceId;
     item.dataset.categoryIndex = index;
 
+    const delTitle = count > 0 ? 'Empty this category before deleting' : 'Delete category';
     item.innerHTML = `
-      <span class="cat-name">${catName}</span>
+      <span class="cat-name">${escapeHtml(catName)}</span>
       <span class="cat-count">${count}</span>
       <div class="cat-priority">
-        <input type="number" class="cat-priority-input" data-category="${catName}"
+        <input type="number" class="cat-priority-input" data-category="${escapeHtml(catName)}"
                value="${cat.priority}" min="1" max="100">
       </div>
+      <button class="cat-delete" data-category="${escapeHtml(catName)}" ${count > 0 ? 'disabled' : ''} title="${delTitle}" aria-label="${delTitle}">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+      </button>
     `;
 
     // Add drag event listeners
@@ -1758,6 +1761,9 @@ function renderCategoriesSettings() {
     item.addEventListener('drop', handleDrop);
     item.addEventListener('dragleave', handleDragLeave);
 
+    const delBtn = item.querySelector('.cat-delete');
+    delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteCategory(cat.spaceId, catName, count); });
+
     container.appendChild(item);
   });
 
@@ -1766,6 +1772,21 @@ function renderCategoriesSettings() {
     input.addEventListener('input', handleCategoryPriorityInput); // instant reorder on type
     input.addEventListener('change', handleCategoryPriorityChange); // save on blur
   });
+}
+
+// Delete an EMPTY category (tombstone + sync). Non-empty categories are blocked
+// (the move-its-bookmarks flow is deferred).
+async function deleteCategory(spaceId, name, count) {
+  if (count > 0) { showToast('Empty this category before deleting it.', 'error'); return; }
+  const ok = await rvConfirm('Delete category?', `Delete the empty category “${name}”?`, { confirmText: 'Delete', danger: true });
+  if (!ok) return;
+  const now = new Date().toISOString();
+  categories = categories.map(c => (c.spaceId === spaceId && c.name === name)
+    ? { ...c, deletedAt: now, updatedAt: now, _dirty: true } : c);
+  await saveData();
+  renderCategoriesSettings();
+  renderCategories();
+  showToast('Category deleted', 'success');
 }
 
 // --- Drag and Drop Handlers ---

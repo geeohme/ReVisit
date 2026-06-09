@@ -489,6 +489,67 @@ button:hover {
 .advanced-models[open] > summary { border-bottom: 1px solid var(--color-border); }
 .advanced-models .transaction-config { margin: 12px; }
 
+/* Spaces tab — inline zones */
+.settings-section .spaces-zone { border-top: none; padding: 0 0 18px; }
+.settings-section .spaces-zone + .spaces-zone { border-top: 1px solid var(--color-border); padding-top: 18px; }
+.spaces-zone h4 { font-family: var(--font-display); font-size: 0.95rem; margin: 0 0 4px; color: var(--color-dark-text); }
+.space-row {
+  display: grid;
+  grid-template-columns: 1fr auto 64px auto auto;
+  gap: 8px; align-items: center; padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.space-row:last-child { border-bottom: none; }
+
+/* Categories editor — pops over the Spaces tab inside the modal */
+.settings-modal { position: relative; }
+.settings-modal.cats-open { height: 80vh; }
+.settings-cats-layer {
+  position: absolute;
+  inset: 0;
+  background: var(--color-bg-panel);
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px);
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+  z-index: 6;
+  border-radius: 14px;
+}
+.settings-cats-layer.active { opacity: 1; visibility: visible; transform: none; }
+.settings-cats-header {
+  display: flex; align-items: center; gap: 14px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.settings-cats-header h3 { font-family: var(--font-display); font-weight: 600; font-size: 1.0625rem; margin: 0; }
+.settings-cats-back {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-light);
+  color: var(--color-medium-text);
+  border-radius: 8px; padding: 7px 12px;
+  font-size: 0.85rem; font-family: inherit; cursor: pointer;
+}
+.settings-cats-back:hover { background: var(--color-hover-bg); color: var(--color-dark-text); }
+.settings-cats-body { padding: 20px; overflow-y: auto; flex: 1; }
+
+/* Category rows gain a delete action column (id-scoped to win over the base rule) */
+#categories-manager .categories-list-header { grid-template-columns: 2fr 0.8fr 0.8fr 36px; }
+#categories-settings-list .category-settings-item { grid-template-columns: 2fr 0.8fr 0.8fr 36px; }
+.cat-delete {
+  width: 28px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--color-border); border-radius: 7px;
+  background: var(--color-bg-panel); color: var(--color-medium-text);
+  cursor: pointer;
+}
+.cat-delete:hover:not(:disabled) { background: var(--color-danger); color: #fff; border-color: transparent; }
+.cat-delete:disabled { opacity: 0.4; cursor: not-allowed; }
+.cat-delete svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
 .settings-header {
   padding: 20px;
   border-bottom: 1px solid var(--color-border);
