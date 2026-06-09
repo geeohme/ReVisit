@@ -83,4 +83,10 @@ test('removeTagFromBookmarks: removes tag and marks affected dirty', () => {
   assert.deepStrictEqual(bks[1].tags, ['y']);
   assert.strictEqual(bks[1]._dirty, undefined); // untouched
   assert.deepStrictEqual(bks[2].tags, []);
+  assert.strictEqual(bks[2]._dirty, true);
+  assert.strictEqual(bks[2].updatedAt, now);
+});
+
+test('resolveInterval: explicit 0 stays 0 (not coerced to default)', () => {
+  assert.strictEqual(core.resolveInterval({ defaultIntervalDays: 0 }), 0);
 });

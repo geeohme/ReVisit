@@ -45,7 +45,7 @@
     const pal = palette || PALETTE;
     if (bookmarkLetterColor) return bookmarkLetterColor;
     if (categoryColor) return categoryColor;
-    const key = (host || '') || '';
+    const key = host || '';
     let n = 0;
     for (let i = 0; i < key.length; i++) n = (n + key.charCodeAt(i)) % pal.length;
     return pal[n];
