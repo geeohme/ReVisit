@@ -15,6 +15,12 @@ let priorityView = false;
 let currentBookmarkId = null;
 let isDirty = false;
 
+function markDirty(rec) {
+  rec._dirty = true;
+  rec.updatedAt = new Date().toISOString();
+  return rec;
+}
+
 // Load shared utilities from utils.js
 // Note: sendMessageWithRetry, isYouTubeUrl, extractVideoId are available from utils.js
 
