@@ -590,8 +590,9 @@ function buildBookmarkRow(bookmark) {
     cb.type = 'checkbox';
     cb.className = 'bk-select';
     cb.checked = selectedIds.has(bookmark.id);
-    cb.addEventListener('click', (e) => {
-      e.stopPropagation();
+    cb.setAttribute('aria-label', `Select ${bookmark.title || 'bookmark'}`);
+    // 'change' (not 'click') so keyboard activation toggles selection too.
+    cb.addEventListener('change', () => {
       if (cb.checked) selectedIds.add(bookmark.id); else selectedIds.delete(bookmark.id);
       updateBulkBar();
     });
@@ -607,6 +608,16 @@ function updateBulkBar() {
   if (el) el.textContent = `${selectedIds.size} selected`;
 }
 
+// Build the "Move to category…" options for a space. The option VALUE carries the
+// raw category name (attribute-escaped only) so bulkMove's `c.name === value`
+// comparison works; the visible text is fully HTML-escaped.
+function categoryOptionsHtml(spaceId) {
+  const attr = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  return `<option value="">Move to category…</option>` + categories
+    .filter(c => c.spaceId === spaceId && !c.deletedAt)
+    .map(c => `<option value="${attr(c.name)}">${escapeHtml(c.name)}</option>`).join('');
+}
+
 function populateBulkTargets() {
   const enabled = new Set(rvLocal.enabledSpaceIds || []);
   const spaceSel = document.getElementById('bulk-space');
@@ -614,17 +625,12 @@ function populateBulkTargets() {
     .filter(s => !s.deletedAt && enabled.has(s.id))
     .map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
   const catSel = document.getElementById('bulk-category');
-  catSel.innerHTML = `<option value="">Move to category…</option>` + categories
-    .filter(c => c.spaceId === activeSpaceId && !c.deletedAt)
-    .map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
+  catSel.innerHTML = categoryOptionsHtml(activeSpaceId);
   // Re-populate category options whenever the space picker changes so category
   // choices always reflect the chosen destination, preventing dangling (spaceId, name).
   // Use onchange (not addEventListener) so re-entering select mode doesn't stack handlers.
   spaceSel.onchange = () => {
-    const destSpaceId = spaceSel.value || activeSpaceId;
-    catSel.innerHTML = `<option value="">Move to category…</option>` + categories
-      .filter(c => c.spaceId === destSpaceId && !c.deletedAt)
-      .map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
+    catSel.innerHTML = categoryOptionsHtml(spaceSel.value || activeSpaceId);
   };
 }
 
@@ -640,6 +646,7 @@ function setSelectMode(on) {
 async function bulkMove() {
   const spaceId = document.getElementById('bulk-space').value;
   const cat = document.getElementById('bulk-category').value;
+  if (!selectedIds.size) { showToast('Nothing selected', 'error'); return; }
   if (!spaceId && !cat) { showToast('Pick a space or category', 'error'); return; }
   for (const id of selectedIds) {
     const b = bookmarks.find(x => x.id === id);
@@ -672,10 +679,8 @@ async function bulkDelete() {
     const b = bookmarks.find(x => x.id === id);
     if (!b) continue;
     b.deletedAt = now;
-    b.updatedAt = now;
-    b._dirty = true;
     b.status = 'Deleted';
-    markDirty(b);
+    markDirty(b); // stamps _dirty + updatedAt
   }
   await saveData();
   showToast('Deleted', 'success');
