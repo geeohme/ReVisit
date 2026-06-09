@@ -544,9 +544,10 @@ button:hover {
 .settings-cats-back:hover { background: var(--color-hover-bg); color: var(--color-dark-text); }
 .settings-cats-body { padding: 20px; overflow-y: auto; flex: 1; }
 
-/* Category rows gain a delete action column (id-scoped to win over the base rule) */
-#categories-manager .categories-list-header { grid-template-columns: 2fr 0.8fr 0.8fr 36px; }
-#categories-settings-list .category-settings-item { grid-template-columns: 2fr 0.8fr 0.8fr 36px; }
+/* Category rows gain a color picker + delete action column (id-scoped to win over the base rule) */
+#categories-manager .categories-list-header { grid-template-columns: 2fr 0.8fr 26px 0.8fr 36px; }
+#categories-settings-list .category-settings-item { grid-template-columns: 2fr 0.8fr 26px 0.8fr 36px; }
+.cat-color { width: 26px; height: 22px; border: none; background: none; padding: 0; cursor: pointer; vertical-align: middle; }
 .cat-delete {
   width: 28px; height: 28px;
   display: inline-flex; align-items: center; justify-content: center;

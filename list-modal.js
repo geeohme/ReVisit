@@ -434,6 +434,14 @@ function categoryColorFor(b) {
 }
 function faviconLetter(b) { return RvListCore.avatarLetter(b.category, hostOf(b)); }
 function faviconColor(b) { return RvListCore.avatarColor(b.letterColor, categoryColorFor(b), hostOf(b), FAV_COLORS); }
+// Pick black or white text for legibility on a given hex background (YIQ luminance).
+function contrastTextColor(hex) {
+  const h = (hex || '').replace('#', '');
+  if (h.length < 6) return '#fff';
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq >= 150 ? '#1a1a1a' : '#fff';
+}
 function addDaysISO(base, days) { return new Date(base.getTime() + days * 86400000).toISOString(); }
 
 // Returns { key (bucket), label (chip text), cls } from revisitBy.
@@ -536,9 +544,10 @@ function buildBookmarkRow(bookmark) {
     ? `<div class="bk-tags">${bookmark.tags.map(t =>
         `<span class="bk-tag" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('')}</div>`
     : '';
+  const favBg = faviconColor(bookmark);
   item.innerHTML = `
     <div class="bk-main">
-      <div class="bk-fav" aria-hidden="true" style="background:${faviconColor(bookmark)}">${escapeHtml(faviconLetter(bookmark))}</div>
+      <div class="bk-fav" aria-hidden="true" style="background:${favBg};color:${contrastTextColor(favBg)}">${escapeHtml(faviconLetter(bookmark))}</div>
       <div class="bk-body">
         <a class="bk-title" href="${escapeHtml(bookmark.url)}" target="_blank" rel="noopener">${escapeHtml(bookmark.title || 'Untitled')}</a>
         <div class="bk-meta">
@@ -2128,9 +2137,11 @@ function renderCategoriesSettings() {
     item.dataset.categoryIndex = index;
 
     const delTitle = count > 0 ? 'Delete category (reassign bookmarks)' : 'Delete category';
+    const catColor = cat.color || RvListCore.nextCategoryColor(categories.filter(x => x.color).map(x => x.color), FAV_COLORS);
     item.innerHTML = `
       <span class="cat-name">${escapeHtml(catName)}</span>
       <span class="cat-count">${count}</span>
+      <input type="color" class="cat-color" data-cat="${escapeHtml(catName)}" value="${catColor}" title="Category color">
       <div class="cat-priority">
         <input type="number" class="cat-priority-input" data-category="${escapeHtml(catName)}"
                value="${cat.priority}" min="1" max="100">
@@ -2157,6 +2168,18 @@ function renderCategoriesSettings() {
   document.querySelectorAll('.cat-priority-input').forEach(input => {
     input.addEventListener('input', handleCategoryPriorityInput); // instant reorder on type
     input.addEventListener('change', handleCategoryPriorityChange); // save on blur
+  });
+
+  // Wire color picker inputs
+  container.querySelectorAll('.cat-color').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const c = categories.find(x => x.spaceId === settingsSpaceId && x.name === inp.dataset.cat && !x.deletedAt);
+      if (!c) return;
+      c.color = inp.value;
+      markDirty(c);
+      saveData();
+      renderLinks();
+    });
   });
 }
 
