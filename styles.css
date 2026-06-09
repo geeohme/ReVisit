@@ -221,11 +221,20 @@ button:hover {
 }
 
 .app-header .logo {
-  font-family: var(--font-display);
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 700;
-  font-size: 1.375rem;
-  letter-spacing: 0.2px;
-  color: var(--color-dark-text);
+  font-size: 18px;
+  color: var(--text-strong, #1c1c1c);
+}
+.logo-img { width: 22px; height: 22px; border-radius: 5px; object-fit: contain; }
+.logo-text { letter-spacing: 0.2px; }
+.header-space-selector {
+  margin-left: 10px;
+  max-width: 180px;
+  font-size: 13px;
+  padding: 4px 8px;
 }
 
 .app-header .header-actions {

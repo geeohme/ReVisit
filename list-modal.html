@@ -15,7 +15,11 @@
 <body>
     <div class="app-container">
         <header class="app-header">
-            <div class="logo">ReVisit</div>
+            <div class="logo">
+                <img class="logo-img" src="icons/ReVisit Logo.png" alt="ReVisit">
+                <span class="logo-text">ReVisit</span>
+                <select id="space-selector" class="header-space-selector" title="Active Space"></select>
+            </div>
             <div class="header-actions">
                 <div class="theme-switch-wrapper">
                     <label class="theme-switch" for="checkbox" title="Toggle light / dark">
@@ -29,7 +33,6 @@
                     </label>
                 </div>
                 <button id="settings-btn">Settings</button>
-                <select id="space-selector" title="Active Space"></select>
                 <button id="priority-btn">Priority View</button>
                 <button class="btn-close" id="close-btn">Close</button>
             </div>
