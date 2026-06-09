@@ -2002,17 +2002,19 @@ async function onDeleteSpace(id) {
   if (settingsSpaceId === id) settingsSpaceId = RvSpacesCore.liveSpaces(spaces)[0]?.id || '';
   if (activeSpaceId === id) activeSpaceId = rvLocal.defaultSpaceId;
   renderSpacesList(); renderSpacesInstallList(); renderSpaceSelector();
-  renderSpaceCategoryEditor(); renderCategories(); renderLinks();
+  renderSpaceCategoryEditor(); renderCategoriesSettings(); renderCategories(); renderLinks();
   showToast('Space deleted', 'success');
 }
 
 // --- Spaces: per-Space category editor (operates on settingsSpaceId) ---
 
+// Sets only the editor title. The category list is rendered by showCtTab() on the
+// open path (avoids a double render); callers that aren't going through showCtTab
+// call renderCategoriesSettings() themselves.
 function renderSpaceCategoryEditor() {
   const live = RvSpacesCore.liveSpaces(spaces);
   const cur = live.find(s => s.id === settingsSpaceId);
   document.getElementById('space-cats-space-name').textContent = cur ? cur.name : '—';
-  renderCategoriesSettings(); // reads settingsSpaceId
 }
 
 // --- Spaces: Zone B — install list (writes rvLocal ONLY) ---
@@ -2086,11 +2088,15 @@ function renderTagsSettings() {
 }
 
 function deleteTag(tag) {
+  // Real implementation lands in a later task; until then give visible feedback
+  // instead of a silent no-op so the button isn't misleading.
   console.warn('deleteTag not yet implemented', tag);
+  showToast('Tag deletion coming soon', 'info');
 }
 
 function renderCategoriesSettings() {
   const container = document.getElementById('categories-settings-list');
+  if (!container) return;
   container.innerHTML = '';
 
   // Sort categories by priority — scoped to the panel's selected Space (skip tombstones).
