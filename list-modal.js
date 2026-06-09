@@ -366,6 +366,14 @@ function stripMarkdown(s) {
 
 function hostOf(b) { try { return new URL(b.url).hostname.replace(/^www\./, ''); } catch { return ''; } }
 function faviconLetter(b) { const h = hostOf(b); return (h && h[0] ? h[0] : '•').toUpperCase(); }
+// Deterministic per-site tile colour so each domain reads consistently at a glance.
+const FAV_COLORS = ['#3E7C5A', '#C8801E', '#7159B5', '#2F6FE4', '#D6492B', '#0E7C86', '#B5346F', '#4B7A1E'];
+function faviconColor(b) {
+  const key = hostOf(b) || b.title || '';
+  let n = 0;
+  for (let i = 0; i < key.length; i++) n = (n + key.charCodeAt(i)) % FAV_COLORS.length;
+  return FAV_COLORS[n];
+}
 function addDaysISO(base, days) { return new Date(base.getTime() + days * 86400000).toISOString(); }
 
 // Returns { key (bucket), label (chip text), cls } from revisitBy.
@@ -454,7 +462,7 @@ function buildBookmarkRow(bookmark) {
     ? `<span class="bk-added">added ${new Date(bookmark.addedTimestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>` : '';
   item.innerHTML = `
     <div class="bk-main">
-      <div class="bk-fav" aria-hidden="true">${escapeHtml(faviconLetter(bookmark))}</div>
+      <div class="bk-fav" aria-hidden="true" style="background:${faviconColor(bookmark)}">${escapeHtml(faviconLetter(bookmark))}</div>
       <div class="bk-body">
         <a class="bk-title" href="${escapeHtml(bookmark.url)}" target="_blank" rel="noopener">${escapeHtml(bookmark.title || 'Untitled')}</a>
         <div class="bk-meta">

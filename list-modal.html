@@ -18,10 +18,14 @@
             <div class="logo">ReVisit</div>
             <div class="header-actions">
                 <div class="theme-switch-wrapper">
-                    <label class="theme-switch" for="checkbox">
+                    <label class="theme-switch" for="checkbox" title="Toggle light / dark">
                         <input type="checkbox" id="checkbox" aria-label="Toggle dark mode">
-                        <span class="sr-only">Toggle dark mode</span>
-                        <div class="slider"></div>
+                        <span class="slider">
+                            <span class="ts-knob">
+                                <svg class="ts-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.4 1.4M17.6 17.6 19 19M19 5l-1.4 1.4M6.4 17.6 5 19"/></svg>
+                                <svg class="ts-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
+                            </span>
+                        </span>
                     </label>
                 </div>
                 <button id="settings-btn">Settings</button>

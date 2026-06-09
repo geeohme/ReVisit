@@ -883,41 +883,49 @@ button:hover {
 }
 .theme-switch {
   display: inline-block;
-  height: 22px;
+  height: 26px;
   position: relative;
-  width: 40px;
+  width: 50px;
 }
-.theme-switch input {
-  display: none;
-}
+.theme-switch input { display: none; }
 .slider {
-  background-color: var(--color-medium-text);
-  bottom: 0;
+  position: absolute;
+  inset: 0;
   cursor: pointer;
-  left: 0;
-  position: absolute;
-  right: 0;
-  top: 0;
-  transition: 0.4s;
-  border-radius: 22px;
-}
-.slider:before {
-  background-color: white;
-  bottom: 2px;
-  content: "";
-  height: 18px;
-  left: 2px;
-  position: absolute;
-  transition: 0.4s;
-  width: 18px;
-  border-radius: 50%;
+  border-radius: 26px;
+  background: var(--color-bg-light);
+  border: 1px solid var(--color-border);
+  transition: background 0.3s ease, border-color 0.3s ease;
 }
 input:checked + .slider {
-  background-color: var(--color-primary);
+  background: var(--color-active-bg);
+  border-color: var(--color-primary);
 }
-input:checked + .slider:before {
-  transform: translateX(18px);
+/* Sliding knob carries the sun (light) / moon (dark) icon. */
+.ts-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
 }
+input:checked + .slider .ts-knob { transform: translateX(24px); }
+.ts-knob svg {
+  width: 12px; height: 12px;
+  stroke: currentColor; fill: none;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+.ts-knob .ts-moon { display: none; }
+input:checked + .slider .ts-knob .ts-sun { display: none; }
+input:checked + .slider .ts-knob .ts-moon { display: inline; }
 
 /* Toast Notification */
 .toast-message {
@@ -1546,8 +1554,8 @@ input:checked + .slider:before {
   display: flex; align-items: center; justify-content: center;
   font-family: var(--font-display);
   font-weight: 600; font-size: 13px;
-  background: var(--color-active-bg);
-  color: var(--color-primary);
+  background: var(--color-active-bg); /* overridden inline with a per-site colour */
+  color: #fff;
 }
 .bk-body { flex: 1; min-width: 0; }
 .bk-title {
