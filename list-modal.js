@@ -1297,8 +1297,8 @@ function openSettings() {
   renderSpacesTab();
   hideCategoriesLayer();
 
-  // Build/refresh the tab bar and default to Appearance.
-  activeSettingsTab = 'appearance';
+  // Build/refresh the tab bar and default to Account.
+  activeSettingsTab = 'account';
   buildSettingsTabs();
 
   // Setup event listeners
@@ -1310,13 +1310,13 @@ function openSettings() {
 // --- Settings tabs ---
 
 const SETTINGS_TABS = [
-  { id: 'appearance', label: 'Appearance', sections: ['appearance-section'] },
-  { id: 'ai',         label: 'AI',         sections: ['gateway-section', 'ollama-section', 'aiprovider-section'] },
   { id: 'account',    label: 'Account',    sections: ['account-section'] },
+  { id: 'ai',         label: 'AI',         sections: ['gateway-section', 'ollama-section', 'aiprovider-section'] },
+  { id: 'appearance', label: 'Appearance', sections: ['appearance-section'] },
   { id: 'spaces',     label: 'Spaces',     sections: ['spaces-section'] },
   { id: 'data',       label: 'Data',       sections: ['backup-section'] },
 ];
-let activeSettingsTab = 'appearance';
+let activeSettingsTab = 'account';
 
 function showSettingsTab(tabId) {
   const tab = SETTINGS_TABS.find(t => t.id === tabId) || SETTINGS_TABS[0];
