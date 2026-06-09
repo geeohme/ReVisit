@@ -2087,11 +2087,21 @@ function renderTagsSettings() {
   host.querySelectorAll('.ct-del').forEach(btn => btn.addEventListener('click', () => deleteTag(btn.dataset.tag)));
 }
 
-function deleteTag(tag) {
-  // Real implementation lands in a later task; until then give visible feedback
-  // instead of a silent no-op so the button isn't misleading.
-  console.warn('deleteTag not yet implemented', tag);
-  showToast('Tag deletion coming soon', 'info');
+async function deleteTag(tag) {
+  const ok = await rvConfirm('Delete tag?', `Remove the tag "${tag}" from all bookmarks in this space?`, { confirmText: 'Delete', danger: true });
+  if (!ok) return;
+  // Match the Tags-list scope exactly (live bookmarks in this space) so the change
+  // count reflects what the user saw and we don't churn soft-deleted tombstones.
+  const scope = bookmarks.filter(b => !b.deletedAt && (!settingsSpaceId || b.spaceId === settingsSpaceId));
+  const changed = RvListCore.removeTagFromBookmarks(scope, tag, new Date().toISOString());
+  if (changed) {
+    if (selectedTag === tag) selectedTag = null;
+    await saveData();
+    renderTagsSettings();
+    renderTagFilter();
+    renderLinks();
+  }
+  showToast(`Removed "${tag}" from ${changed} bookmark(s)`, 'success');
 }
 
 function renderCategoriesSettings() {
