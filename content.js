@@ -500,7 +500,15 @@ try {
     }
 
     if (request.action === 'scrapeAndShowOverlay') {
-      handleScrapeAndShowOverlay(request.bookmarkId, request.bookmarkData);
+      handleScrapeAndShowOverlay(request.bookmarkId, request.bookmarkData, request.mode);
+      sendResponse({ success: true });
+      return;
+    }
+
+    if (request.action === 'showSummarizeOnly') {
+      // Non-YouTube summarize-only: background already scraped + summarized.
+      // No transcript for non-YouTube pages.
+      injectSummaryOnlyOverlay(request.result, request.bookmarkData, null);
       sendResponse({ success: true });
       return;
     }
@@ -718,8 +726,9 @@ async function getTranscriptFromDOM() {
 }
 
 // Handle the scrape and overlay workflow
-async function handleScrapeAndShowOverlay(bookmarkId, preliminaryBookmark) {
-  console.log('DEBUG: Starting scrape and overlay workflow');
+async function handleScrapeAndShowOverlay(bookmarkId, preliminaryBookmark, mode) {
+  console.log('DEBUG: Starting scrape and overlay workflow', mode ? `(mode=${mode})` : '');
+  const summarizeOnly = mode === 'summarizeOnly';
   
   // Scrape page content
   let scrapedData;
@@ -762,7 +771,11 @@ async function handleScrapeAndShowOverlay(bookmarkId, preliminaryBookmark) {
 
   const message = {
     action: 'processWithAI',
-    scrapedData: scrapedData
+    scrapedData: scrapedData,
+    // In summarize-only mode no bookmark is saved up front, so the transcript
+    // must NOT be persisted yet — it's carried in memory and only written if
+    // the user chooses to save (beginSaveFromSummary).
+    deferTranscriptSave: summarizeOnly
   };
 
   // Add transcript to message if available
@@ -777,7 +790,22 @@ async function handleScrapeAndShowOverlay(bookmarkId, preliminaryBookmark) {
     }
     
     console.log('DEBUG: AI processing result:', response.result);
-    
+
+    if (summarizeOnly) {
+      // Read-only zoomed summary overlay. Keep the scraped transcript in memory
+      // so it can be persisted only if the user chooses to save.
+      injectSummaryOnlyOverlay(
+        {
+          category: response.result.category,
+          summary: response.result.summary,
+          tags: response.result.tags
+        },
+        { ...preliminaryBookmark, videoId: scrapedData.videoId || null },
+        transcript
+      );
+      return;
+    }
+
     // Inject overlay with AI results
     injectBookmarkOverlay(bookmarkId, {
       ...preliminaryBookmark,
@@ -1287,6 +1315,82 @@ async function injectBookmarkOverlay(bookmarkId, bookmarkData) {
     };
     handleOverlayAction({ action: 'save', bookmarkId, updatedData });
     host.remove();
+  });
+}
+
+// "Summarize only" read-only zoomed summary overlay (Shadow DOM).
+// Shows ONLY the summary, large and read-only. At the bottom, "ReVisit this
+// page" opens the normal Save overlay seeded with this summary; the × / backdrop
+// dismisses and drops everything (no bookmark, transcript discarded).
+async function injectSummaryOnlyOverlay(result, bookmarkData, transcript) {
+  console.log('DEBUG: Injecting summarize-only overlay (Shadow DOM)');
+
+  const existingHost = document.getElementById('rv-overlay-host');
+  if (existingHost) existingHost.remove();
+
+  const stored = await chrome.storage.local.get(['rvScheme', 'rvTheme']);
+  const { host, shadow } = createIsolatedHost('rv-overlay-host');
+  applyShadowTheme(host, stored.rvScheme || 'paper', stored.rvTheme || 'light');
+
+  const overlayContainer = document.createElement('div');
+  overlayContainer.className = 'overlay-backdrop';
+  // Large centered card with a tall, scrollable body in the zoomed look.
+  overlayContainer.innerHTML = `
+    <div class="overlay-card" style="max-width: 760px; width: 92%; height: 86vh; max-height: 86vh;">
+      <div class="card-header">
+        <h2>Summary</h2>
+        <button class="close-btn" id="rv-so-close">&times;</button>
+      </div>
+      <div class="summary-zoom-body" id="rv-so-body" style="flex: 1; min-height: 0;"></div>
+      <div class="card-footer">
+        <button class="btn btn-primary" id="rv-so-revisit">ReVisit this page</button>
+      </div>
+    </div>
+  `;
+
+  shadow.appendChild(overlayContainer);
+
+  // Render the summary using the EXISTING markdown renderer (read-only).
+  shadow.getElementById('rv-so-body').innerHTML = renderMarkdown(result.summary || '');
+
+  // Dismiss = drop everything: no bookmark was created, discard summary/transcript.
+  const dismiss = () => { host.remove(); };
+  shadow.getElementById('rv-so-close').addEventListener('click', dismiss);
+  overlayContainer.addEventListener('click', (e) => {
+    if (e.target === overlayContainer) dismiss();
+  });
+
+  // "ReVisit this page" → lazily create the preliminary bookmark (persisting the
+  // YouTube transcript if present), then open the NORMAL Save overlay seeded with
+  // the already-computed summary/category/tags. No re-summarization happens.
+  shadow.getElementById('rv-so-revisit').addEventListener('click', async () => {
+    try {
+      const resp = await chrome.runtime.sendMessage({
+        action: 'beginSaveFromSummary',
+        bookmarkData: {
+          url: bookmarkData.url,
+          title: bookmarkData.title,
+          isYouTube: !!bookmarkData.isYouTube,
+          videoId: bookmarkData.videoId || null
+        },
+        transcript: transcript || null
+      });
+      if (!resp || !resp.success) {
+        showNotification('Failed to start save', 'error');
+        return;
+      }
+      host.remove();
+      // Open the normal Save overlay, pre-seeded with the computed summary.
+      injectBookmarkOverlay(resp.bookmarkId, {
+        ...bookmarkData,
+        category: result.category,
+        summary: result.summary,
+        tags: result.tags
+      });
+    } catch (err) {
+      console.error('ERROR: beginSaveFromSummary failed:', err);
+      showNotification('Failed to start save', 'error');
+    }
   });
 }
 
