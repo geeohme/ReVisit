@@ -2117,7 +2117,7 @@ function renderCategoriesSettings() {
     item.dataset.spaceId = cat.spaceId;
     item.dataset.categoryIndex = index;
 
-    const delTitle = count > 0 ? 'Empty this category before deleting' : 'Delete category';
+    const delTitle = count > 0 ? 'Delete category (reassign bookmarks)' : 'Delete category';
     item.innerHTML = `
       <span class="cat-name">${escapeHtml(catName)}</span>
       <span class="cat-count">${count}</span>
@@ -2125,7 +2125,7 @@ function renderCategoriesSettings() {
         <input type="number" class="cat-priority-input" data-category="${escapeHtml(catName)}"
                value="${cat.priority}" min="1" max="100">
       </div>
-      <button class="cat-delete" data-category="${escapeHtml(catName)}" ${count > 0 ? 'disabled' : ''} title="${delTitle}" aria-label="${delTitle}">
+      <button class="cat-delete" data-category="${escapeHtml(catName)}" title="${delTitle}" aria-label="${delTitle}">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
       </button>
     `;
@@ -2150,12 +2150,41 @@ function renderCategoriesSettings() {
   });
 }
 
-// Delete an EMPTY category (tombstone + sync). Non-empty categories are blocked
-// (the move-its-bookmarks flow is deferred).
+// Delete a category, optionally reassigning its bookmarks first.
+// If empty: confirm and soft-delete.
+// If non-empty: present a reassign-or-clear choice before tombstoning.
 async function deleteCategory(spaceId, name, count) {
-  if (count > 0) { showToast('Empty this category before deleting it.', 'error'); return; }
-  const ok = await rvConfirm('Delete category?', `Delete the empty category “${name}”?`, { confirmText: 'Delete', danger: true });
-  if (!ok) return;
+  const cat = categories.find(c => c.spaceId === spaceId && c.name === name && !c.deletedAt);
+  if (!cat) return;
+
+  if (count === 0) {
+    const ok = await rvConfirm('Delete category?', `Delete the empty category “${name}”?`, { confirmText: 'Delete', danger: true });
+    if (!ok) return;
+  } else {
+    // Build list of other live categories in the same space.
+    const others = categories
+      .filter(c => c.spaceId === spaceId && c.name !== name && !c.deletedAt)
+      .sort((a, b) => a.priority - b.priority)
+      .map(c => c.name);
+    const choice = await rvChoose(
+      `Delete “${name}”?`,
+      `${count} bookmark${count === 1 ? '' : 's'} use this category. Choose where they go, then it will be deleted.`,
+      [
+        ...others.map(n => ({ id: `to:${n}`, label: `Move to “${n}”` })),
+        { id: 'clear', label: 'Clear their category' },
+        { id: 'cancel', label: 'Cancel', variant: 'secondary' },
+      ]
+    );
+    if (!choice || choice === 'cancel') return;
+    const target = choice.startsWith('to:') ? choice.slice(3) : '';
+    bookmarks.forEach(b => {
+      if (b.spaceId === spaceId && b.category === name && !b.deletedAt) {
+        b.category = target;
+        markDirty(b);
+      }
+    });
+  }
+
   const now = new Date().toISOString();
   categories = categories.map(c => (c.spaceId === spaceId && c.name === name)
     ? { ...c, deletedAt: now, updatedAt: now, _dirty: true } : c);
@@ -2460,6 +2489,42 @@ function rvConfirm(title, message, { confirmText = 'Confirm', danger = false } =
       { label: 'Cancel', value: false, variant: 'secondary' },
       { label: confirmText, value: true, variant: danger ? 'danger' : 'primary' },
     ],
+  });
+}
+
+// Present a dialog with N labelled option buttons arranged in a vertical stack.
+// options: [{ id, label, variant? }]  (variant defaults to 'primary'; pass 'secondary' or 'danger' as needed)
+// Resolves to the chosen option's id, or null if dismissed (Escape / backdrop click).
+function rvChoose(title, message, options) {
+  return new Promise(resolve => {
+    const scrim = document.createElement('div');
+    scrim.className = 'rv-dialog-scrim';
+    scrim.innerHTML = `
+      <div class="rv-dialog" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
+        <h3 class="rv-dialog-title"></h3>
+        <div class="rv-dialog-msg"></div>
+        <div class="rv-dialog-choices"></div>
+      </div>`;
+    scrim.querySelector('.rv-dialog-title').textContent = title;
+    const msgEl = scrim.querySelector('.rv-dialog-msg');
+    if (message instanceof Node) msgEl.appendChild(message);
+    else msgEl.textContent = message || '';
+    const choicesEl = scrim.querySelector('.rv-dialog-choices');
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); cleanup(null); } };
+    const cleanup = (val) => { document.removeEventListener('keydown', onKey, true); scrim.remove(); resolve(val); };
+    (options || []).forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = `rv-dialog-btn ${opt.variant || 'primary'}`;
+      btn.textContent = opt.label;
+      btn.addEventListener('click', () => cleanup(opt.id));
+      choicesEl.appendChild(btn);
+    });
+    scrim.addEventListener('mousedown', (e) => { if (e.target === scrim) cleanup(null); });
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(scrim);
+    requestAnimationFrame(() => scrim.classList.add('active'));
+    const focusBtn = choicesEl.querySelector('.danger') || choicesEl.querySelector('.primary') || choicesEl.querySelector('button');
+    if (focusBtn) focusBtn.focus();
   });
 }
 

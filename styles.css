@@ -1788,6 +1788,8 @@ input:checked + .slider .ts-knob .ts-moon { display: inline; }
 .rv-dialog-btn.danger:hover { filter: brightness(1.06); }
 .rv-dialog-btn.secondary { background: var(--color-bg-light); color: var(--color-dark-text); border-color: var(--color-border); }
 .rv-dialog-btn.secondary:hover { background: var(--color-hover-bg); }
+.rv-dialog-choices { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.rv-dialog-choices .rv-dialog-btn { width: 100%; text-align: left; }
 .rv-radio-group { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
 .rv-radio {
   display: flex; align-items: flex-start; gap: 10px;
