@@ -1186,9 +1186,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             console.log('DEBUG: 244 Bookmark marked as Complete');
           } else if (request.actionType === 'ReVisited') {
             // Update revisit date and mark the bookmark as ReVisited (a real status).
+            // Service workers can't import page-side modules; mirror RvListCore.resolveInterval
+            // inline here. Use ?? (not ||) so an explicit 0-day interval isn't coerced to 7.
             const iv = (data.settings && data.settings.defaultIntervalDays === null)
               ? null
-              : (data.settings?.defaultIntervalDays || 7);
+              : (data.settings?.defaultIntervalDays ?? 7);
             if (iv !== null) {
               bookmark.revisitBy = new Date(Date.now() + iv * 24 * 60 * 60 * 1000).toISOString();
             }
@@ -1196,7 +1198,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             bookmark.history = bookmark.history || [];
             bookmark.history.push({
               timestamp: Date.now(),
-              action: 'ReVisited - Updated revisit date'
+              action: iv !== null ? `ReVisited - Updated revisit date (+${iv}d)` : 'ReVisited'
             });
             console.log('DEBUG: 245 Bookmark revisit date updated');
           }
