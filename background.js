@@ -1,6 +1,7 @@
 // Cloud sync client (thin GoTrue + PostgREST). Loaded into the service worker.
 // rv-sync-core.js must load first — sync.js references self.RvSyncCore.
 importScripts('rv-sync-core.js');
+importScripts('rv-list-core.js'); // pure helpers (nextCategoryColor, etc.) — no chrome.* deps
 importScripts('sync.js');
 
 // Background service worker for ReVisit extension
@@ -1190,7 +1191,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             const maxPriority = existingCategories
               .filter(c => typeof c === 'object' && c.spaceId === submittedSpaceId)
               .reduce((max, cat) => Math.max(max, cat.priority || 0), 0);
-            existingCategories.push({ spaceId: submittedSpaceId, name: updatedCategory, priority: maxPriority + 1 });
+            // Assign a color at creation so list avatars are consistent immediately.
+            const usedColors = existingCategories.filter(c => typeof c === 'object' && c.color).map(c => c.color);
+            const newCatColor = (self.RvListCore && self.RvListCore.nextCategoryColor)
+              ? self.RvListCore.nextCategoryColor(usedColors, self.RvListCore.PALETTE)
+              : undefined;
+            existingCategories.push({ spaceId: submittedSpaceId, name: updatedCategory, priority: maxPriority + 1, color: newCatColor });
             data.categories = existingCategories;
           }
           

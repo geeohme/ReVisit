@@ -1999,7 +1999,8 @@ async function onDeleteSpace(id) {
       if (b.spaceId !== id) return b;
       if (b.category && !targetCatNames.has(b.category)) {
         const maxP = categories.filter(c => c.spaceId === target.id).reduce((m, c) => Math.max(m, c.priority || 0), 0);
-        categories.push({ spaceId: target.id, name: b.category, priority: maxP + 1 });
+        const cColor = RvListCore.nextCategoryColor(categories.filter(x => x.color).map(x => x.color), FAV_COLORS);
+        categories.push({ spaceId: target.id, name: b.category, priority: maxP + 1, color: cColor });
         targetCatNames.add(b.category);
       }
       return { ...b, spaceId: target.id };
@@ -2342,7 +2343,10 @@ function handleAddCategory() {
     return;
   }
 
-  categories.push({ spaceId: settingsSpaceId, name, priority });
+  // Assign a color at creation so avatars + the settings swatch agree immediately
+  // (don't wait for the next-load backfill).
+  const newColor = RvListCore.nextCategoryColor(categories.filter(x => x.color).map(x => x.color), FAV_COLORS);
+  categories.push({ spaceId: settingsSpaceId, name, priority, color: newColor });
   saveData();
   nameInput.value = '';
   priorityInput.value = '1';
