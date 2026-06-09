@@ -13,6 +13,8 @@ let searchQuery = '';
 let statusFilter = 'All';
 let priorityView = false;
 let currentBookmarkId = null;
+let selectMode = false;
+const selectedIds = new Set();
 let isDirty = false;
 
 function markDirty(rec) {
@@ -285,6 +287,12 @@ function setupEventListeners() {
       isDirty = true;
     });
   }
+  // Multi-select bulk actions
+  document.getElementById('select-toggle').addEventListener('click', () => setSelectMode(!selectMode));
+  document.getElementById('bulk-cancel').addEventListener('click', () => setSelectMode(false));
+  document.getElementById('bulk-move').addEventListener('click', bulkMove);
+  document.getElementById('bulk-delete').addEventListener('click', bulkDelete);
+
   // Markdown editors track dirty on blur/input
 }
 
@@ -541,6 +549,7 @@ function buildBookmarkRow(bookmark) {
 
   // Clicking the card body (not the title link or the action cluster) opens the editor.
   item.addEventListener('click', (e) => {
+    if (selectMode) return;
     if (e.target.closest('.bk-actions') || e.target.closest('.bk-title')) return;
     openDetailOverlay(bookmark);
   });
@@ -575,7 +584,102 @@ function buildBookmarkRow(bookmark) {
       applyTagFilter(el.dataset.tag);
     });
   });
+  if (selectMode) {
+    item.classList.add('selectable');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'bk-select';
+    cb.checked = selectedIds.has(bookmark.id);
+    cb.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (cb.checked) selectedIds.add(bookmark.id); else selectedIds.delete(bookmark.id);
+      updateBulkBar();
+    });
+    item.prepend(cb);
+  }
   return item;
+}
+
+// --- Multi-select / Bulk Actions ---
+
+function updateBulkBar() {
+  const el = document.getElementById('bulk-count');
+  if (el) el.textContent = `${selectedIds.size} selected`;
+}
+
+function populateBulkTargets() {
+  const enabled = new Set(rvLocal.enabledSpaceIds || []);
+  const spaceSel = document.getElementById('bulk-space');
+  spaceSel.innerHTML = `<option value="">Move to space…</option>` + spaces
+    .filter(s => !s.deletedAt && enabled.has(s.id))
+    .map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+  const catSel = document.getElementById('bulk-category');
+  catSel.innerHTML = `<option value="">Move to category…</option>` + categories
+    .filter(c => c.spaceId === activeSpaceId && !c.deletedAt)
+    .map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
+  // Re-populate category options whenever the space picker changes so category
+  // choices always reflect the chosen destination, preventing dangling (spaceId, name).
+  spaceSel.addEventListener('change', () => {
+    const destSpaceId = spaceSel.value || activeSpaceId;
+    catSel.innerHTML = `<option value="">Move to category…</option>` + categories
+      .filter(c => c.spaceId === destSpaceId && !c.deletedAt)
+      .map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
+  });
+}
+
+function setSelectMode(on) {
+  selectMode = on;
+  selectedIds.clear();
+  document.getElementById('bulk-bar').hidden = !on;
+  document.getElementById('select-toggle').classList.toggle('active', on);
+  if (on) { populateBulkTargets(); updateBulkBar(); }
+  renderLinks();
+}
+
+async function bulkMove() {
+  const spaceId = document.getElementById('bulk-space').value;
+  const cat = document.getElementById('bulk-category').value;
+  if (!spaceId && !cat) { showToast('Pick a space or category', 'error'); return; }
+  for (const id of selectedIds) {
+    const b = bookmarks.find(x => x.id === id);
+    if (!b) continue;
+    if (spaceId) {
+      b.spaceId = spaceId;
+      // Clear category if it no longer exists in the destination space.
+      const catOk = categories.some(c => c.spaceId === spaceId && c.name === b.category && !c.deletedAt);
+      if (!catOk) b.category = '';
+    }
+    // Only apply chosen category if it is valid in the destination space (which may
+    // have just been changed above).  This prevents dangling (spaceId, name) pairs.
+    if (cat && categories.some(c => c.spaceId === (spaceId || b.spaceId) && c.name === cat && !c.deletedAt)) {
+      b.category = cat;
+    }
+    markDirty(b);
+  }
+  await saveData();
+  showToast('Moved', 'success');
+  setSelectMode(false);
+  renderCategories();
+}
+
+async function bulkDelete() {
+  if (!selectedIds.size) { showToast('Nothing selected', 'error'); return; }
+  const ok = await rvConfirm('Delete selected?', `Delete ${selectedIds.size} bookmark(s)?`, { confirmText: 'Delete', danger: true });
+  if (!ok) return;
+  const now = new Date().toISOString();
+  for (const id of selectedIds) {
+    const b = bookmarks.find(x => x.id === id);
+    if (!b) continue;
+    b.deletedAt = now;
+    b.updatedAt = now;
+    b._dirty = true;
+    b.status = 'Deleted';
+    markDirty(b);
+  }
+  await saveData();
+  showToast('Deleted', 'success');
+  setSelectMode(false);
+  renderCategories();
 }
 
 // Apply a ReVisit action to a bookmark using the SAME saveData() LWW + push path

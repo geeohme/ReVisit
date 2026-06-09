@@ -1531,6 +1531,25 @@ input:checked + .slider .ts-knob .ts-moon { display: inline; }
   font-size: 0.8rem;
 }
 
+/* Select-mode / bulk-action bar */
+.select-toggle {
+  padding: 5px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg-light);
+  color: var(--color-dark-text);
+  font-family: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.select-toggle:hover { background: var(--color-hover-bg); }
+.select-toggle.active { background: var(--color-primary); color: var(--color-primary-contrast); border-color: var(--color-primary); }
+.bulk-bar { display: flex; gap: 8px; align-items: center; padding: 8px 12px; background: var(--color-hover-bg); border-radius: 8px; margin: 6px 0; flex-wrap: wrap; }
+.bulk-bar[hidden] { display: none; }
+.bulk-bar select { padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-bg-light); color: var(--color-dark-text); font-family: inherit; font-size: 0.8rem; }
+.bk-card.selectable { cursor: default; }
+.bk-select { margin-right: 8px; cursor: pointer; }
+
 /* Sidebar tag filter */
 .tag-filter { margin-top: 8px; }
 .tag-filter h3 {

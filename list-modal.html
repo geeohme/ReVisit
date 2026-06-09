@@ -82,6 +82,15 @@
                             <option value="category">Category</option>
                         </select>
                     </label>
+                    <button id="select-toggle" class="select-toggle">Select</button>
+                </div>
+                <div id="bulk-bar" class="bulk-bar" hidden>
+                    <span id="bulk-count">0 selected</span>
+                    <select id="bulk-space" title="Move to space"></select>
+                    <select id="bulk-category" title="Move to category"></select>
+                    <button id="bulk-move" class="btn-save">Move</button>
+                    <button id="bulk-delete" class="btn-delete">Delete</button>
+                    <button id="bulk-cancel" class="btn-secondary">Done</button>
                 </div>
                 <div id="links-list" class="bookmark-list">
                     <!-- Bookmarks will be injected here -->
