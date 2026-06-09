@@ -15,7 +15,11 @@
 <body>
     <div class="app-container">
         <header class="app-header">
-            <div class="logo">ReVisit</div>
+            <div class="logo">
+                <img class="logo-img" src="icons/ReVisit Logo.png" alt="ReVisit">
+                <span class="logo-text">ReVisit</span>
+                <select id="space-selector" class="header-space-selector" title="Active Space"></select>
+            </div>
             <div class="header-actions">
                 <div class="theme-switch-wrapper">
                     <label class="theme-switch" for="checkbox" title="Toggle light / dark">
@@ -29,7 +33,6 @@
                     </label>
                 </div>
                 <button id="settings-btn">Settings</button>
-                <select id="space-selector" title="Active Space"></select>
                 <button id="priority-btn">Priority View</button>
                 <button class="btn-close" id="close-btn">Close</button>
             </div>
@@ -45,23 +48,26 @@
                 </div>
 
                 <div class="filter-tabs">
-                    <button class="active" data-filter="Active">To revisit</button>
+                    <button class="active" data-filter="All">All</button>
+                    <button data-filter="Active">To revisit</button>
                     <button data-filter="ReVisited">Revisited</button>
                     <button data-filter="Complete">Done</button>
-                    <button data-filter="All">All</button>
                 </div>
 
-                <div class="category-list">
-                    <h3>Categories</h3>
-                    <div id="categories-list">
-                        <!-- Categories will be injected here -->
+                <div class="sidebar-ct">
+                    <div class="sct-search-row">
+                        <input type="text" id="sct-search" placeholder="Filter categories or tags…" aria-label="Filter categories or tags">
+                        <button type="button" id="sct-search-clear" class="link-btn">Clear</button>
                     </div>
-                </div>
-
-                <div class="tag-filter">
-                    <h3>Tags</h3>
-                    <div id="tags-list">
-                        <!-- Tag chips injected here -->
+                    <div class="sct-tabs">
+                        <button class="sct-tab active" data-scttab="categories">Categories</button>
+                        <button class="sct-tab" data-scttab="tags">Tags</button>
+                    </div>
+                    <div id="sct-categories" class="sct-pane">
+                        <div id="categories-list"><!-- Categories injected here --></div>
+                    </div>
+                    <div id="sct-tags" class="sct-pane" hidden>
+                        <div id="tags-list"><!-- Tag chips injected here --></div>
                     </div>
                 </div>
             </aside>
@@ -79,7 +85,17 @@
                             <option value="category">Category</option>
                         </select>
                     </label>
+                    <button id="select-toggle" class="select-toggle">Select</button>
                 </div>
+                <div id="bulk-bar" class="bulk-bar" hidden>
+                    <span id="bulk-count">0 selected</span>
+                    <select id="bulk-space" title="Move to space"></select>
+                    <select id="bulk-category" title="Move to category"></select>
+                    <button id="bulk-move" class="btn-save">Move</button>
+                    <button id="bulk-delete" class="btn-delete">Delete</button>
+                    <button id="bulk-cancel" class="btn-secondary">Done</button>
+                </div>
+                <div id="bucket-nav" class="bucket-nav" hidden></div>
                 <div id="links-list" class="bookmark-list">
                     <!-- Bookmarks will be injected here -->
                 </div>
@@ -104,6 +120,11 @@
                     </div>
                     <input type="text" id="new-tag-input" class="tag-input" placeholder="+ Tag">
                 </div>
+                <label class="letter-color-ctl" title="Avatar letter colour (overrides category)">
+                    Letter colour
+                    <input type="color" id="detail-letter-color">
+                    <button type="button" id="detail-letter-color-clear" class="link-btn">Use category</button>
+                </label>
             </div>
 
             <div class="metadata-grid">
@@ -123,6 +144,10 @@
                     <label>Revisit By</label>
                     <input type="date" id="detail-revisit">
                 </div>
+                <div class="form-group">
+                    <label>Space</label>
+                    <select id="detail-space"></select>
+                </div>
             </div>
 
             <div class="reschedule-row" id="detail-reschedule">
@@ -133,16 +158,31 @@
                 <button type="button" class="rs-chip" data-clear="1">No date · Someday</button>
             </div>
 
-            <h3 class="section-heading">Summary</h3>
+            <h3 class="section-heading">Summary
+                <button type="button" class="zoom-btn" data-zoom-target="detail-summary" title="Zoom">⤢</button>
+            </h3>
             <div id="detail-summary" class="markdown-content" contenteditable="true" placeholder="AI Summary..."></div>
 
-            <h3 class="section-heading">Your Notes</h3>
+            <h3 class="section-heading">Your Notes
+                <button type="button" class="zoom-btn" data-zoom-target="detail-notes" title="Zoom">⤢</button>
+            </h3>
             <div id="detail-notes" class="markdown-content" contenteditable="true" placeholder="Add your notes..."></div>
 
             <div class="overlay-actions">
                 <button id="delete-bookmark-btn" class="btn-delete">Delete</button>
                 <button id="save-bookmark-btn" class="btn-save">Save Changes</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Zoom overlay for Summary / Notes (editable) -->
+    <div class="zoom-overlay" id="zoom-overlay">
+        <div class="zoom-card">
+            <div class="zoom-head">
+                <span id="zoom-title">Summary</span>
+                <button type="button" class="close-overlay-btn" id="zoom-close">×</button>
+            </div>
+            <div id="zoom-editor" class="markdown-content zoom-editor" contenteditable="true"></div>
         </div>
     </div>
 
@@ -181,6 +221,33 @@
                     </div>
                     <div class="scheme-preview" id="scheme-preview" aria-hidden="true">
                         <span class="sw sw-bg"></span><span class="sw sw-panel"></span><span class="sw sw-accent"></span><span class="sw sw-text"></span><span class="sw sw-ok"></span>
+                    </div>
+                    <div class="settings-grid" style="margin-top:12px;">
+                        <div class="settings-field">
+                            <label for="set-default-interval">Default revisit interval</label>
+                            <select id="set-default-interval">
+                                <option value="none">None (no reminder)</option>
+                                <option value="1">1 day</option>
+                                <option value="3">3 days</option>
+                                <option value="7">1 week</option>
+                                <option value="14">2 weeks</option>
+                                <option value="30">1 month</option>
+                            </select>
+                        </div>
+                        <div class="settings-field">
+                            <label for="set-popup-position">Capture popup position</label>
+                            <select id="set-popup-position">
+                                <option value="center">Center</option>
+                                <option value="top-left">Top-left</option>
+                                <option value="top-center">Top-center</option>
+                                <option value="top-right">Top-right</option>
+                                <option value="mid-left">Middle-left</option>
+                                <option value="mid-right">Middle-right</option>
+                                <option value="bottom-left">Bottom-left</option>
+                                <option value="bottom-center">Bottom-center</option>
+                                <option value="bottom-right">Bottom-right</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
                 <!-- Account / Cloud Sync Section -->
@@ -393,21 +460,21 @@
                 </div>
             </div>
 
-            <!-- Categories editor — pops over the Spaces tab, inside the modal -->
+            <!-- Categories &amp; Tags editor — pops over the Spaces tab, inside the modal -->
             <div class="settings-cats-layer" id="settings-cats-layer" aria-hidden="true">
-                <div class="settings-cats-header">
+                <div class="cats-layer-head">
                     <button class="settings-cats-back" id="cats-back-btn" aria-label="Back to Spaces">
                         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         Spaces
                     </button>
-                    <h3>Categories in <span id="space-cats-space-name">—</span></h3>
+                    <h3>Categories &mdash; <span id="space-cats-space-name">—</span></h3>
                 </div>
-                <div class="settings-cats-body">
-                    <p class="settings-help-text">Priority sets display order (1 ranks highest). Drag to reorder. A category can only be deleted when it has no bookmarks.</p>
+                <p class="settings-help-text">Priority sets display order (1 ranks highest). Drag to reorder. Deleting a category lets you move its bookmarks to another category first.</p>
                     <div id="categories-manager">
                         <div class="categories-list-header">
                             <span class="cat-name-header">Category Name</span>
                             <span class="cat-count-header">Bookmarks</span>
+                            <span class="cat-color-header"></span>
                             <span class="cat-priority-header">Priority</span>
                             <span class="cat-actions-header"></span>
                         </div>
@@ -421,7 +488,6 @@
                             <button class="settings-btn settings-btn-primary" id="add-category-btn">Add Category</button>
                         </div>
                     </div>
-                </div>
             </div>
         </div>
     </div>
@@ -467,6 +533,7 @@
     <script src="utils.js"></script>
     <script src="rv-sync-core.js"></script>
     <script src="rv-spaces-core.js"></script>
+    <script src="rv-list-core.js"></script>
     <script src="sync.js"></script>
     <script src="list-modal.js"></script>
 </body>

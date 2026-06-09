@@ -1,6 +1,7 @@
 // Cloud sync client (thin GoTrue + PostgREST). Loaded into the service worker.
 // rv-sync-core.js must load first — sync.js references self.RvSyncCore.
 importScripts('rv-sync-core.js');
+importScripts('rv-list-core.js'); // pure helpers (nextCategoryColor, etc.) — no chrome.* deps
 importScripts('sync.js');
 
 // Background service worker for ReVisit extension
@@ -856,7 +857,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           tags: [],
           userNotes: '',
           addedTimestamp: Date.now(),
-          revisitBy: new Date(Date.now() + (settings.defaultIntervalDays || 7) * 24 * 60 * 60 * 1000).toISOString(),
+          revisitBy: (settings.defaultIntervalDays === null)
+            ? null
+            : new Date(Date.now() + (settings.defaultIntervalDays ?? 7) * 24 * 60 * 60 * 1000).toISOString(),
           status: 'Active',
           history: [],
           isPreliminary: true, // Mark as preliminary
@@ -958,6 +961,191 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
         
         sendResponse({ success: true, bookmarkId: preliminaryBookmark.id });
+      } else if (request.action === 'summarizeOnly') {
+        // "Summarize only": run the SAME scrape + AI pipeline as addBookmark,
+        // but DO NOT create/save a preliminary bookmark. On completion the
+        // content script shows a read-only zoomed summary overlay instead of
+        // the Save overlay. No bookmark exists unless the user later chooses
+        // "ReVisit this page" (beginSaveFromSummary) and then Saves.
+        console.log('DEBUG: summarizeOnly request received');
+
+        // ACK immediately so the popup can close (same race-avoidance as addBookmark).
+        sendResponse({ success: true, ack: true });
+
+        const [soTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!soTab) {
+          throw new Error('No active tab found');
+        }
+
+        // Ensure content script is loaded (notifications + overlay rendering).
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: soTab.id },
+            files: ['content.js']
+          });
+          await new Promise(resolve => setTimeout(resolve, 200));
+        } catch (err) {
+          console.log('Content script already injected:', err.message);
+        }
+
+        try {
+          await chrome.tabs.sendMessage(soTab.id, {
+            action: 'showNotification',
+            message: 'Gathering Details...',
+            type: 'info'
+          });
+        } catch (err) {
+          console.warn('Could not show initial notification:', err.message);
+        }
+
+        const soIsYouTube = soTab.url && (soTab.url.includes('youtube.com/watch') || soTab.url.includes('youtu.be/'));
+
+        const soData = await getStorageData();
+        const soSettings = soData.settings || {};
+        const soCategories = getCategoryNames(soData.categories || []);
+
+        // bookmarkData mirrors the preliminary bookmark fields, but is NOT saved.
+        // It carries title/url + default revisit/space so the seeded Save overlay
+        // can default everything exactly like the normal flow.
+        const soRvLocal = await getRvLocal();
+        const soBookmarkData = {
+          url: soTab.url,
+          title: soTab.title || 'Untitled',
+          category: 'Uncategorized',
+          summary: '',
+          tags: [],
+          userNotes: '',
+          revisitBy: (soSettings.defaultIntervalDays === null)
+            ? null
+            : new Date(Date.now() + (soSettings.defaultIntervalDays ?? 7) * 24 * 60 * 60 * 1000).toISOString(),
+          isYouTube: soIsYouTube,
+          spaceId: soRvLocal.defaultSpaceId
+        };
+
+        if (soIsYouTube) {
+          // Reuse the SAME content-script scrape (incl. transcript) used by
+          // addBookmark — just branch the final display via mode flag.
+          const isAlreadyLoaded = await verifyContentScript(soTab.id);
+          if (!isAlreadyLoaded) {
+            try {
+              await chrome.scripting.executeScript({
+                target: { tabId: soTab.id },
+                files: ['content.js']
+              });
+              await new Promise(resolve => setTimeout(resolve, 500));
+            } catch (injectionError) {
+              throw new Error(`Content script injection failed: ${injectionError.message}`);
+            }
+            const isReady = await verifyContentScript(soTab.id);
+            if (!isReady) {
+              throw new Error('Content script is not responding to ping');
+            }
+          }
+          await sendMessageWithRetry(soTab.id, {
+            action: 'scrapeAndShowOverlay',
+            mode: 'summarizeOnly',
+            bookmarkData: soBookmarkData
+          });
+        } else {
+          // Non-YouTube: scrape + AI in background (same as addBookmark), then
+          // hand the result to the read-only summary overlay. On failure surface
+          // an error toast (the ACK was already sent, so sendResponse is a no-op).
+          try {
+            const scrapeResult = await chrome.scripting.executeScript({
+              target: { tabId: soTab.id },
+              func: scrapePageContent
+            });
+            const scrapedData = scrapeResult[0].result;
+            const result = await processWithAI(scrapedData, soSettings, soCategories, null);
+            await chrome.tabs.sendMessage(soTab.id, {
+              action: 'showSummarizeOnly',
+              result: { summary: result.summary, category: result.category, tags: result.tags },
+              bookmarkData: soBookmarkData
+            });
+          } catch (soErr) {
+            console.error('DEBUG: summarizeOnly (non-YouTube) failed:', soErr);
+            try {
+              await chrome.tabs.sendMessage(soTab.id, {
+                action: 'showNotification',
+                message: `Couldn't summarize this page: ${soErr.message}`,
+                type: 'error'
+              });
+            } catch (_) { /* tab may be gone */ }
+          }
+        }
+      } else if (request.action === 'beginSaveFromSummary') {
+        // User clicked "ReVisit this page" in the read-only summary overlay.
+        // NOW (lazily) create the preliminary bookmark — reusing addBookmark's
+        // create block — and persist the in-memory YouTube transcript if present.
+        // The existing injectBookmarkOverlay + updateBookmark path then works
+        // unchanged: it updates this preliminary bookmark on Save.
+        console.log('DEBUG: beginSaveFromSummary request received');
+
+        const bd = request.bookmarkData || {};
+        const data = await getStorageData();
+        const settings = data.settings || {};
+        const rvLocal = await getRvLocal();
+        const isYouTube = !!bd.isYouTube;
+
+        // If this URL is already bookmarked (live), edit that one instead of
+        // creating a duplicate — mirrors the intent of addBookmark's dup check.
+        const existing = (data.bookmarks || []).find(b => b.url === bd.url && !b.deletedAt);
+        if (existing) {
+          if (isYouTube && bd.videoId && request.transcript) {
+            await saveTranscript(bd.videoId, {
+              raw: request.transcript,
+              metadata: { title: bd.title, videoId: bd.videoId, retrievedAt: Date.now(), source: 'dom-scraping' }
+            });
+            formatTranscriptFast(request.transcript, settings)
+              .then(ft => ft && updateTranscript(bd.videoId, { formatted: ft }))
+              .catch(e => console.warn('formatted transcript (existing) failed', e));
+          }
+          sendResponse({ success: true, bookmarkId: existing.id });
+          return;
+        }
+
+        const preliminaryBookmark = {
+          id: crypto.randomUUID(),
+          url: bd.url,
+          title: bd.title || 'Untitled',
+          category: 'Uncategorized',
+          summary: '',
+          tags: [],
+          userNotes: '',
+          addedTimestamp: Date.now(),
+          revisitBy: (settings.defaultIntervalDays === null)
+            ? null
+            : new Date(Date.now() + (settings.defaultIntervalDays ?? 7) * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'Active',
+          history: [],
+          isPreliminary: true,
+          isYouTube: isYouTube,
+          spaceId: rvLocal.defaultSpaceId
+        };
+
+        data.bookmarks = data.bookmarks || [];
+        data.bookmarks.push(preliminaryBookmark);
+        await saveStorageData(data);
+
+        // Persist the YouTube transcript carried in memory from the summarize
+        // step, the same way the normal YouTube flow persists it: raw immediately,
+        // and the Groq-formatted version non-blocking (for parity with addBookmark).
+        if (isYouTube && bd.videoId && request.transcript) {
+          await saveTranscript(bd.videoId, {
+            raw: request.transcript,
+            metadata: {
+              title: bd.title,
+              videoId: bd.videoId,
+              retrievedAt: Date.now(),
+              source: 'dom-scraping'
+            }
+          });
+          formatTranscriptFast(request.transcript, settings)
+            .then(ft => ft && updateTranscript(bd.videoId, { formatted: ft }))
+            .catch(e => console.warn('formatted transcript failed', e));
+        }
+
+        sendResponse({ success: true, bookmarkId: preliminaryBookmark.id });
       } else if (request.action === 'processWithAI') {
         // Process scraped content with AI
         console.log('DEBUG: 229 Background processing AI request');
@@ -977,7 +1165,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.log('DEBUG: 234 Is YouTube:', request.scrapedData.isYouTube);
 
         // Pass settings and sender.tab.id to processWithAI
-        const result = await processWithAI(request.scrapedData, settings, categories, request.transcript, sender?.tab?.id);
+        const result = await processWithAI(request.scrapedData, settings, categories, request.transcript, sender?.tab?.id, request.deferTranscriptSave);
         sendResponse({ success: true, result });
       } else if (request.action === 'updateBookmark') {
         // Update bookmark with final data
@@ -1003,7 +1191,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             const maxPriority = existingCategories
               .filter(c => typeof c === 'object' && c.spaceId === submittedSpaceId)
               .reduce((max, cat) => Math.max(max, cat.priority || 0), 0);
-            existingCategories.push({ spaceId: submittedSpaceId, name: updatedCategory, priority: maxPriority + 1 });
+            // Assign a color at creation so list avatars are consistent immediately.
+            const usedColors = existingCategories.filter(c => typeof c === 'object' && c.color).map(c => c.color);
+            const newCatColor = (self.RvListCore && self.RvListCore.nextCategoryColor)
+              ? self.RvListCore.nextCategoryColor(usedColors, self.RvListCore.PALETTE)
+              : undefined;
+            existingCategories.push({ spaceId: submittedSpaceId, name: updatedCategory, priority: maxPriority + 1, color: newCatColor });
             data.categories = existingCategories;
           }
           
@@ -1101,7 +1294,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           tags: [],
           userNotes: '',
           addedTimestamp: Date.now(),
-          revisitBy: new Date(Date.now() + (settings.defaultIntervalDays || 7) * 24 * 60 * 60 * 1000).toISOString(),
+          revisitBy: (settings.defaultIntervalDays === null)
+            ? null
+            : new Date(Date.now() + (settings.defaultIntervalDays ?? 7) * 24 * 60 * 60 * 1000).toISOString(),
           status: 'Active',
           history: [],
           isPreliminary: true,
@@ -1185,14 +1380,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             });
             console.log('DEBUG: 244 Bookmark marked as Complete');
           } else if (request.actionType === 'ReVisited') {
-            // Update revisit date
-            const defaultIntervalDays = data.settings?.defaultIntervalDays || 7;
-            bookmark.revisitBy = new Date(Date.now() + defaultIntervalDays * 24 * 60 * 60 * 1000).toISOString();
-            bookmark.status = 'Active';
+            // Update revisit date and mark the bookmark as ReVisited (a real status).
+            // Service workers can't import page-side modules; mirror RvListCore.resolveInterval
+            // inline here. Use ?? (not ||) so an explicit 0-day interval isn't coerced to 7.
+            const iv = (data.settings && data.settings.defaultIntervalDays === null)
+              ? null
+              : (data.settings?.defaultIntervalDays ?? 7);
+            if (iv !== null) {
+              bookmark.revisitBy = new Date(Date.now() + iv * 24 * 60 * 60 * 1000).toISOString();
+            }
+            bookmark.status = 'ReVisited';
             bookmark.history = bookmark.history || [];
             bookmark.history.push({
               timestamp: Date.now(),
-              action: 'ReVisited - Updated revisit date'
+              action: iv !== null ? `ReVisited - Updated revisit date (+${iv}d)` : 'ReVisited'
             });
             console.log('DEBUG: 245 Bookmark revisit date updated');
           }
@@ -1446,7 +1647,7 @@ async function updateTranscript(videoId, updates) {
 }
 
 // Enhanced AI processing function
-async function processWithAI(scrapedData, settings, categories, transcript = null, tabId = null) {
+async function processWithAI(scrapedData, settings, categories, transcript = null, tabId = null, deferTranscriptSave = false) {
   console.log('DEBUG: 247 processWithAI called with settings:', settings);
   console.log('DEBUG: 248 LLM Gateway API Key in processWithAI:', settings.llmGateway?.apiKey ? 'PRESENT' : 'MISSING');
   console.log('DEBUG: 249 Is YouTube video:', scrapedData.isYouTube);
@@ -1462,7 +1663,7 @@ async function processWithAI(scrapedData, settings, categories, transcript = nul
   // Handle YouTube videos with transcript
   if (scrapedData.isYouTube && scrapedData.videoId && transcript) {
     console.log('DEBUG: 251 Processing YouTube video with DOM-scraped transcript');
-    return await processYouTubeVideoWithTranscript(scrapedData, settings, categories, transcript, tabId);
+    return await processYouTubeVideoWithTranscript(scrapedData, settings, categories, transcript, tabId, deferTranscriptSave);
   } else if (scrapedData.isYouTube && scrapedData.videoId) {
     console.log('DEBUG: 252 Processing YouTube video without transcript');
     return await processStandardPage(scrapedData, settings, categories);
@@ -1473,23 +1674,26 @@ async function processWithAI(scrapedData, settings, categories, transcript = nul
 }
 
 // Process YouTube video with transcript using parallel API calls
-async function processYouTubeVideoWithTranscript(scrapedData, settings, categories, transcript, tabId) {
+async function processYouTubeVideoWithTranscript(scrapedData, settings, categories, transcript, tabId, deferTranscriptSave = false) {
   console.log('DEBUG: 254 Processing YouTube video with parallel API calls');
   console.log('DEBUG: 255 Transcript length:', transcript.length);
   console.log('DEBUG: 256 LLM Gateway configured:', !!settings.llmGateway?.apiKey);
 
   try {
-    // Save the raw transcript
-    await saveTranscript(scrapedData.videoId, {
-      raw: transcript,
-      metadata: {
-        title: scrapedData.title,
-        videoId: scrapedData.videoId,
-        retrievedAt: Date.now(),
-        source: 'dom-scraping'
-      }
-    });
-    console.log('DEBUG: 257 Raw transcript saved to storage');
+    // Save the raw transcript — UNLESS deferred (summarize-only flow, where no
+    // bookmark exists yet; the transcript is persisted only if the user saves).
+    if (!deferTranscriptSave) {
+      await saveTranscript(scrapedData.videoId, {
+        raw: transcript,
+        metadata: {
+          title: scrapedData.title,
+          videoId: scrapedData.videoId,
+          retrievedAt: Date.now(),
+          source: 'dom-scraping'
+        }
+      });
+      console.log('DEBUG: 257 Raw transcript saved to storage');
+    }
 
     // PARALLEL API CALLS: Summary (Haiku) + Formatting (Groq)
     console.log('DEBUG: 258 Launching parallel API calls (Haiku + Groq)');
@@ -1514,8 +1718,9 @@ async function processYouTubeVideoWithTranscript(scrapedData, settings, categori
     console.log('DEBUG: 260 AI summarization result:', aiResult);
     console.log('DEBUG: 261 Formatted transcript length:', formattedTranscript.length);
 
-    // Save formatted transcript (non-blocking - happens in background)
-    if (formattedTranscript) {
+    // Save formatted transcript (non-blocking - happens in background).
+    // Skipped when deferred — nothing is persisted until the user saves.
+    if (formattedTranscript && !deferTranscriptSave) {
       console.log('DEBUG: 262 Saving formatted transcript in background');
       updateTranscript(scrapedData.videoId, { formatted: formattedTranscript })
         .then(() => {

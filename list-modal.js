@@ -6,14 +6,24 @@ let spaces = [];
 let rvLocal = { enabledSpaceIds: [], defaultSpaceId: '', lastUsedListSpaceId: '' };
 let activeSpaceId = '';
 let settingsSpaceId = '';
+let sctTab = 'categories';  // active sidebar tab (Categories | Tags)
+let sctSearch = '';         // shared sidebar filter term (persists across tab toggle)
 let selectedCategory = 'All';
 let selectedTag = null;
 let sortMode = 'due';
 let searchQuery = '';
-let statusFilter = 'Active';
+let statusFilter = 'All';
 let priorityView = false;
 let currentBookmarkId = null;
+let selectMode = false;
+const selectedIds = new Set();
 let isDirty = false;
+
+function markDirty(rec) {
+  rec._dirty = true;
+  rec.updatedAt = new Date().toISOString();
+  return rec;
+}
 
 // Load shared utilities from utils.js
 // Note: sendMessageWithRetry, isYouTubeUrl, extractVideoId are available from utils.js
@@ -84,6 +94,20 @@ async function init() {
   settings = rvData.settings || {};
   spaces = rvData.spaces || [];
   rvLocal = data.rvLocal || { enabledSpaceIds: [], defaultSpaceId: '', lastUsedListSpaceId: '' };
+
+  // One-time backfill: assign a palette color to every color-less non-deleted category.
+  (function backfillCategoryColors() {
+    let changed = false;
+    for (const c of categories) {
+      if (!c.color && !c.deletedAt) {
+        const used = categories.filter(x => x.color).map(x => x.color);
+        c.color = RvListCore.nextCategoryColor(used, FAV_COLORS);
+        markDirty(c);
+        changed = true;
+      }
+    }
+    if (changed) saveData().catch(e => console.warn('category color backfill save failed', e));
+  })();
   const liveSpaces = spaces.filter(s => !s.deletedAt).sort((a, b) => (a.priority || 0) - (b.priority || 0));
   activeSpaceId = rvLocal.lastUsedListSpaceId || rvLocal.defaultSpaceId || (liveSpaces[0] && liveSpaces[0].id) || '';
 
@@ -208,6 +232,34 @@ function setupEventListeners() {
   document.getElementById('save-bookmark-btn').addEventListener('click', saveCurrentBookmark);
   document.getElementById('delete-bookmark-btn').addEventListener('click', deleteCurrentBookmark);
 
+  // Zoom overlay — open from Summary/Notes headings, close via button or backdrop
+  document.querySelectorAll('.zoom-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const id = btn.dataset.zoomTarget;
+      openZoom(id, id === 'detail-summary' ? 'Summary' : 'Your Notes');
+    });
+  });
+  document.getElementById('zoom-close').addEventListener('click', closeZoom);
+  document.getElementById('zoom-overlay').addEventListener('click', (e) => {
+    if (e.target.id === 'zoom-overlay') closeZoom();
+  });
+
+  // Sidebar Categories|Tags tabs + shared filter search.
+  document.querySelectorAll('.sct-tab').forEach(b =>
+    b.addEventListener('click', () => showSctTab(b.dataset.scttab)));
+  const sctSearchEl = document.getElementById('sct-search');
+  if (sctSearchEl) sctSearchEl.addEventListener('input', () => {
+    sctSearch = sctSearchEl.value;
+    if (sctTab === 'categories') renderCategories(); else renderTagFilter();
+  });
+  const sctClearEl = document.getElementById('sct-search-clear');
+  if (sctClearEl) sctClearEl.addEventListener('click', () => {
+    sctSearch = '';
+    if (sctSearchEl) sctSearchEl.value = '';
+    if (sctTab === 'categories') renderCategories(); else renderTagFilter();
+  });
+
   // Settings — open/close only. The section handlers (toggle instructions, the REAL
   // Test Connection = testGatewayConnection, save, etc.) are bound in
   // setupSettingsEventListeners() each time the panel opens. (The old init-time
@@ -252,6 +304,12 @@ function setupEventListeners() {
       isDirty = true;
     });
   }
+  // Multi-select bulk actions
+  document.getElementById('select-toggle').addEventListener('click', () => setSelectMode(!selectMode));
+  document.getElementById('bulk-cancel').addEventListener('click', () => setSelectMode(false));
+  document.getElementById('bulk-move').addEventListener('click', bulkMove);
+  document.getElementById('bulk-delete').addEventListener('click', bulkDelete);
+
   // Markdown editors track dirty on blur/input
 }
 
@@ -268,8 +326,10 @@ function renderCategories() {
   allItem.addEventListener('click', () => selectCategory('All'));
   container.appendChild(allItem);
 
-  // Dynamic Categories — scoped to the active Space.
-  const scoped = categories.filter(c => c.spaceId === activeSpaceId && !c.deletedAt);
+  // Dynamic Categories — scoped to the active Space, filtered by the sidebar search.
+  // ("All" above is always shown; the filter only narrows the named categories.)
+  const q = (sctSearch || '').toLowerCase();
+  const scoped = categories.filter(c => c.spaceId === activeSpaceId && !c.deletedAt && (!q || c.name.toLowerCase().includes(q)));
   const sortedCategories = [...scoped].sort((a, b) => a.priority - b.priority);
   sortedCategories.forEach(cat => {
     const catName = cat.name;
@@ -309,7 +369,10 @@ function renderLinks() {
 
   filtered.sort(SORTERS[sortMode] || SORTERS.due);
 
+  const nav = document.getElementById('bucket-nav');
+
   if (filtered.length === 0) {
+    if (nav) { nav.hidden = true; nav.innerHTML = ''; }
     container.innerHTML = '<div class="empty-state">Nothing here yet.</div>';
     return;
   }
@@ -317,6 +380,7 @@ function renderLinks() {
   // Group into due buckets only when sorting by due date and not in flat mode;
   // any other sort renders a single flat list in the chosen order.
   if (sortMode !== 'due' || priorityView) {
+    if (nav) { nav.hidden = true; nav.innerHTML = ''; }
     filtered.forEach(b => container.appendChild(buildBookmarkRow(b)));
     return;
   }
@@ -324,6 +388,21 @@ function renderLinks() {
   const groups = {};
   DUE_BUCKETS.forEach(g => { groups[g.key] = []; });
   filtered.forEach(b => { groups[getDueInfo(b).key].push(b); });
+
+  if (nav) {
+    nav.hidden = false;
+    nav.innerHTML = DUE_BUCKETS.map(g => {
+      const n = groups[g.key].length;
+      return `<button class="bucket-jump ${n ? '' : 'empty'} ${g.key}" data-bucket="${g.key}" ${n ? '' : 'disabled'}>${escapeHtml(g.label)}<span class="bj-ct">${n}</span></button>`;
+    }).join('');
+    nav.querySelectorAll('.bucket-jump').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const head = container.querySelector(`.bucket-h.${btn.dataset.bucket}`);
+        head?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  }
+
   DUE_BUCKETS.forEach(g => {
     const items = groups[g.key];
     if (!items.length) return;
@@ -365,14 +444,20 @@ function stripMarkdown(s) {
 }
 
 function hostOf(b) { try { return new URL(b.url).hostname.replace(/^www\./, ''); } catch { return ''; } }
-function faviconLetter(b) { const h = hostOf(b); return (h && h[0] ? h[0] : '•').toUpperCase(); }
-// Deterministic per-site tile colour so each domain reads consistently at a glance.
 const FAV_COLORS = ['#3E7C5A', '#C8801E', '#7159B5', '#2F6FE4', '#D6492B', '#0E7C86', '#B5346F', '#4B7A1E'];
-function faviconColor(b) {
-  const key = hostOf(b) || b.title || '';
-  let n = 0;
-  for (let i = 0; i < key.length; i++) n = (n + key.charCodeAt(i)) % FAV_COLORS.length;
-  return FAV_COLORS[n];
+function categoryColorFor(b) {
+  const c = categories.find(x => x.spaceId === b.spaceId && x.name === b.category && !x.deletedAt);
+  return c && c.color ? c.color : null;
+}
+function faviconLetter(b) { return RvListCore.avatarLetter(b.category, hostOf(b)); }
+function faviconColor(b) { return RvListCore.avatarColor(b.letterColor, categoryColorFor(b), hostOf(b), FAV_COLORS); }
+// Pick black or white text for legibility on a given hex background (YIQ luminance).
+function contrastTextColor(hex) {
+  const h = (hex || '').replace('#', '');
+  if (h.length < 6) return '#fff';
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq >= 150 ? '#1a1a1a' : '#fff';
 }
 function addDaysISO(base, days) { return new Date(base.getTime() + days * 86400000).toISOString(); }
 
@@ -416,9 +501,13 @@ function renderTagFilter() {
     if (b.deletedAt || b.spaceId !== activeSpaceId) return;
     (b.tags || []).forEach(t => counts.set(t, (counts.get(t) || 0) + 1));
   });
-  const tags = [...counts.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  const allTags = [...counts.keys()];
+  const q = (sctSearch || '').toLowerCase();
+  const tags = allTags
+    .filter(t => !q || t.toLowerCase().includes(q))
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
   container.innerHTML = '';
-  if (!tags.length) {
+  if (!allTags.length) {
     container.innerHTML = '<span class="tag-empty">No tags yet</span>';
     return;
   }
@@ -427,20 +516,47 @@ function renderTagFilter() {
     const clear = document.createElement('button');
     clear.className = 'tag-chip clear';
     clear.textContent = '✕ Clear';
-    clear.addEventListener('click', () => { selectedTag = null; renderTagFilter(); renderLinks(); });
+    clear.addEventListener('click', () => applyTagFilter(null));
     container.appendChild(clear);
+  }
+  if (!tags.length) {
+    container.insertAdjacentHTML('beforeend', '<span class="tag-empty">No matching tags</span>');
   }
   tags.forEach(t => {
     const chip = document.createElement('button');
     chip.className = `tag-chip${selectedTag === t ? ' on' : ''}`;
     chip.textContent = t;
-    chip.addEventListener('click', () => {
-      selectedTag = (selectedTag === t) ? null : t;
-      renderTagFilter();
-      renderLinks();
-    });
+    chip.addEventListener('click', () => applyTagFilter(selectedTag === t ? null : t));
     container.appendChild(chip);
   });
+}
+
+// Switch the sidebar Categories|Tags tabs. The shared search (sctSearch) persists
+// across toggles and is applied by whichever renderer runs.
+function showSctTab(tab) {
+  sctTab = tab;
+  document.querySelectorAll('.sct-tab').forEach(b => b.classList.toggle('active', b.dataset.scttab === tab));
+  const catPane = document.getElementById('sct-categories');
+  const tagPane = document.getElementById('sct-tags');
+  if (catPane) catPane.hidden = tab !== 'categories';
+  if (tagPane) tagPane.hidden = tab !== 'tags';
+  if (tab === 'categories') renderCategories(); else renderTagFilter();
+}
+
+// Centralised "filter the list by this tag" used by card chips, detail chips, and the sidebar.
+async function applyTagFilter(tag) {
+  // If the detail overlay is open, close it through the normal path so the isDirty
+  // guard runs (and currentBookmarkId/isDirty get reset). If the user cancels the
+  // discard prompt, the overlay stays open — abort the filter.
+  const ov = document.getElementById('detail-overlay');
+  if (ov && ov.classList.contains('active')) {
+    await closeDetailOverlay();
+    if (ov.classList.contains('active')) return;
+  }
+  selectedTag = tag || null;
+  renderTagFilter();
+  renderLinks();
+  document.getElementById('links-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function closeRowMenus() {
@@ -460,9 +576,14 @@ function buildBookmarkRow(bookmark) {
   const summary = preview ? `<p class="bk-summary">${escapeHtml(preview)}</p>` : '';
   const added = bookmark.addedTimestamp
     ? `<span class="bk-added">added ${new Date(bookmark.addedTimestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>` : '';
+  const tagChips = (bookmark.tags || []).length
+    ? `<div class="bk-tags">${bookmark.tags.map(t =>
+        `<span class="bk-tag" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('')}</div>`
+    : '';
+  const favBg = faviconColor(bookmark);
   item.innerHTML = `
     <div class="bk-main">
-      <div class="bk-fav" aria-hidden="true" style="background:${faviconColor(bookmark)}">${escapeHtml(faviconLetter(bookmark))}</div>
+      <div class="bk-fav" aria-hidden="true" style="background:${favBg};color:${contrastTextColor(favBg)}">${escapeHtml(faviconLetter(bookmark))}</div>
       <div class="bk-body">
         <a class="bk-title" href="${escapeHtml(bookmark.url)}" target="_blank" rel="noopener">${escapeHtml(bookmark.title || 'Untitled')}</a>
         <div class="bk-meta">
@@ -472,6 +593,7 @@ function buildBookmarkRow(bookmark) {
           ${added}
         </div>
         ${summary}
+        ${tagChips}
       </div>
       <div class="bk-actions">
         <button class="bk-open" title="Open the page (marks it done)">Open</button>
@@ -493,6 +615,7 @@ function buildBookmarkRow(bookmark) {
 
   // Clicking the card body (not the title link or the action cluster) opens the editor.
   item.addEventListener('click', (e) => {
+    if (selectMode) return;
     if (e.target.closest('.bk-actions') || e.target.closest('.bk-title')) return;
     openDetailOverlay(bookmark);
   });
@@ -521,7 +644,114 @@ function buildBookmarkRow(bookmark) {
       handleRowAction(bookmark.id, btn.dataset.act, btn.dataset.days);
     });
   });
+  item.querySelectorAll('.bk-tag').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation(); // don't open the detail overlay
+      applyTagFilter(el.dataset.tag);
+    });
+  });
+  if (selectMode) {
+    item.classList.add('selectable');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'bk-select';
+    cb.checked = selectedIds.has(bookmark.id);
+    cb.setAttribute('aria-label', `Select ${bookmark.title || 'bookmark'}`);
+    // 'change' (not 'click') so keyboard activation toggles selection too.
+    cb.addEventListener('change', () => {
+      if (cb.checked) selectedIds.add(bookmark.id); else selectedIds.delete(bookmark.id);
+      updateBulkBar();
+    });
+    item.prepend(cb);
+  }
   return item;
+}
+
+// --- Multi-select / Bulk Actions ---
+
+function updateBulkBar() {
+  const el = document.getElementById('bulk-count');
+  if (el) el.textContent = `${selectedIds.size} selected`;
+}
+
+// Build the "Move to category…" options for a space. The option VALUE carries the
+// raw category name (attribute-escaped only) so bulkMove's `c.name === value`
+// comparison works; the visible text is fully HTML-escaped.
+function categoryOptionsHtml(spaceId) {
+  const attr = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  return `<option value="">Move to category…</option>` + categories
+    .filter(c => c.spaceId === spaceId && !c.deletedAt)
+    .map(c => `<option value="${attr(c.name)}">${escapeHtml(c.name)}</option>`).join('');
+}
+
+function populateBulkTargets() {
+  const enabled = new Set(rvLocal.enabledSpaceIds || []);
+  const spaceSel = document.getElementById('bulk-space');
+  spaceSel.innerHTML = `<option value="">Move to space…</option>` + spaces
+    .filter(s => !s.deletedAt && enabled.has(s.id))
+    .map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+  const catSel = document.getElementById('bulk-category');
+  catSel.innerHTML = categoryOptionsHtml(activeSpaceId);
+  // Re-populate category options whenever the space picker changes so category
+  // choices always reflect the chosen destination, preventing dangling (spaceId, name).
+  // Use onchange (not addEventListener) so re-entering select mode doesn't stack handlers.
+  spaceSel.onchange = () => {
+    catSel.innerHTML = categoryOptionsHtml(spaceSel.value || activeSpaceId);
+  };
+}
+
+function setSelectMode(on) {
+  selectMode = on;
+  selectedIds.clear();
+  document.getElementById('bulk-bar').hidden = !on;
+  document.getElementById('select-toggle').classList.toggle('active', on);
+  if (on) { populateBulkTargets(); updateBulkBar(); }
+  renderLinks();
+}
+
+async function bulkMove() {
+  const spaceId = document.getElementById('bulk-space').value;
+  const cat = document.getElementById('bulk-category').value;
+  if (!selectedIds.size) { showToast('Nothing selected', 'error'); return; }
+  if (!spaceId && !cat) { showToast('Pick a space or category', 'error'); return; }
+  for (const id of selectedIds) {
+    const b = bookmarks.find(x => x.id === id);
+    if (!b) continue;
+    if (spaceId) {
+      b.spaceId = spaceId;
+      // Clear category if it no longer exists in the destination space.
+      const catOk = categories.some(c => c.spaceId === spaceId && c.name === b.category && !c.deletedAt);
+      if (!catOk) b.category = '';
+    }
+    // Only apply chosen category if it is valid in the destination space (which may
+    // have just been changed above).  This prevents dangling (spaceId, name) pairs.
+    if (cat && categories.some(c => c.spaceId === (spaceId || b.spaceId) && c.name === cat && !c.deletedAt)) {
+      b.category = cat;
+    }
+    markDirty(b);
+  }
+  await saveData();
+  showToast('Moved', 'success');
+  setSelectMode(false);
+  renderCategories();
+}
+
+async function bulkDelete() {
+  if (!selectedIds.size) { showToast('Nothing selected', 'error'); return; }
+  const ok = await rvConfirm('Delete selected?', `Delete ${selectedIds.size} bookmark(s)?`, { confirmText: 'Delete', danger: true });
+  if (!ok) return;
+  const now = new Date().toISOString();
+  for (const id of selectedIds) {
+    const b = bookmarks.find(x => x.id === id);
+    if (!b) continue;
+    b.deletedAt = now;
+    b.status = 'Deleted';
+    markDirty(b); // stamps _dirty + updatedAt
+  }
+  await saveData();
+  showToast('Deleted', 'success');
+  setSelectMode(false);
+  renderCategories();
 }
 
 // Apply a ReVisit action to a bookmark using the SAME saveData() LWW + push path
@@ -538,12 +768,13 @@ async function handleRowAction(id, act, days) {
     await saveData();
     showToast('Opened — marked done', 'success');
   } else if (act === 'revisit') {
-    const iv = (settings && settings.defaultIntervalDays) || 7;
-    b.revisitBy = addDaysISO(now, iv);
-    b.status = 'Active';
-    pushHistory(b, `ReVisited — reminder in ${iv}d`);
+    const iv = RvListCore.resolveInterval(settings);
+    const t = RvListCore.revisitTransition(now, iv);
+    b.status = t.status; // 'ReVisited'
+    if (t.revisitBy !== undefined) b.revisitBy = t.revisitBy; // null interval keeps existing date
+    pushHistory(b, iv == null ? 'ReVisited' : `ReVisited — reminder in ${iv}d`);
     await saveData();
-    showToast(`Revisited — back in ${iv} day${iv === 1 ? '' : 's'}`, 'success');
+    showToast(iv == null ? 'Revisited' : `Revisited — back in ${iv} day${iv === 1 ? '' : 's'}`, 'success');
   } else if (act === 'snooze') {
     const d = parseInt(days, 10) || 1;
     b.revisitBy = addDaysISO(now, d);
@@ -598,6 +829,41 @@ async function openDetailOverlay(bookmark) {
   const catSelect = document.getElementById('detail-category');
   catSelect.innerHTML = categories.filter(c => c.spaceId === bookmark.spaceId && !c.deletedAt).map(c => `<option value="${c.name}" ${c.name === bookmark.category ? 'selected' : ''}>${c.name}</option>`).join('');
 
+  // Space reassignment — limited to Spaces enabled on THIS install (plus the
+  // bookmark's current space, so it always shows even if not locally enabled).
+  const spaceSel = document.getElementById('detail-space');
+  const enabledIds = new Set(rvLocal.enabledSpaceIds || []);
+  spaceSel.innerHTML = spaces
+    .filter(s => !s.deletedAt && (enabledIds.has(s.id) || s.id === bookmark.spaceId))
+    .map(s => `<option value="${s.id}" ${s.id === bookmark.spaceId ? 'selected' : ''}>${escapeHtml(s.name)}</option>`)
+    .join('');
+  spaceSel.onchange = () => {
+    isDirty = true;
+    // Repopulate the category dropdown for the newly-selected space so the user
+    // never sees categories that belong to a different space (mirrors content.js).
+    const catSelect = document.getElementById('detail-category');
+    catSelect.innerHTML = categories
+      .filter(c => c.spaceId === spaceSel.value && !c.deletedAt)
+      .map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`)
+      .join('');
+  };
+
+  // Per-bookmark letter-color override
+  const lc = document.getElementById('detail-letter-color');
+  lc.value = bookmark.letterColor || categoryColorFor(bookmark) || faviconColor(bookmark);
+  // touched: user picked a custom colour → set an override on save.
+  // cleared: user pressed "Use category" → remove the override on save.
+  // Neither: leave letterColor exactly as-is (don't pin the fallback colour).
+  lc.dataset.touched = '';
+  lc.dataset.cleared = '';
+  lc.oninput = () => { lc.dataset.touched = '1'; lc.dataset.cleared = ''; isDirty = true; };
+  document.getElementById('detail-letter-color-clear').onclick = () => {
+    lc.value = categoryColorFor(bookmark) || faviconColor(bookmark);
+    lc.dataset.cleared = '1';
+    lc.dataset.touched = '';
+    isDirty = true;
+  };
+
   // Tags
   renderTags(bookmark.tags);
 
@@ -610,6 +876,8 @@ async function openDetailOverlay(bookmark) {
 }
 
 async function closeDetailOverlay() {
+  // Close any open zoom overlay first so it can't linger over a dismissed detail view.
+  if (document.getElementById('zoom-overlay')?.classList.contains('active')) closeZoom();
   if (isDirty) {
     const ok = await rvConfirm('Discard unsaved changes?', 'You have unsaved changes. Discard them?', { confirmText: 'Discard', danger: true });
     if (!ok) return;
@@ -619,15 +887,79 @@ async function closeDetailOverlay() {
   isDirty = false;
 }
 
+// Zoom a markdown field into a large editable overlay. Edits sync back live to the
+// source contenteditable so the existing save path persists them unchanged.
+//
+// setupMarkdownEditor stores raw markdown in element.dataset.raw.  When the field is
+// focused it shows element.textContent (raw); when blurred it renders HTML back into
+// element.innerHTML and keeps dataset.raw up-to-date.  saveCurrentBookmark reads
+// dataset.raw (falling back to textContent when the element is focused).
+//
+// openZoom therefore:
+//   1. Reads dataset.raw as the authoritative raw markdown source.
+//   2. Sets zoom-editor's textContent to that raw text (stays editable).
+//   3. On every input, writes zoom-editor.textContent back to src.dataset.raw so
+//      Save picks it up, and also updates src.textContent in case the source field
+//      is currently focused (though it won't be while zoom is open).
+//   4. closeZoom re-renders the source field so it shows formatted markdown again
+//      (matching the normal onblur behaviour of setupMarkdownEditor).
+
+let zoomSourceId = null;
+
+function openZoom(targetId, title) {
+  const src = document.getElementById(targetId);
+  if (!src) return;
+  zoomSourceId = targetId;
+  const editor = document.getElementById('zoom-editor');
+  document.getElementById('zoom-title').textContent = title;
+  // If the source field is currently focused it's in raw-text mode and its
+  // in-progress edits live in textContent (not yet flushed to dataset.raw).
+  // Flush first so zoom opens with the latest text, not a stale value.
+  if (document.activeElement === src) src.dataset.raw = src.textContent;
+  // Use dataset.raw as the single source of truth for raw markdown.
+  editor.textContent = src.dataset.raw || '';
+  editor.oninput = () => {
+    const raw = editor.textContent;
+    src.dataset.raw = raw;
+    // Keep src.textContent in sync in case it's focused (shouldn't happen normally).
+    if (document.activeElement === src) {
+      src.textContent = raw;
+    }
+    isDirty = true;
+  };
+  document.getElementById('zoom-overlay').classList.add('active');
+  editor.focus();
+}
+
+function closeZoom() {
+  document.getElementById('zoom-overlay').classList.remove('active');
+  // Re-render the source field as formatted markdown (mirrors setupMarkdownEditor onblur).
+  if (zoomSourceId) {
+    const src = document.getElementById(zoomSourceId);
+    if (src) {
+      src.innerHTML = renderMarkdown(src.dataset.raw || '');
+    }
+  }
+  // Detach the oninput handler to avoid stale closures.
+  const editor = document.getElementById('zoom-editor');
+  if (editor) editor.oninput = null;
+  zoomSourceId = null;
+}
+
 function renderTags(tags) {
   const container = document.getElementById('detail-tags');
   container.innerHTML = ''; // Clear existing tags
-  
+
   tags.forEach(tag => {
     const tagEl = document.createElement('span');
     tagEl.className = 'tag';
-    tagEl.innerHTML = `${tag} <span class="tag-remove">×</span>`;
-    tagEl.querySelector('.tag-remove').addEventListener('click', () => {
+    tagEl.innerHTML = `<span class="tag-label">${escapeHtml(tag)}</span> <span class="tag-remove">×</span>`;
+    const label = tagEl.querySelector('.tag-label');
+    label.style.cursor = 'pointer';
+    label.title = 'Filter list by this tag';
+    label.addEventListener('click', () => applyTagFilter(tag));
+    tagEl.querySelector('.tag-remove').addEventListener('click', (e) => {
+      e.stopPropagation();
       removeTag(tag);
     });
     container.appendChild(tagEl);
@@ -885,10 +1217,34 @@ async function saveCurrentBookmark() {
 
   // Tags are already updated in the bookmark object by addTag/removeTag
   // but we need to ensure we save the current state
-  
+
+  // Per-bookmark letter-color override
+  const lcInput = document.getElementById('detail-letter-color');
+  if (lcInput.dataset.cleared === '1') {
+    delete bookmark.letterColor; // revert to category colour
+  } else if (lcInput.dataset.touched === '1') {
+    bookmark.letterColor = lcInput.value; // explicit override
+  } // otherwise leave letterColor as-is (don't pin the fallback colour)
+
+  // Space reassignment — if changed, clear category when it doesn't exist in the
+  // destination space (to avoid a dangling (spaceId, name) pair).
+  const newSpaceId = document.getElementById('detail-space').value;
+  const movedToAnotherSpace = newSpaceId && newSpaceId !== bookmark.spaceId;
+  if (movedToAnotherSpace) {
+    bookmark.spaceId = newSpaceId;
+    const catOk = categories.some(c => c.spaceId === newSpaceId && c.name === bookmark.category && !c.deletedAt);
+    if (!catOk) bookmark.category = '';
+  }
+
   await saveData();
   isDirty = false;
   showToast('Bookmark saved!', 'success');
+  // A bookmark moved to another Space no longer belongs to the current view — close
+  // the overlay so the user isn't left looking at an orphaned record.
+  if (movedToAnotherSpace) {
+    document.getElementById('detail-overlay').classList.remove('active');
+    currentBookmarkId = null;
+  }
   renderLinks(); // Refresh list
   renderCategories(); // Refresh counts
 }
@@ -984,12 +1340,20 @@ function openSettings() {
   // Global default model + Advanced disclosure state.
   initGlobalModel();
 
+  // Populate default interval selector
+  const ivSel = document.getElementById('set-default-interval');
+  if (ivSel) ivSel.value = (settings.defaultIntervalDays === null) ? 'none' : String(settings.defaultIntervalDays ?? 7);
+
+  // Populate capture popup position selector
+  const ppSel = document.getElementById('set-popup-position');
+  if (ppSel) ppSel.value = settings.capturePopupPosition || 'center';
+
   // Spaces tab (inline) + ensure the categories layer starts closed.
   renderSpacesTab();
   hideCategoriesLayer();
 
-  // Build/refresh the tab bar and default to Appearance.
-  activeSettingsTab = 'appearance';
+  // Build/refresh the tab bar and default to Account.
+  activeSettingsTab = 'account';
   buildSettingsTabs();
 
   // Setup event listeners
@@ -1001,13 +1365,13 @@ function openSettings() {
 // --- Settings tabs ---
 
 const SETTINGS_TABS = [
-  { id: 'appearance', label: 'Appearance', sections: ['appearance-section'] },
-  { id: 'ai',         label: 'AI',         sections: ['gateway-section', 'ollama-section', 'aiprovider-section'] },
   { id: 'account',    label: 'Account',    sections: ['account-section'] },
+  { id: 'ai',         label: 'AI',         sections: ['gateway-section', 'ollama-section', 'aiprovider-section'] },
+  { id: 'appearance', label: 'Appearance', sections: ['appearance-section'] },
   { id: 'spaces',     label: 'Spaces',     sections: ['spaces-section'] },
   { id: 'data',       label: 'Data',       sections: ['backup-section'] },
 ];
-let activeSettingsTab = 'appearance';
+let activeSettingsTab = 'account';
 
 function showSettingsTab(tabId) {
   const tab = SETTINGS_TABS.find(t => t.id === tabId) || SETTINGS_TABS[0];
@@ -1172,6 +1536,17 @@ function setupSettingsEventListeners() {
   // Auto-save AI text/model fields on change (no Save button — saved as you go).
   ['gateway-api-key', 'ollama-local-url', 'ollama-cloud-api-key', 'youtube-model', 'transcript-model', 'page-model']
     .forEach(id => { const el = document.getElementById(id); if (el) el.onchange = persistAiSettings; });
+
+  // Default revisit interval
+  const defaultIvSel = document.getElementById('set-default-interval');
+  if (defaultIvSel) defaultIvSel.onchange = (e) => {
+    settings.defaultIntervalDays = (e.target.value === 'none') ? null : parseInt(e.target.value, 10);
+    saveData();
+  };
+
+  // Capture popup position
+  const ppSelW = document.getElementById('set-popup-position');
+  if (ppSelW) ppSelW.onchange = (e) => { settings.capturePopupPosition = e.target.value; saveData(); };
 
   // Backup data
   document.getElementById('export-data-btn').onclick = exportData;
@@ -1535,6 +1910,7 @@ function showCategoriesLayer(spaceId) {
   layer.classList.add('active');
   layer.setAttribute('aria-hidden', 'false');
   document.querySelector('.settings-modal').classList.add('cats-open');
+  renderCategoriesSettings();
 }
 function hideCategoriesLayer() {
   const layer = document.getElementById('settings-cats-layer');
@@ -1642,7 +2018,8 @@ async function onDeleteSpace(id) {
       if (b.spaceId !== id) return b;
       if (b.category && !targetCatNames.has(b.category)) {
         const maxP = categories.filter(c => c.spaceId === target.id).reduce((m, c) => Math.max(m, c.priority || 0), 0);
-        categories.push({ spaceId: target.id, name: b.category, priority: maxP + 1 });
+        const cColor = RvListCore.nextCategoryColor(categories.filter(x => x.color).map(x => x.color), FAV_COLORS);
+        categories.push({ spaceId: target.id, name: b.category, priority: maxP + 1, color: cColor });
         targetCatNames.add(b.category);
       }
       return { ...b, spaceId: target.id };
@@ -1662,17 +2039,19 @@ async function onDeleteSpace(id) {
   if (settingsSpaceId === id) settingsSpaceId = RvSpacesCore.liveSpaces(spaces)[0]?.id || '';
   if (activeSpaceId === id) activeSpaceId = rvLocal.defaultSpaceId;
   renderSpacesList(); renderSpacesInstallList(); renderSpaceSelector();
-  renderSpaceCategoryEditor(); renderCategories(); renderLinks();
+  renderSpaceCategoryEditor(); renderCategoriesSettings(); renderCategories(); renderLinks();
   showToast('Space deleted', 'success');
 }
 
 // --- Spaces: per-Space category editor (operates on settingsSpaceId) ---
 
+// Sets only the editor title. The category list is rendered separately by
+// showCategoriesLayer() on open and by renderCategoriesSettings() after edits,
+// so callers that change the list (e.g. space delete) call it themselves.
 function renderSpaceCategoryEditor() {
   const live = RvSpacesCore.liveSpaces(spaces);
   const cur = live.find(s => s.id === settingsSpaceId);
   document.getElementById('space-cats-space-name').textContent = cur ? cur.name : '—';
-  renderCategoriesSettings(); // reads settingsSpaceId
 }
 
 // --- Spaces: Zone B — install list (writes rvLocal ONLY) ---
@@ -1721,8 +2100,11 @@ async function onSetDefault(e) {
   renderSpacesInstallList(); renderSpaceSelector();
 }
 
+// --- Categories/Tags layer: shared tab + search state ---
+
 function renderCategoriesSettings() {
   const container = document.getElementById('categories-settings-list');
+  if (!container) return;
   container.innerHTML = '';
 
   // Sort categories by priority — scoped to the panel's selected Space (skip tombstones).
@@ -1741,15 +2123,17 @@ function renderCategoriesSettings() {
     item.dataset.spaceId = cat.spaceId;
     item.dataset.categoryIndex = index;
 
-    const delTitle = count > 0 ? 'Empty this category before deleting' : 'Delete category';
+    const delTitle = count > 0 ? 'Delete category (reassign bookmarks)' : 'Delete category';
+    const catColor = cat.color || RvListCore.nextCategoryColor(categories.filter(x => x.color).map(x => x.color), FAV_COLORS);
     item.innerHTML = `
       <span class="cat-name">${escapeHtml(catName)}</span>
       <span class="cat-count">${count}</span>
+      <input type="color" class="cat-color" data-cat="${escapeHtml(catName)}" value="${catColor}" title="Category color">
       <div class="cat-priority">
         <input type="number" class="cat-priority-input" data-category="${escapeHtml(catName)}"
                value="${cat.priority}" min="1" max="100">
       </div>
-      <button class="cat-delete" data-category="${escapeHtml(catName)}" ${count > 0 ? 'disabled' : ''} title="${delTitle}" aria-label="${delTitle}">
+      <button class="cat-delete" data-category="${escapeHtml(catName)}" title="${delTitle}" aria-label="${delTitle}">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
       </button>
     `;
@@ -1772,14 +2156,55 @@ function renderCategoriesSettings() {
     input.addEventListener('input', handleCategoryPriorityInput); // instant reorder on type
     input.addEventListener('change', handleCategoryPriorityChange); // save on blur
   });
+
+  // Wire color picker inputs
+  container.querySelectorAll('.cat-color').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const c = categories.find(x => x.spaceId === settingsSpaceId && x.name === inp.dataset.cat && !x.deletedAt);
+      if (!c) return;
+      c.color = inp.value;
+      markDirty(c);
+      saveData();
+      renderLinks();
+    });
+  });
 }
 
-// Delete an EMPTY category (tombstone + sync). Non-empty categories are blocked
-// (the move-its-bookmarks flow is deferred).
+// Delete a category, optionally reassigning its bookmarks first.
+// If empty: confirm and soft-delete.
+// If non-empty: present a reassign-or-clear choice before tombstoning.
 async function deleteCategory(spaceId, name, count) {
-  if (count > 0) { showToast('Empty this category before deleting it.', 'error'); return; }
-  const ok = await rvConfirm('Delete category?', `Delete the empty category “${name}”?`, { confirmText: 'Delete', danger: true });
-  if (!ok) return;
+  const cat = categories.find(c => c.spaceId === spaceId && c.name === name && !c.deletedAt);
+  if (!cat) return;
+
+  if (count === 0) {
+    const ok = await rvConfirm('Delete category?', `Delete the empty category “${name}”?`, { confirmText: 'Delete', danger: true });
+    if (!ok) return;
+  } else {
+    // Build list of other live categories in the same space.
+    const others = categories
+      .filter(c => c.spaceId === spaceId && c.name !== name && !c.deletedAt)
+      .sort((a, b) => a.priority - b.priority)
+      .map(c => c.name);
+    const choice = await rvChoose(
+      `Delete “${name}”?`,
+      `${count} bookmark${count === 1 ? '' : 's'} use this category. Choose where they go, then it will be deleted.`,
+      [
+        ...others.map(n => ({ id: `to:${n}`, label: `Move to “${n}”` })),
+        { id: 'clear', label: 'Clear their category' },
+        { id: 'cancel', label: 'Cancel', variant: 'secondary' },
+      ]
+    );
+    if (!choice || choice === 'cancel') return;
+    const target = choice.startsWith('to:') ? choice.slice(3) : '';
+    bookmarks.forEach(b => {
+      if (b.spaceId === spaceId && b.category === name && !b.deletedAt) {
+        b.category = target;
+        markDirty(b);
+      }
+    });
+  }
+
   const now = new Date().toISOString();
   categories = categories.map(c => (c.spaceId === spaceId && c.name === name)
     ? { ...c, deletedAt: now, updatedAt: now, _dirty: true } : c);
@@ -1896,7 +2321,10 @@ function handleAddCategory() {
     return;
   }
 
-  categories.push({ spaceId: settingsSpaceId, name, priority });
+  // Assign a color at creation so avatars + the settings swatch agree immediately
+  // (don't wait for the next-load backfill).
+  const newColor = RvListCore.nextCategoryColor(categories.filter(x => x.color).map(x => x.color), FAV_COLORS);
+  categories.push({ spaceId: settingsSpaceId, name, priority, color: newColor });
   saveData();
   nameInput.value = '';
   priorityInput.value = '1';
@@ -2084,6 +2512,42 @@ function rvConfirm(title, message, { confirmText = 'Confirm', danger = false } =
       { label: 'Cancel', value: false, variant: 'secondary' },
       { label: confirmText, value: true, variant: danger ? 'danger' : 'primary' },
     ],
+  });
+}
+
+// Present a dialog with N labelled option buttons arranged in a vertical stack.
+// options: [{ id, label, variant? }]  (variant defaults to 'primary'; pass 'secondary' or 'danger' as needed)
+// Resolves to the chosen option's id, or null if dismissed (Escape / backdrop click).
+function rvChoose(title, message, options) {
+  return new Promise(resolve => {
+    const scrim = document.createElement('div');
+    scrim.className = 'rv-dialog-scrim';
+    scrim.innerHTML = `
+      <div class="rv-dialog" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
+        <h3 class="rv-dialog-title"></h3>
+        <div class="rv-dialog-msg"></div>
+        <div class="rv-dialog-choices"></div>
+      </div>`;
+    scrim.querySelector('.rv-dialog-title').textContent = title;
+    const msgEl = scrim.querySelector('.rv-dialog-msg');
+    if (message instanceof Node) msgEl.appendChild(message);
+    else msgEl.textContent = message || '';
+    const choicesEl = scrim.querySelector('.rv-dialog-choices');
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); cleanup(null); } };
+    const cleanup = (val) => { document.removeEventListener('keydown', onKey, true); scrim.remove(); resolve(val); };
+    (options || []).forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = `rv-dialog-btn ${opt.variant || 'primary'}`;
+      btn.textContent = opt.label;
+      btn.addEventListener('click', () => cleanup(opt.id));
+      choicesEl.appendChild(btn);
+    });
+    scrim.addEventListener('mousedown', (e) => { if (e.target === scrim) cleanup(null); });
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(scrim);
+    requestAnimationFrame(() => scrim.classList.add('active'));
+    const focusBtn = choicesEl.querySelector('.danger') || choicesEl.querySelector('.primary') || choicesEl.querySelector('button');
+    if (focusBtn) focusBtn.focus();
   });
 }
 
