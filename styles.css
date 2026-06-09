@@ -693,6 +693,10 @@ button:hover {
   width: 100px;
 }
 
+.letter-color-ctl { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-medium-text); margin-top: 6px; }
+.letter-color-ctl input[type=color] { width: 26px; height: 22px; border: none; background: none; padding: 0; cursor: pointer; }
+.link-btn { border: none; background: none; color: var(--color-primary); cursor: pointer; font-size: 12px; padding: 0; }
+
 .detail-header {
   margin-bottom: 20px;
 }

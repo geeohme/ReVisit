@@ -90,6 +90,20 @@ async function init() {
   settings = rvData.settings || {};
   spaces = rvData.spaces || [];
   rvLocal = data.rvLocal || { enabledSpaceIds: [], defaultSpaceId: '', lastUsedListSpaceId: '' };
+
+  // One-time backfill: assign a palette color to every color-less non-deleted category.
+  (function backfillCategoryColors() {
+    let changed = false;
+    for (const c of categories) {
+      if (!c.color && !c.deletedAt) {
+        const used = categories.filter(x => x.color).map(x => x.color);
+        c.color = RvListCore.nextCategoryColor(used, FAV_COLORS);
+        markDirty(c);
+        changed = true;
+      }
+    }
+    if (changed) saveData();
+  })();
   const liveSpaces = spaces.filter(s => !s.deletedAt).sort((a, b) => (a.priority || 0) - (b.priority || 0));
   activeSpaceId = rvLocal.lastUsedListSpaceId || rvLocal.defaultSpaceId || (liveSpaces[0] && liveSpaces[0].id) || '';
 
@@ -384,15 +398,13 @@ function stripMarkdown(s) {
 }
 
 function hostOf(b) { try { return new URL(b.url).hostname.replace(/^www\./, ''); } catch { return ''; } }
-function faviconLetter(b) { const h = hostOf(b); return (h && h[0] ? h[0] : '•').toUpperCase(); }
-// Deterministic per-site tile colour so each domain reads consistently at a glance.
 const FAV_COLORS = ['#3E7C5A', '#C8801E', '#7159B5', '#2F6FE4', '#D6492B', '#0E7C86', '#B5346F', '#4B7A1E'];
-function faviconColor(b) {
-  const key = hostOf(b) || b.title || '';
-  let n = 0;
-  for (let i = 0; i < key.length; i++) n = (n + key.charCodeAt(i)) % FAV_COLORS.length;
-  return FAV_COLORS[n];
+function categoryColorFor(b) {
+  const c = categories.find(x => x.spaceId === b.spaceId && x.name === b.category && !x.deletedAt);
+  return c && c.color ? c.color : null;
 }
+function faviconLetter(b) { return RvListCore.avatarLetter(b.category, hostOf(b)); }
+function faviconColor(b) { return RvListCore.avatarColor(b.letterColor, categoryColorFor(b), hostOf(b), FAV_COLORS); }
 function addDaysISO(base, days) { return new Date(base.getTime() + days * 86400000).toISOString(); }
 
 // Returns { key (bucket), label (chip text), cls } from revisitBy.
@@ -658,6 +670,17 @@ async function openDetailOverlay(bookmark) {
       .filter(c => c.spaceId === spaceSel.value && !c.deletedAt)
       .map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`)
       .join('');
+  };
+
+  // Per-bookmark letter-color override
+  const lc = document.getElementById('detail-letter-color');
+  lc.value = bookmark.letterColor || categoryColorFor(bookmark) || faviconColor(bookmark);
+  lc.dataset.cleared = '';
+  lc.oninput = () => { lc.dataset.cleared = ''; isDirty = true; };
+  document.getElementById('detail-letter-color-clear').onclick = () => {
+    lc.value = categoryColorFor(bookmark) || faviconColor(bookmark);
+    lc.dataset.cleared = '1';
+    isDirty = true;
   };
 
   // Tags
@@ -1013,6 +1036,14 @@ async function saveCurrentBookmark() {
 
   // Tags are already updated in the bookmark object by addTag/removeTag
   // but we need to ensure we save the current state
+
+  // Per-bookmark letter-color override
+  const lcInput = document.getElementById('detail-letter-color');
+  if (lcInput.dataset.cleared === '1') {
+    delete bookmark.letterColor; // revert to category colour
+  } else {
+    bookmark.letterColor = lcInput.value;
+  }
 
   // Space reassignment — if changed, clear category when it doesn't exist in the
   // destination space (to avoid a dangling (spaceId, name) pair).
