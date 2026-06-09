@@ -6,6 +6,8 @@ let spaces = [];
 let rvLocal = { enabledSpaceIds: [], defaultSpaceId: '', lastUsedListSpaceId: '' };
 let activeSpaceId = '';
 let settingsSpaceId = '';
+let ctTab = 'categories';   // active sub-tab in the categories/tags layer
+let ctSearch = '';           // shared search term (persists across tab toggle)
 let selectedCategory = 'All';
 let selectedTag = null;
 let sortMode = 'due';
@@ -1855,6 +1857,24 @@ function showCategoriesLayer(spaceId) {
   layer.classList.add('active');
   layer.setAttribute('aria-hidden', 'false');
   document.querySelector('.settings-modal').classList.add('cats-open');
+
+  // Wire tabs + search bar once (guard prevents double-binding on re-open).
+  if (!showCategoriesLayer._wired) {
+    showCategoriesLayer._wired = true;
+    document.querySelectorAll('.ct-tab').forEach(b =>
+      b.addEventListener('click', () => showCtTab(b.dataset.cttab)));
+    const search = document.getElementById('ct-search');
+    search.addEventListener('input', () => {
+      ctSearch = search.value;
+      if (ctTab === 'categories') renderCategoriesSettings(); else renderTagsSettings();
+    });
+    document.getElementById('ct-search-clear').addEventListener('click', () => {
+      ctSearch = ''; document.getElementById('ct-search').value = '';
+      if (ctTab === 'categories') renderCategoriesSettings(); else renderTagsSettings();
+    });
+  }
+  document.getElementById('ct-search').value = ctSearch; // restore persisted search
+  showCtTab(ctTab);
 }
 function hideCategoriesLayer() {
   const layer = document.getElementById('settings-cats-layer');
@@ -2041,13 +2061,43 @@ async function onSetDefault(e) {
   renderSpacesInstallList(); renderSpaceSelector();
 }
 
+// --- Categories/Tags layer: shared tab + search state ---
+
+function showCtTab(tab) {
+  ctTab = tab;
+  document.querySelectorAll('.ct-tab').forEach(b => b.classList.toggle('active', b.dataset.cttab === tab));
+  document.getElementById('ct-categories').hidden = tab !== 'categories';
+  document.getElementById('ct-tags').hidden = tab !== 'tags';
+  if (tab === 'categories') renderCategoriesSettings(); else renderTagsSettings();
+}
+
+function renderTagsSettings() {
+  const host = document.getElementById('tags-settings-list');
+  if (!host) return;
+  const scope = bookmarks.filter(b => !b.deletedAt && (!settingsSpaceId || b.spaceId === settingsSpaceId));
+  const counts = {};
+  scope.forEach(b => (b.tags || []).forEach(t => { counts[t] = (counts[t] || 0) + 1; }));
+  const q = ctSearch.toLowerCase();
+  const tags = Object.keys(counts).filter(t => !q || t.toLowerCase().includes(q)).sort();
+  host.innerHTML = tags.length
+    ? tags.map(t => `<div class="ct-row"><span class="ct-name">${escapeHtml(t)}</span><span class="ct-count">${counts[t]}</span><button class="ct-del" data-tag="${escapeHtml(t)}">Delete</button></div>`).join('')
+    : '<div class="empty-state">No tags.</div>';
+  host.querySelectorAll('.ct-del').forEach(btn => btn.addEventListener('click', () => deleteTag(btn.dataset.tag)));
+}
+
+function deleteTag(tag) {
+  console.warn('deleteTag not yet implemented', tag);
+}
+
 function renderCategoriesSettings() {
   const container = document.getElementById('categories-settings-list');
   container.innerHTML = '';
 
   // Sort categories by priority — scoped to the panel's selected Space (skip tombstones).
+  const q = ctSearch.toLowerCase();
   const sortedCategories = [...categories]
     .filter(c => c.spaceId === settingsSpaceId && !c.deletedAt)
+    .filter(c => !q || c.name.toLowerCase().includes(q))
     .sort((a, b) => a.priority - b.priority);
 
   sortedCategories.forEach((cat, index) => {

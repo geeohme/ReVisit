@@ -443,16 +443,24 @@
                 </div>
             </div>
 
-            <!-- Categories editor — pops over the Spaces tab, inside the modal -->
+            <!-- Categories &amp; Tags editor — pops over the Spaces tab, inside the modal -->
             <div class="settings-cats-layer" id="settings-cats-layer" aria-hidden="true">
-                <div class="settings-cats-header">
+                <div class="cats-layer-head">
                     <button class="settings-cats-back" id="cats-back-btn" aria-label="Back to Spaces">
                         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         Spaces
                     </button>
-                    <h3>Categories in <span id="space-cats-space-name">—</span></h3>
+                    <h3>Categories &amp; Tags &mdash; <span id="space-cats-space-name">—</span></h3>
                 </div>
-                <div class="settings-cats-body">
+                <div class="ct-search-row">
+                    <input type="text" id="ct-search" placeholder="Search categories or tags…">
+                    <button type="button" id="ct-search-clear" class="link-btn">Clear</button>
+                </div>
+                <div class="ct-tabs">
+                    <button class="ct-tab active" data-cttab="categories">Categories</button>
+                    <button class="ct-tab" data-cttab="tags">Tags</button>
+                </div>
+                <div id="ct-categories" class="ct-pane">
                     <p class="settings-help-text">Priority sets display order (1 ranks highest). Drag to reorder. A category can only be deleted when it has no bookmarks.</p>
                     <div id="categories-manager">
                         <div class="categories-list-header">
@@ -471,6 +479,9 @@
                             <button class="settings-btn settings-btn-primary" id="add-category-btn">Add Category</button>
                         </div>
                     </div>
+                </div>
+                <div id="ct-tags" class="ct-pane" hidden>
+                    <div id="tags-settings-list"><!-- tag rows injected --></div>
                 </div>
             </div>
         </div>

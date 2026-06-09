@@ -1825,3 +1825,16 @@ input:checked + .slider .ts-knob .ts-moon { display: inline; }
 /* Cancel .close-overlay-btn's position:absolute so the × stays in the flex header. */
 #zoom-close { position: static; }
 .rv-radio input { margin-top: 2px; accent-color: var(--color-primary); }
+
+/* --- Categories & Tags layer: tabbed panel --- */
+.cats-layer-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.ct-search-row { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
+.ct-search-row input { flex: 1; padding: 6px 10px; }
+.ct-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+.ct-tab { padding: 6px 12px; border: none; background: transparent; cursor: pointer; border-bottom: 2px solid transparent; color: var(--color-medium-text); }
+.ct-tab.active { border-bottom-color: var(--color-primary); color: var(--color-dark-text); font-weight: 600; }
+.ct-pane[hidden] { display: none; }
+.ct-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+.ct-row .ct-name { flex: 1; }
+.ct-row .ct-count { color: var(--color-medium-text); font-size: 12px; }
+.ct-del { border: none; background: none; color: var(--color-danger); cursor: pointer; font-size: 12px; }
