@@ -1,5 +1,12 @@
 # ReVisit — Next-Phase Implementation Spec
 
+> **STATUS: COMPLETE.** All phases below (2, 3, 4) are now implemented, verified, and
+> committed on branch `ui-foundation-themes` (12 commits). `background.js` (the
+> summarizer) and the sync/spaces core are byte-identical to `main`. Plus three
+> user-requested extras: opening from the list marks Done, the title is a hyperlink,
+> and the kebab menu layering was fixed; and a Phase-4.3 polish pass (themed popup,
+> sun/moon toggle, per-site fav tiles). The spec is retained below as the record.
+>
 > **Purpose.** This is the executable handoff for the **next conversation**. Phase 1
 > (the zero-logic-risk foundation) is **done and on branch `ui-foundation-themes`**
 > (see "Phase 1 — shipped" below). This doc specs Phases 2–4: the interaction fixes
