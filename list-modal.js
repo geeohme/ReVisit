@@ -653,6 +653,8 @@ async function openDetailOverlay(bookmark) {
 }
 
 async function closeDetailOverlay() {
+  // Close any open zoom overlay first so it can't linger over a dismissed detail view.
+  if (document.getElementById('zoom-overlay')?.classList.contains('active')) closeZoom();
   if (isDirty) {
     const ok = await rvConfirm('Discard unsaved changes?', 'You have unsaved changes. Discard them?', { confirmText: 'Discard', danger: true });
     if (!ok) return;
@@ -687,6 +689,10 @@ function openZoom(targetId, title) {
   zoomSourceId = targetId;
   const editor = document.getElementById('zoom-editor');
   document.getElementById('zoom-title').textContent = title;
+  // If the source field is currently focused it's in raw-text mode and its
+  // in-progress edits live in textContent (not yet flushed to dataset.raw).
+  // Flush first so zoom opens with the latest text, not a stale value.
+  if (document.activeElement === src) src.dataset.raw = src.textContent;
   // Use dataset.raw as the single source of truth for raw markdown.
   editor.textContent = src.dataset.raw || '';
   editor.oninput = () => {
