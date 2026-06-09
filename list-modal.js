@@ -649,7 +649,16 @@ async function openDetailOverlay(bookmark) {
     .filter(s => !s.deletedAt && (enabledIds.has(s.id) || s.id === bookmark.spaceId))
     .map(s => `<option value="${s.id}" ${s.id === bookmark.spaceId ? 'selected' : ''}>${escapeHtml(s.name)}</option>`)
     .join('');
-  spaceSel.onchange = () => { isDirty = true; };
+  spaceSel.onchange = () => {
+    isDirty = true;
+    // Repopulate the category dropdown for the newly-selected space so the user
+    // never sees categories that belong to a different space (mirrors content.js).
+    const catSelect = document.getElementById('detail-category');
+    catSelect.innerHTML = categories
+      .filter(c => c.spaceId === spaceSel.value && !c.deletedAt)
+      .map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`)
+      .join('');
+  };
 
   // Tags
   renderTags(bookmark.tags);
@@ -1008,7 +1017,8 @@ async function saveCurrentBookmark() {
   // Space reassignment — if changed, clear category when it doesn't exist in the
   // destination space (to avoid a dangling (spaceId, name) pair).
   const newSpaceId = document.getElementById('detail-space').value;
-  if (newSpaceId && newSpaceId !== bookmark.spaceId) {
+  const movedToAnotherSpace = newSpaceId && newSpaceId !== bookmark.spaceId;
+  if (movedToAnotherSpace) {
     bookmark.spaceId = newSpaceId;
     const catOk = categories.some(c => c.spaceId === newSpaceId && c.name === bookmark.category && !c.deletedAt);
     if (!catOk) bookmark.category = '';
@@ -1017,6 +1027,12 @@ async function saveCurrentBookmark() {
   await saveData();
   isDirty = false;
   showToast('Bookmark saved!', 'success');
+  // A bookmark moved to another Space no longer belongs to the current view — close
+  // the overlay so the user isn't left looking at an orphaned record.
+  if (movedToAnotherSpace) {
+    document.getElementById('detail-overlay').classList.remove('active');
+    currentBookmarkId = null;
+  }
   renderLinks(); // Refresh list
   renderCategories(); // Refresh counts
 }
