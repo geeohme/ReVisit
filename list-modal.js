@@ -102,7 +102,7 @@ async function init() {
         changed = true;
       }
     }
-    if (changed) saveData();
+    if (changed) saveData().catch(e => console.warn('category color backfill save failed', e));
   })();
   const liveSpaces = spaces.filter(s => !s.deletedAt).sort((a, b) => (a.priority || 0) - (b.priority || 0));
   activeSpaceId = rvLocal.lastUsedListSpaceId || rvLocal.defaultSpaceId || (liveSpaces[0] && liveSpaces[0].id) || '';
