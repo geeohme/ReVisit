@@ -324,16 +324,6 @@ button:hover {
   color: white;
 }
 
-.category-list h3 {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-medium-text);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-top: calc(var(--spacing-unit) * 3);
-  margin-bottom: var(--spacing-unit);
-}
-
 .category-item {
   display: flex;
   justify-content: space-between;
@@ -1552,15 +1542,6 @@ input:checked + .slider .ts-knob .ts-moon { display: inline; }
 .bk-select { margin-right: 8px; cursor: pointer; }
 
 /* Sidebar tag filter */
-.tag-filter { margin-top: 8px; }
-.tag-filter h3 {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-medium-text);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin: calc(var(--spacing-unit) * 3) 0 var(--spacing-unit);
-}
 #tags-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .tag-chip {
   font-size: 0.74rem;
