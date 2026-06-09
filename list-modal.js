@@ -433,28 +433,29 @@ function renderTagFilter() {
     const clear = document.createElement('button');
     clear.className = 'tag-chip clear';
     clear.textContent = '✕ Clear';
-    clear.addEventListener('click', () => { selectedTag = null; renderTagFilter(); renderLinks(); });
+    clear.addEventListener('click', () => applyTagFilter(null));
     container.appendChild(clear);
   }
   tags.forEach(t => {
     const chip = document.createElement('button');
     chip.className = `tag-chip${selectedTag === t ? ' on' : ''}`;
     chip.textContent = t;
-    chip.addEventListener('click', () => {
-      selectedTag = (selectedTag === t) ? null : t;
-      renderTagFilter();
-      renderLinks();
-    });
+    chip.addEventListener('click', () => applyTagFilter(selectedTag === t ? null : t));
     container.appendChild(chip);
   });
 }
 
 // Centralised "filter the list by this tag" used by card chips, detail chips, and the sidebar.
-function applyTagFilter(tag) {
-  selectedTag = tag || null;
-  // Close the detail overlay if open so the filtered list is visible.
+async function applyTagFilter(tag) {
+  // If the detail overlay is open, close it through the normal path so the isDirty
+  // guard runs (and currentBookmarkId/isDirty get reset). If the user cancels the
+  // discard prompt, the overlay stays open — abort the filter.
   const ov = document.getElementById('detail-overlay');
-  if (ov && ov.classList.contains('active')) ov.classList.remove('active');
+  if (ov && ov.classList.contains('active')) {
+    await closeDetailOverlay();
+    if (ov.classList.contains('active')) return;
+  }
+  selectedTag = tag || null;
   renderTagFilter();
   renderLinks();
   document.getElementById('links-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
