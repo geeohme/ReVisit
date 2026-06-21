@@ -3,6 +3,10 @@
 (function (root) {
   const CONFIG_KEY  = 'rvSyncConfig';   // { url, anonKey }
   const SESSION_KEY = 'rvSession';      // { access_token, refresh_token, expires_at, user }
+  // PostgREST schema for all data tables (was 'public'). Isolates ReVisit's tables
+  // from other projects on the shared Supabase instance. Auth/GoTrue (/auth/v1/*)
+  // is schema-independent and is unaffected — only /rest/v1 traffic is scoped.
+  const DB_SCHEMA   = 'revisit';
 
   async function getConfig() {
     const r = await chrome.storage.local.get(CONFIG_KEY);
@@ -189,9 +193,15 @@
     const cfg = await getConfig();
     const s = await ensureFreshSession();
     if (!cfg || !s) throw new Error('Not authenticated');
+    // PostgREST selects the schema via a profile header: Accept-Profile for reads,
+    // Content-Profile for writes. Pick by method so both paths hit DB_SCHEMA.
+    const method = (opts.method || 'GET').toUpperCase();
+    const profile = (method === 'GET' || method === 'HEAD')
+      ? { 'Accept-Profile': DB_SCHEMA }
+      : { 'Content-Profile': DB_SCHEMA };
     const res = await fetch(`${cfg.url}${path}`, {
       ...opts,
-      headers: { ...authHeaders(cfg, s.access_token), ...(opts.headers || {}) }
+      headers: { ...authHeaders(cfg, s.access_token), ...profile, ...(opts.headers || {}) }
     });
     return res;
   }
